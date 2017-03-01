@@ -53,7 +53,9 @@ def app(ctx, log_config, log_file):
             },
             'p2p': {
                 'listen_host': '0.0.0.0',
-                'listen_port': 20170
+                'listen_port': 20170,
+                'max_peers': 4,
+                'min_peers': 4
             }
         }
     }
@@ -69,6 +71,8 @@ def run(ctx, node_id, console):
     config['node'] = {
         'privkey_hex': privkeys[node_id]
     }
+    config['discovery']['listen_port'] += node_id
+    config['p2p']['listen_port'] += node_id
     log.info("starting", config=config)
 
     app = SimpleCasper(config)
@@ -88,9 +92,9 @@ def run(ctx, node_id, console):
         log.info("Logging to file %s", ctx.obj['log_file'])
         # User requested file logging - remove stderr handler
         root_logger = slogging.getLogger()
-        for hndlr in root_logger.handlers:
-            if isinstance(hndlr, StreamHandler) and hndlr.stream == sys.stderr:
-                root_logger.removeHandler(hndlr)
+        for hdl in root_logger.handlers:
+            if isinstance(hdl, StreamHandler) and hdl.stream == sys.stderr:
+                root_logger.removeHandler(hdl)
                 break
 
     # wait for interrupt
