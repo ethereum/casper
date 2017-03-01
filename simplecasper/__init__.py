@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 # ############# version ##################
-from pkg_resources import get_distribution, DistributionNotFound
 import os.path
-import subprocess
 import re
+import subprocess
 
+from pkg_resources import get_distribution, DistributionNotFound
 
 GIT_DESCRIBE_RE = re.compile('^(?P<version>v\d+\.\d+\.\d+)-(?P<git>\d+-g[a-fA-F0-9]+(?:-dirty)?)$')
 
