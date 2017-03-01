@@ -158,10 +158,10 @@ class LevelDBService(LevelDB, BaseService):
 
     def __init__(self, app):
         BaseService.__init__(self, app)
-        assert self.app.config['db']['data_dir']
+        assert self.app.config['node']['data_dir']
         self.uncommitted = dict()
         self.stop_event = Event()
-        dbfile = os.path.join(self.app.config['db']['data_dir'], 'leveldb')
+        dbfile = os.path.join(self.app.config['node']['data_dir'], 'leveldb')
         LevelDB.__init__(self, dbfile)
 
     def _run(self):
