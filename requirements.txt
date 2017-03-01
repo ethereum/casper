@@ -1,0 +1,6 @@
+gevent==1.1.0
+leveldb
+click
+wheel
+rlp>=0.4.4
+devp2p>=0.8.0
