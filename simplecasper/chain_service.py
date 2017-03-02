@@ -1,4 +1,10 @@
+from gevent.event import Event
+from web3 import Web3, KeepAliveRPCProvider
+from ethereum import slogging
+
 from devp2p.service import BaseService
+
+log = slogging.get_logger('chain')
 
 
 class ChainService(BaseService):
@@ -6,18 +12,38 @@ class ChainService(BaseService):
     name = 'chain'
     default_config = dict(
         chain=dict(
-            jsonrpc_ip='0.0.0.0',
-            jsonrpc_port=8545
+            provider='jsonrpc',
+            jsonrpc=dict(
+                host='127.0.0.1',
+                port=8545
+            )
         )
     )
 
     def __init__(self, app):
         super(ChainService, self).__init__(app)
-        self.ip = self.app.config['chain']['jsonrpc_ip']
-        self.port = self.app.config['chain']['jsonrpc_port']
+
+        if self.app.config['chain']['provider'] == 'jsonrpc':
+            self.web3 = Web3(KeepAliveRPCProvider(
+                host=self.app.config['chain']['jsonrpc']['host'],
+                port=self.app.config['chain']['jsonrpc']['port']
+            ))
+        else:
+            raise ValueError("unsupported chain provider %s" %
+                             self.app.config['chain']['provider'])
 
     def _run(self):
-        pass
+        self.start_filters()
+
+        evt = Event()
+        evt.wait()
 
     def stop(self):
         super(ChainService, self).stop()
+
+    def start_filters(self):
+        blk_filter = self.web3.eth.filter('latest')
+        blk_filter.watch(self.on_new_block)
+
+    def on_new_block(self, blockhash):
+        log.info("new block", blockhash=blockhash)
