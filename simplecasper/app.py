@@ -19,6 +19,7 @@ from devp2p.service import BaseService
 from ethereum.utils import encode_hex, sha3
 from simplecasper import __version__
 
+slogging.PRINT_FORMAT = '%(asctime)s %(name)s:%(levelname).1s\t%(message)s'
 log = slogging.get_logger('app')
 
 services = [NodeDiscovery, PeerManager, DBService, ChainService, CasperService]
