@@ -54,7 +54,8 @@ def app(ctx, log_config, log_file):
                 'data_dir': 'data'
             },
             'casper': {
-                'network_id': 0
+                'network_id': 0,
+                'epoch_length': 2
             },
             'discovery': {
                 'listen_host': '0.0.0.0',

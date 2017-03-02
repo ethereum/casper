@@ -21,6 +21,7 @@ class ChainService(BaseService):
     )
 
     def __init__(self, app):
+        log.info("Chain service init")
         super(ChainService, self).__init__(app)
 
         if self.app.config['chain']['provider'] == 'jsonrpc':
@@ -47,3 +48,6 @@ class ChainService(BaseService):
 
     def on_new_block(self, blockhash):
         log.info("new block", blockhash=blockhash)
+
+        blk = self.web3.eth.getBlock(block_identifier=blockhash)
+        self.app.services.casper.on_new_block(blk)

@@ -9,26 +9,31 @@ class CasperService(WiredService):
 
     name = 'casper'
     default_config = dict(
+        casper=dict(
+            network_id=0,
+            epoch_length=100
+        )
     )
 
     # required by WiredService
     wire_protocol = CasperProtocol  # create for each peer
 
     def __init__(self, app):
-        self.config = app.config['casper']
+        log.info("Casper service init")
         self.db = app.services.db
 
+        cfg = app.config['casper']
         if 'network_id' in self.db:
             db_network_id = self.db.get('network_id')
-            if db_network_id != str(self.config['network_id']):
+            if db_network_id != str(cfg['network_id']):
                 raise RuntimeError(
                     "The database in '{}' was initialized with network id {} and can not be used "
                     "when connecting to network id {}. Please choose a different data directory.".format(
-                        self.config['db']['data_dir'], db_network_id, self.config['network_id']
+                        app.config['db']['data_dir'], db_network_id, cfg['network_id']
                     )
                 )
         else:
-            self.db.put('network_id', str(self.config['network_id']))
+            self.db.put('network_id', str(cfg['network_id']))
             self.db.commit()
 
         super(CasperService, self).__init__(app)
@@ -61,3 +66,15 @@ class CasperService(WiredService):
 
     def on_receive_commit(self, hash, view):
         pass
+
+    def broadcast_prepare(self, blk):
+        log.debug('broadcast prepare message',
+                  number=blk['number'],
+                  hash=blk['hash'])
+        pass
+
+    def on_new_block(self, blk):
+        log.info('on new block', block=blk)
+
+        if blk['number'] % self.config['casper']['epoch_length'] == 0:
+            self.broadcast_prepare(blk)
