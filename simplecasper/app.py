@@ -10,6 +10,7 @@ from gevent.event import Event
 
 import ethereum.slogging as slogging
 from casper_service import CasperService
+from chain_service import ChainService
 from db_service import DBService
 from devp2p.app import BaseApp
 from devp2p.discovery import NodeDiscovery
@@ -20,7 +21,7 @@ from simplecasper import __version__
 
 log = slogging.get_logger('app')
 
-services = [NodeDiscovery, PeerManager, DBService, CasperService]
+services = [NodeDiscovery, PeerManager, DBService, ChainService, CasperService]
 
 privkeys = [encode_hex(sha3(i)) for i in range(100, 200)]
 
