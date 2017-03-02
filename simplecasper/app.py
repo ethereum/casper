@@ -16,7 +16,7 @@ from devp2p.app import BaseApp
 from devp2p.discovery import NodeDiscovery
 from devp2p.peermanager import PeerManager
 from devp2p.service import BaseService
-from ethereum.utils import encode_hex, sha3
+from ethereum.utils import encode_hex, decode_hex, sha3, privtopub
 from simplecasper import __version__
 
 slogging.PRINT_FORMAT = '%(asctime)s %(name)s:%(levelname).1s\t%(message)s'
@@ -25,6 +25,7 @@ log = slogging.get_logger('app')
 services = [NodeDiscovery, PeerManager, DBService, ChainService, CasperService]
 
 privkeys = [encode_hex(sha3(i)) for i in range(100, 200)]
+pubkeys = [encode_hex(privtopub(decode_hex(k))[1:]) for k in privkeys]
 
 
 class SimpleCasper(BaseApp):
@@ -61,7 +62,9 @@ def app(ctx, log_config, log_file):
             'discovery': {
                 'listen_host': '0.0.0.0',
                 'listen_port': 20170,
-                'bootstrap_nodes': []
+                'bootstrap_nodes': [
+                    'enode://%s@127.0.0.1:20170' % pubkeys[0]
+                ]
             },
             'p2p': {
                 'listen_host': '0.0.0.0',

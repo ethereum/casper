@@ -21,6 +21,7 @@ class CasperService(WiredService):
     def __init__(self, app):
         log.info("Casper service init")
         self.db = app.services.db
+        self.bcast = app.services.peermanager.broadcast
 
         cfg = app.config['casper']
         if 'network_id' in self.db:
@@ -58,20 +59,28 @@ class CasperService(WiredService):
         log.debug('----------------------------------')
         log.debug('on_wire_protocol_stop', proto=proto)
 
-    def on_receive_status(self, csp_version, network_id, chain_difficulty, chain_head_hash, genesis_hash):
+    def on_receive_status(self, proto, csp_version, network_id, chain_difficulty, chain_head_hash, genesis_hash):
         pass
 
-    def on_receive_prepare(self, hash, view, view_source):
+    def on_receive_prepare(self, proto, hash, view, view_source):
+        log.debug('on receive prepare',
+                  hash=hash,
+                  view=view,
+                  view_source=view_source,
+                  peer=proto.peer)
         pass
 
-    def on_receive_commit(self, hash, view):
+    def on_receive_commit(self, proto, hash, view):
         pass
 
-    def broadcast_prepare(self, blk):
+    def broadcast_prepare(self, blk, origin=None):
         log.debug('broadcast prepare message',
                   number=blk['number'],
                   hash=blk['hash'])
-        pass
+        self.bcast(CasperProtocol,
+                   'prepare',
+                   args=(blk['hash'], 100, 99),  # TODO: fix view & view_source
+                   exclude_peers=[origin.peer] if origin else [])
 
     def on_new_block(self, blk):
         log.info('on new block', block=blk)
