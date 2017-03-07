@@ -1,4 +1,5 @@
 import rlp
+from casper_messages import PrepareMessage, CommitMessage
 from devp2p.protocol import BaseProtocol, SubProtocolError
 from ethereum import slogging
 
@@ -47,18 +48,11 @@ class CasperProtocol(BaseProtocol):
         prepare(HASH, view, view_source), -1 <= view_source < view
         """
         cmd_id = 1
-        structure = [
-            ('hash', rlp.sedes.binary),
-            ('view', rlp.sedes.big_endian_int),
-            ('view_source', rlp.sedes.big_endian_int)
-        ]
+        structure = [('prepare', PrepareMessage)]
 
     class commit(BaseProtocol.command):
         """
         commit(HASH, view), 0 <= view
         """
         cmd_id = 2
-        structure = [
-            ('hash', rlp.sedes.binary),
-            ('view', rlp.sedes.big_endian_int)
-        ]
+        structure = [('commit', CommitMessage)]

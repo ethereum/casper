@@ -1,6 +1,9 @@
-from devp2p.service import WiredService
+from casper_messages import PrepareMessage
 from casper_protocol import CasperProtocol
+from devp2p.service import WiredService
 from ethereum import slogging
+from ethereum.utils import encode_hex
+from leveldb_store import LevelDBStore
 
 log = slogging.get_logger('casper')
 
@@ -11,7 +14,8 @@ class CasperService(WiredService):
     default_config = dict(
         casper=dict(
             network_id=0,
-            epoch_length=100
+            epoch_length=100,
+            privkey='\x00'*32
         )
     )
 
@@ -24,6 +28,7 @@ class CasperService(WiredService):
         self.bcast = app.services.peermanager.broadcast
 
         cfg = app.config['casper']
+        self.privkey = cfg['privkey']
         if 'network_id' in self.db:
             db_network_id = self.db.get('network_id')
             if db_network_id != str(cfg['network_id']):
@@ -36,6 +41,8 @@ class CasperService(WiredService):
         else:
             self.db.put('network_id', str(cfg['network_id']))
             self.db.commit()
+
+        self.store = LevelDBStore(self.db)
 
         super(CasperService, self).__init__(app)
 
@@ -62,24 +69,31 @@ class CasperService(WiredService):
     def on_receive_status(self, proto, csp_version, network_id, chain_difficulty, chain_head_hash, genesis_hash):
         pass
 
-    def on_receive_prepare(self, proto, hash, view, view_source):
+    def on_receive_prepare(self, proto, prepare):
         log.debug('on receive prepare',
-                  hash=hash,
-                  view=view,
-                  view_source=view_source,
+                  hash=encode_hex(prepare.hash),
+                  view=prepare.view,
+                  view_source=prepare.view_source,
                   peer=proto.peer)
-        pass
+        self.store.save_prepare(prepare)
+        self.store.commit()
 
-    def on_receive_commit(self, proto, hash, view):
+    def on_receive_commit(self, proto, commit):
         pass
 
     def broadcast_prepare(self, blk, origin=None):
         log.debug('broadcast prepare message',
                   number=blk['number'],
                   hash=blk['hash'])
+
+        prepare = PrepareMessage(blk['hash'], 100, 99)  # TODO: fix view, view_source
+        prepare.sign(self.privkey)
+        self.store.save_prepare(prepare)
+        self.store.commit()
+
         self.bcast(CasperProtocol,
                    'prepare',
-                   args=(blk['hash'], 100, 99),  # TODO: fix view & view_source
+                   args=(prepare,),
                    exclude_peers=[origin.peer] if origin else [])
 
     def on_new_block(self, blk):

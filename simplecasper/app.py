@@ -57,7 +57,8 @@ def app(ctx, log_config, log_file):
             },
             'casper': {
                 'network_id': 0,
-                'epoch_length': 2
+                'epoch_length': 2,
+                'privkey': ''
             },
             'discovery': {
                 'listen_host': '0.0.0.0',
@@ -87,6 +88,7 @@ def run(ctx, node_id, console):
     config['node']['data_dir'] += str(node_id)
     config['discovery']['listen_port'] += node_id
     config['p2p']['listen_port'] += node_id
+    config['casper']['privkey'] = decode_hex(config['node']['privkey_hex'])
     log.info("starting", config=config)
 
     if config['node']['data_dir'] and not os.path.exists(config['node']['data_dir']):

@@ -2,7 +2,7 @@
 
 tmux start-server;
 
-TMUX= tmux new-session -d -s simplecasper -n daemons
+TMUX= tmux new-session -d -s simplecasper -n casper-daemons
 
 tmux send-keys -t simplecasper:0.0 source\ \~/.zshrc C-m
 tmux send-keys -t simplecasper:0.0 simplecasper\ -l\ casper:debug\ run\ 0 C-m
