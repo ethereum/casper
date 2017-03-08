@@ -1,4 +1,4 @@
-from casper_messages import PrepareMessage
+from casper_messages import InvalidCasperMessage, PrepareMessage
 from casper_protocol import CasperProtocol
 from devp2p.service import WiredService
 from ethereum import slogging
@@ -75,8 +75,14 @@ class CasperService(WiredService):
                   view=prepare.view,
                   view_source=prepare.view_source,
                   peer=proto.peer)
-        self.store.save_prepare(prepare)
-        self.store.commit()
+        try:
+            prepare.validate()
+            self.store.save_prepare(prepare)
+            self.store.commit()
+        except InvalidCasperMessage as e:
+            log.error('invalid casper message received',
+                      reason=e,
+                      peer=proto.peer)
 
     def on_receive_commit(self, proto, commit):
         pass
