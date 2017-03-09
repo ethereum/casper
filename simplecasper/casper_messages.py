@@ -1,5 +1,11 @@
 import rlp
-from ethereum.utils import encode_hex
+from ethereum.utils import encode_hex, sha3, encode_int32, ecsign
+
+
+def sign(hash, privkey):
+    assert len(privkey) == 32
+    v, r, s = ecsign(hash, privkey)
+    return encode_int32(v) + encode_int32(r) + encode_int32(s)
 
 
 class InvalidCasperMessage(Exception):
@@ -31,8 +37,20 @@ class PrepareMessage(rlp.Serializable):
     def proposal(self):
         return "%d-%s" % (self.epoch, encode_hex(self.hash))
 
+    @property
+    def signing_hash(self):
+        return sha3(
+            'prepare%s%s%s%s%s' % (
+                encode_int32(self.epoch),
+                self.hash,
+                self.ancestry_hash,
+                encode_int32(self.epoch_source),
+                self.source_ancestry_hash
+            )
+        )
+
     def sign(self, privkey):
-        self.signature = 'mock-sig'  # TODO: sign message
+        sign(self.signing_hash, privkey)
 
 
 class CommitMessage(rlp.Serializable):
@@ -43,3 +61,15 @@ class CommitMessage(rlp.Serializable):
         ('hash', rlp.sedes.binary),
         ('signature', rlp.sedes.binary)
     ]
+
+    @property
+    def signing_hash(self):
+        return sha3(
+            'commit%s%s' % (
+                encode_int32(self.epoch),
+                self.hash
+            )
+        )
+
+    def sign(self, privkey):
+        sign(self.signing_hash, privkey)
