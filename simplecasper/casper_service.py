@@ -116,5 +116,10 @@ class CasperService(WiredService):
     def on_new_block(self, blk):
         log.info('on new block', block=blk)
 
-        if blk['number'] % self.config['casper']['epoch_length'] == 0:
-            self.broadcast_prepare(blk)
+        try:
+            self.store.save_block(blk)
+
+            if blk['number'] % self.config['casper']['epoch_length'] == 0:
+                self.broadcast_prepare(blk)
+        except KeyError:
+            log.error('failed to save block', hash=blk['hash'])
