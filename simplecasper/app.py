@@ -57,6 +57,7 @@ def app(ctx, log_config, log_file):
             },
             'casper': {
                 'network_id': 0,
+                'validator_id': 0,
                 'epoch_length': 2,
                 'privkey': ''
             },

@@ -1,6 +1,7 @@
 from casper_messages import InvalidCasperMessage, PrepareMessage
 from casper_protocol import CasperProtocol
 from devp2p.service import WiredService
+from validators import Dynasty, Validator
 from ethereum import slogging
 from ethereum.utils import encode_hex
 from leveldb_store import LevelDBStore
@@ -14,6 +15,7 @@ class CasperService(WiredService):
     default_config = dict(
         casper=dict(
             network_id=0,
+            validator_id=0,
             epoch_length=100,
             privkey='\x00'*32
         )
@@ -43,6 +45,8 @@ class CasperService(WiredService):
             self.db.commit()
 
         self.store = LevelDBStore(self.db)
+        self.validator = self.store.load_validator(cfg['validator_id'])
+        self.epoch = 0  # TODO: initialize epoch
 
         super(CasperService, self).__init__(app)
 
@@ -92,7 +96,14 @@ class CasperService(WiredService):
                   number=blk['number'],
                   hash=blk['hash'])
 
-        prepare = PrepareMessage(blk['hash'], 100, 99)  # TODO: fix view, view_source
+        prepare = PrepareMessage(
+            validator_id=self.validator.id,
+            epoch=self.epoch,
+            hash=blk['hash'],
+            ancestry_hash='',
+            epoch_source=0,
+            source_ancestry_hash='',
+        )  # TODO: fix view, view_source
         prepare.sign(self.privkey)
         self.store.save_prepare(prepare)
         self.store.commit()
