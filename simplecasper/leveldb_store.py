@@ -1,6 +1,9 @@
-import rlp
-from validators import Validator
 import json
+
+import rlp
+from casper_messages import PrepareMessage
+from validators import Validator
+from ethereum.utils import encode_hex
 
 validators = [
     Validator(
@@ -35,21 +38,59 @@ class LevelDBStore(object):
         # return rlp.decode(self.db.get('validator_%d' % id), sedes=Validator)
         return validators[id]
 
-    def save_block(self, block):
-        hash = block['hash']
+    def load_blocks_by_number(self, number):
+        key = "block_by_number_%d" % number
         try:
-            self.db.get(hash)
+            hashes = self.db.get(key)
+            return [self.load_block(h) for h in hashes]
+        except KeyError:
+            return []
+
+    def load_block(self, hash):
+        try:
+            if len(hash) == 32:
+                hash = '0x' + encode_hex(hash)
+            return json.loads(self.db.get(hash))
+        except KeyError:
+            return None
+
+    def save_block(self, block):
+        self._save_block(block)
+        self._update_block_index(block)
+        self._update_head(block)
+
+    def _save_block(self, block):
+        try:
+            self.db.get(block['hash'])
             raise KeyError("block already in db")
         except KeyError:
-            # not exist, cool
-            self.db.put(hash, json.dumps(block))
-            head = rlp.decode(self.db.get('HEAD'), sedes=rlp.sedes.big_endian_int)
-            if block['number'] == head+1:
-                self.db.put('HEAD', rlp.encode(block['number'], sedes=rlp.sedes.big_endian_int))
-            elif block['number'] > head:  # discard future blocks
-                pass
+            self.db.put(block['hash'], json.dumps(block))
 
-    def save_prepare(self, prepare):
+    def _update_block_index(self, block):
+        key = "block_by_number_%d" % block['number']
+        try:
+            hashes = rlp.decode(self.db.get(key))
+        except KeyError:
+            hashes = []
+        hashes.append(block['hash'])
+        self.db.put(key, rlp.encode(hashes))
+
+    def _update_head(self, block):
+        head = rlp.decode(self.db.get('HEAD'), sedes=rlp.sedes.big_endian_int)
+        if block['number'] > head:
+            self.db.put('HEAD', rlp.encode(block['number'], sedes=rlp.sedes.big_endian_int))
+
+    def load_my_prepare(self, epoch):
+        try:
+            return rlp.decode(self.db.get('epoch_%d_prepare' % epoch), sedes=PrepareMessage)
+        except KeyError:
+            return None
+
+    def save_prepare(self, prepare, my=False):
+        if my:
+            self.db.put('epoch_%d_prepare' % prepare.epoch, rlp.encode(prepare))
+
+        # save prepares for certain proposal
         count_key = 'prepare_count_%s' % prepare.proposal
         try:
             count = rlp.decode(self.db.get(count_key), sedes=rlp.sedes.big_endian_int)

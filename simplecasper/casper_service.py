@@ -45,7 +45,8 @@ class CasperService(WiredService):
         self.store = LevelDBStore(self.db)
         self.validator = self.store.load_validator(cfg['validator_id'])
         self.block = None
-        self.epoch_length = 10
+        self.epoch_block = None
+        self.epoch_length = 5
         self.epoch_source = -1
         self.epoch = 0
         self.ancestry_hash = sha3('')
@@ -79,8 +80,8 @@ class CasperService(WiredService):
     def on_receive_prepare(self, proto, prepare):
         log.debug('on receive prepare',
                   hash=encode_hex(prepare.hash),
-                  view=prepare.view,
-                  view_source=prepare.view_source,
+                  epoch=prepare.epoch,
+                  epoch_source=prepare.epoch_source,
                   peer=proto.peer)
         try:
             prepare.validate()
@@ -105,6 +106,7 @@ class CasperService(WiredService):
             new_epoch = blk['number'] // self.epoch_length
             if new_epoch != self.epoch:
                 self.epoch_source = self.epoch
+                self.epoch_block = blk
                 self.epoch = new_epoch
 
             self.move()
@@ -123,7 +125,18 @@ class CasperService(WiredService):
     def is_preparable(self):
         if self.epoch_source != -1:
             pass  # TODO: check epoch_source/ancestor_hash quorum
-        # TODO: double prepare check
+        if self.store.load_my_prepare(self.epoch):
+            return False
+        if not self.epoch_block:
+            number = self.epoch * self.epoch_length
+            candidates = self.store.load_blocks_by_number(number)
+            if len(candidates) > 0:
+                self.epoch_block = candidates[0]  # TODO: better candidate selection strategy
+            else:
+                log.warn("missing epoch block, cannot prepare",
+                         epoch=self.epoch,
+                         number=number)
+                return False
         return True
 
     def broadcast_prepare(self, origin=None):
@@ -140,7 +153,7 @@ class CasperService(WiredService):
             source_ancestry_hash=self.source_ancestry_hash
         )
         prepare.sign(self.privkey)
-        self.store.save_prepare(prepare)
+        self.store.save_prepare(prepare, my=True)
         self.store.commit()
 
         self.bcast(CasperProtocol,

@@ -45,7 +45,7 @@ class PrepareMessage(rlp.Serializable):
 
     def validate(self):
         if not -1 <= self.epoch_source < self.epoch:
-            raise InvalidCasperMessage('view_source not in range')
+            raise InvalidCasperMessage('epoch_source not in range')
 
     @property
     def proposal(self):
