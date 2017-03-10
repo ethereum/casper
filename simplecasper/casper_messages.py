@@ -1,11 +1,21 @@
 import rlp
-from ethereum.utils import encode_hex, sha3, encode_int32, ecsign
+from ethereum.utils import encode_hex, sha3, encode_int32, ecsign, parse_as_bin
+from ethereum import slogging
+
+log = slogging.get_logger('casper.message')
 
 
 def sign(hash, privkey):
     assert len(privkey) == 32
     v, r, s = ecsign(hash, privkey)
     return encode_int32(v) + encode_int32(r) + encode_int32(s)
+
+
+def normalize_hash(hash):
+    if len(hash) != 32:
+        hash = parse_as_bin(hash)
+    assert len(hash) == 32
+    return hash
 
 
 class InvalidCasperMessage(Exception):
@@ -25,8 +35,12 @@ class PrepareMessage(rlp.Serializable):
     ]
 
     def __init__(self, validator_id, epoch, hash, ancestry_hash, epoch_source, source_ancestry_hash, signature=''):
+        hash = normalize_hash(hash)
+        ancestry_hash = normalize_hash(ancestry_hash)
+        source_ancestry_hash = normalize_hash(source_ancestry_hash)
+
         super(PrepareMessage, self).__init__(
-            validator_id,epoch, hash, ancestry_hash, epoch_source, source_ancestry_hash, signature
+            validator_id, epoch, hash, ancestry_hash, epoch_source, source_ancestry_hash, signature
         )
 
     def validate(self):

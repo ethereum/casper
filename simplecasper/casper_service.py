@@ -1,12 +1,11 @@
 from casper_messages import InvalidCasperMessage, PrepareMessage
 from casper_protocol import CasperProtocol
 from devp2p.service import WiredService
-from validators import Dynasty, Validator
 from ethereum import slogging
-from ethereum.utils import encode_hex
+from ethereum.utils import encode_hex, sha3
 from leveldb_store import LevelDBStore
 
-log = slogging.get_logger('casper')
+log = slogging.get_logger('casper.service')
 
 
 class CasperService(WiredService):
@@ -16,7 +15,6 @@ class CasperService(WiredService):
         casper=dict(
             network_id=0,
             validator_id=0,
-            epoch_length=100,
             privkey='\x00'*32
         )
     )
@@ -46,7 +44,12 @@ class CasperService(WiredService):
 
         self.store = LevelDBStore(self.db)
         self.validator = self.store.load_validator(cfg['validator_id'])
-        self.epoch = 0  # TODO: initialize epoch
+        self.block = None
+        self.epoch_length = 10
+        self.epoch_source = -1
+        self.epoch = 0
+        self.ancestry_hash = sha3('')
+        self.source_ancestry_hash = sha3('')
 
         super(CasperService, self).__init__(app)
 
@@ -91,19 +94,51 @@ class CasperService(WiredService):
     def on_receive_commit(self, proto, commit):
         pass
 
-    def broadcast_prepare(self, blk, origin=None):
+    def on_new_block(self, blk):
+        log.info('on new block', block=blk)
+
+        try:
+            self.store.save_block(blk)
+            self.block = blk
+            # the blk comes from geth/parity, we just assume it's valid and skip PoW check
+
+            new_epoch = blk['number'] // self.epoch_length
+            if new_epoch != self.epoch:
+                self.epoch_source = self.epoch
+                self.epoch = new_epoch
+
+            self.move()
+        except KeyError:
+            log.error('failed to save block', hash=blk['hash'])
+
+    def move(self):
+        if self.is_commitable():
+            self.broadcast_commit()
+        if self.is_preparable():
+            self.broadcast_prepare()
+
+    def is_commitable(self):
+        return False
+
+    def is_preparable(self):
+        if self.epoch_source != -1:
+            pass  # TODO: check epoch_source/ancestor_hash quorum
+        # TODO: double prepare check
+        return True
+
+    def broadcast_prepare(self, origin=None):
         log.debug('broadcast prepare message',
-                  number=blk['number'],
-                  hash=blk['hash'])
+                  number=self.block['number'],
+                  hash=self.block['hash'])
 
         prepare = PrepareMessage(
             validator_id=self.validator.id,
             epoch=self.epoch,
-            hash=blk['hash'],
-            ancestry_hash='',
-            epoch_source=0,
-            source_ancestry_hash='',
-        )  # TODO: fix view, view_source
+            hash=self.block['hash'],
+            ancestry_hash=self.ancestry_hash,
+            epoch_source=self.epoch_source,
+            source_ancestry_hash=self.source_ancestry_hash
+        )
         prepare.sign(self.privkey)
         self.store.save_prepare(prepare)
         self.store.commit()
@@ -113,13 +148,5 @@ class CasperService(WiredService):
                    args=(prepare,),
                    exclude_peers=[origin.peer] if origin else [])
 
-    def on_new_block(self, blk):
-        log.info('on new block', block=blk)
-
-        try:
-            self.store.save_block(blk)
-
-            if blk['number'] % self.config['casper']['epoch_length'] == 0:
-                self.broadcast_prepare(blk)
-        except KeyError:
-            log.error('failed to save block', hash=blk['hash'])
+    def broadcast_commit(self):
+        pass
