@@ -25,6 +25,9 @@ INSTALL_REQUIRES_REPLACEMENTS = {}
 INSTALL_REQUIRES = list()
 with open('requirements.txt') as requirements_file:
     for requirement in requirements_file:
+        # install_requires will break on git URLs, so skip them
+        if 'git+' in requirement:
+            continue
         dependency = INSTALL_REQUIRES_REPLACEMENTS.get(
             requirement.strip(),
             requirement.strip(),
