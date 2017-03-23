@@ -4,5 +4,5 @@ click
 wheel
 rlp>=0.4.4
 devp2p>=0.8.0
-ethereum>=1.6.0
-web3>=3.7.2
+git+https://github.com/ethereum/pyethereum.git@state_revamp
+web3>=3.8.0
