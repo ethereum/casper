@@ -89,8 +89,9 @@ def app(ctx, log_config, log_file, data_dir, unlock, password):
 @app.command()
 @click.argument('node_id', type=click.IntRange(0, 100))
 @click.option('--console', is_flag=True, help='Immediately drop into interactive console.')
+@click.option('--fake-account', is_flag=True, help='Use a fake account for testing purposes')
 @click.pass_context
-def run(ctx, node_id, console):
+def run(ctx, node_id, console, fake_account):
     """Start the daemon"""
     config = ctx.obj['config']
     config['node']['privkey_hex'] = privkeys[node_id]
@@ -109,9 +110,13 @@ def run(ctx, node_id, console):
         assert service.name not in app.services
         service.register_with_app(app)
         assert hasattr(app.services, service.name)
-
         # If this service is the account service, then attempt to unlock the coinbase
         if service is AccountsService:
+            # If the fake_account flag is True, create a temparary fake account based on node_id
+            if fake_account:
+                account = Account.new('', decode_hex(privkeys[node_id]))
+                app.services.accounts.add_account(account, store=False)
+                continue
             unlock_accounts(ctx.obj['unlock'], app.services.accounts, password=ctx.obj['password'])
             try:
                 app.services.accounts.coinbase
