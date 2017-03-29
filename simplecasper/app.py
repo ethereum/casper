@@ -47,18 +47,20 @@ class SimpleCasper(BaseApp):
               help='log_config string: e.g. ":info,eth:debug', show_default=True)
 @click.option('--log-file', type=click.Path(dir_okay=False, writable=True, resolve_path=True),
               help="Log to file instead of stderr.")
+@click.option('--data-dir', '-d', multiple=False, type=str,
+              help='data directory', default='data', show_default=True)
 @click.option('--unlock', multiple=True, type=str,
               help='Unlock an account (prompts for password)')
 @click.option('--password', type=click.File(), help='path to a password file')
 @click.pass_context
-def app(ctx, log_config, log_file, unlock, password):
+def app(ctx, log_config, log_file, data_dir, unlock, password):
     slogging.configure(log_config, log_file=log_file)
     ctx.obj = {
         'log_config': log_config,
         'log_file': log_file,
         'config': {
             'node': {
-                'data_dir': 'data'
+                'data_dir': data_dir
             },
             'casper': {
                 'network_id': 0,
@@ -92,10 +94,8 @@ def run(ctx, node_id, console):
     """Start the daemon"""
     config = ctx.obj['config']
     config['node']['privkey_hex'] = privkeys[node_id]
-    config['node']['data_dir'] += str(node_id)
     config['discovery']['listen_port'] += node_id
     config['p2p']['listen_port'] += node_id
-    config['casper']['privkey'] = decode_hex(config['node']['privkey_hex'])
     log.info("starting", config=config)
 
     if config['node']['data_dir'] and not os.path.exists(config['node']['data_dir']):
@@ -109,6 +109,16 @@ def run(ctx, node_id, console):
         assert service.name not in app.services
         service.register_with_app(app)
         assert hasattr(app.services, service.name)
+
+        # If this service is the account service, then attempt to unlock the coinbase
+        if service is AccountsService:
+            unlock_accounts(ctx.obj['unlock'], app.services.accounts, password=ctx.obj['password'])
+            try:
+                app.services.accounts.coinbase
+            except ValueError as e:
+                log.fatal('invalid coinbase', coinbase=config.get('pow', {}).get('coinbase_hex'),
+                          error=e.message)
+                sys.exit()
 
     # start app
     log.info('starting')
