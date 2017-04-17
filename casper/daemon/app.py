@@ -19,7 +19,7 @@ from devp2p.discovery import NodeDiscovery
 from devp2p.peermanager import PeerManager
 from devp2p.service import BaseService
 from ethereum.utils import encode_hex, decode_hex, sha3, privtopub
-from simplecasper import __version__
+from casper import __version__
 
 slogging.PRINT_FORMAT = '%(asctime)s %(name)s:%(levelname).1s\t%(message)s'
 log = slogging.get_logger('app')
@@ -30,8 +30,8 @@ privkeys = [encode_hex(sha3(i)) for i in range(100, 200)]
 pubkeys = [encode_hex(privtopub(decode_hex(k))[1:]) for k in privkeys]
 
 
-class SimpleCasper(BaseApp):
-    client_name = 'simplecasper'
+class Casper(BaseApp):
+    client_name = 'casper'
     client_version = '%s/%s/%s' % (__version__, sys.platform,
                                    'py%d.%d.%d' % sys.version_info[:3])
     client_version_string = '%s/v%s' % (client_name, client_version)
@@ -42,7 +42,7 @@ class SimpleCasper(BaseApp):
     script_globals = {}
 
 
-@click.group(help='Welcome to {} {}'.format(SimpleCasper.client_name, SimpleCasper.client_version))
+@click.group(help='Welcome to {} {}'.format(Casper.client_name, Casper.client_version))
 @click.option('-l', '--log_config', multiple=False, type=str, default=":info",
               help='log_config string: e.g. ":info,eth:debug', show_default=True)
 @click.option('--log-file', type=click.Path(dir_okay=False, writable=True, resolve_path=True),
@@ -102,7 +102,7 @@ def run(ctx, node_id, console, fake_account):
     if config['node']['data_dir'] and not os.path.exists(config['node']['data_dir']):
         os.makedirs(config['node']['data_dir'])
 
-    app = SimpleCasper(config)
+    app = Casper(config)
     app.start_console = console
 
     for service in services:
@@ -155,7 +155,7 @@ def account(ctx):
     For accounts to be accessible by pyethapp, their keys must be stored in the keystore directory.
     Its path can be configured through "accounts.keystore_dir".
     """
-    app = SimpleCasper(ctx.obj['config'])
+    app = Casper(ctx.obj['config'])
     ctx.obj['app'] = app
     AccountsService.register_with_app(app)
     unlock_accounts(ctx.obj['unlock'], app.services.accounts, password=ctx.obj['password'])

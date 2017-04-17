@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import codecs
 from setuptools import setup
 from setuptools.command.test import test as TestCommand
 
@@ -42,15 +41,14 @@ INSTALL_REQUIRES = list(set(INSTALL_REQUIRES))
 version = '0.0.1'
 
 setup(
-    name='simplecasper',
+    name='casper',
     version=version,
-    description='Ethereum Casper POC4 Daemon',
-    long_description="Ethereum Casper POC4 Daemon",
-    author='Jan Xie',
-    author_email='jan.h.xie@gmail.com',
-    url='https://github.com/cryptape/simplecasper',
+    description='A proof of stake protocol for Ethereum',
+    author='Ethereum Foundation',
+    author_email='info@ethereum.org',
+    url='https://github.com/ethereum/casper',
     packages=[
-        'simplecasper',
+        'casper',
     ],
     package_data={},
     license='MIT',
@@ -73,6 +71,6 @@ setup(
     tests_require=[],
     entry_points='''
     [console_scripts]
-    simplecasper=simplecasper.app:app
+    casper=casper.daemon.app:app
     '''
 )

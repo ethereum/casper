@@ -11,11 +11,11 @@ GIT_DESCRIBE_RE = re.compile('^(?P<version>v\d+\.\d+\.\d+)-(?P<git>\d+-g[a-fA-F0
 
 __version__ = None
 try:
-    _dist = get_distribution('simplecasper')
+    _dist = get_distribution('casper')
     # Normalize case for Windows systems
     dist_loc = os.path.normcase(_dist.location)
     here = os.path.normcase(__file__)
-    if not here.startswith(os.path.join(dist_loc, 'simplecasper')):
+    if not here.startswith(os.path.join(dist_loc, 'casper')):
         # not installed, but there is another version that *is*
         raise DistributionNotFound
     __version__ = _dist.version
