@@ -243,7 +243,7 @@ def flick_status(logout_msg: bytes <= 1024):
                 e = new_ds % 256
             else:
                 e = 256
-            self.dynasty_mask[validator_index][i] = num256_sub(shift(as_num256(1), e), shift(as_num256(1), s))
+            self.dynasty_mask[validator_index][i] = bitwise_or(num256_sub(shift(as_num256(1), e), shift(as_num256(1), s)), self.dynasty_mask[validator_index][i])
             if e < 256:
                 break
         self.validators[validator_index].dynasty_start = new_ds
