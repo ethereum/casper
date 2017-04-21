@@ -46,8 +46,12 @@ class ChainService(BaseService):
         blk_filter = self.web3.eth.filter('latest')
         blk_filter.watch(self.on_new_block)
 
-    def on_new_block(self, blockhash):
-        log.info("new block", blockhash=blockhash)
+    def on_new_block(self, hash):
+        log.info("new block", blockhash=hash)
 
-        blk = self.web3.eth.getBlock(block_identifier=blockhash)
+        blk = self.web3.eth.getBlock(block_identifier=hash)
         self.app.services.casper.on_new_block(blk)
+
+    def block(self, hash):
+        return self.web3.eth.getBlock(block_identifier=hash)
+

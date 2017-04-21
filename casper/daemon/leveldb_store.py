@@ -4,6 +4,11 @@ import rlp
 from casper_messages import PrepareMessage
 from validators import Validator
 from ethereum.utils import encode_hex
+from ethereum import slogging
+
+
+log = slogging.get_logger('leveldb.store')
+
 
 validators = [
     Validator(
@@ -25,8 +30,7 @@ validators = [
 class LevelDBStore(object):
 
     epoch_length_key = 'epoch_length'
-    genesis_hash_key = 'genesis_hash'
-    head_key = 'head'
+    genesis_key = 'genesis'
     current_epoch_key = 'cur'
     checkpoint_count_key = 'cpcount'
     checkpoint_key_ = 'cp_%d'
@@ -37,31 +41,26 @@ class LevelDBStore(object):
     prepare_count_key_ = 'ppcount_for_%s'
     prepare_key_ = 'pp_for_%s_%d'
 
-    def __init__(self, db, epoch_length, genesis_hash):
+    def __init__(self, db, epoch_length, genesis):
         self.db = db
-
         try:
-            self.head()  # assert initialized
+            assert genesis['hash'] == self.genesis()['hash']
             assert epoch_length == self.epoch_length()
-            assert genesis_hash == self.genesis_hash()
         except KeyError:
-            self.init_db(epoch_length)
+            self.init_db(epoch_length, genesis)
 
-    def init_db(self, epoch_length, genesis_hash):
+    def init_db(self, epoch_length, genesis):
+        self.put_json(self.genesis_key, genesis)
         self.put_int(self.epoch_length_key, epoch_length)
-        self.put_bin(self.genesis_hash_key, genesis_hash)
-        self.put_int(self.head_key, 0)
         self.put_int(self.current_epoch_key, 0)
         self.put_int(self.checkpoint_count_key, 0)
+        log.info("db initialized")
 
     def epoch_length(self):
         return self.get_int(self.epoch_length_key)
 
-    def genesis_hash(self):
-        return self.get_bin(self.genesis_hash_key)
-
-    def head(self):
-        return self.get_int(self.head_key)
+    def genesis(self):
+        return self.get_json(self.genesis_key)
 
     def current_epoch(self):
         return self.get_int(self.current_epoch_key)
@@ -132,7 +131,7 @@ class LevelDBStore(object):
     def save_block(self, block, epoch_start):
         self._save_block(block)
         self._update_block_index(block, epoch_start)
-        self._update_head(block)
+        log.debug("block saved", hash=block['hash'])
 
     def _save_block(self, block):
         assert not self.block(block['hash'])
@@ -152,11 +151,6 @@ class LevelDBStore(object):
             if block['number'] > parent_tail['number']:
                 self.save_tail(parent_cp_hash, block)
 
-    def _update_head(self, block):
-        head = self.head()
-        if block['number'] > head:
-            self.put_int(self.head_key, 0)
-
     def my_prepare(self, epoch):
         try:
             return rlp.decode(self.db.get(self.my_prepare_key_ % epoch), sedes=PrepareMessage)
@@ -168,7 +162,7 @@ class LevelDBStore(object):
             self.db.put(self.my_prepare_key_ % prepare.epoch, rlp.encode(prepare))
 
         # save prepares for certain proposal
-        count_key = self.prepare_count_key % prepare.proposal
+        count_key = self.prepare_count_key_ % prepare.proposal
         try:
             count = self.get_int(count_key)
         except KeyError:

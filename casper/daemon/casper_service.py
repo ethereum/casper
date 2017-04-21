@@ -16,7 +16,9 @@ class CasperService(WiredService):
         casper=dict(
             network_id=0,
             validator_id=0,
-            privkey='\x00'*32
+            privkey='\x00'*32,
+            epoch_length=5,
+            genesis_hash=''  # genesis of Casper, not block#0
         )
     )
 
@@ -44,15 +46,19 @@ class CasperService(WiredService):
             self.db.put('network_id', str(cfg['network_id']))
             self.db.commit()
 
-        self.store = LevelDBStore(self.db)
-        self.validator = self.store.validator(cfg['validator_id'])
         self.block = None
+        self.epoch_length = cfg['epoch_length']
         self.epoch_block = None
-        self.epoch_length = 5
         self.epoch_source = -1
         self.epoch = 0
         self.ancestry_hash = sha3('')
         self.source_ancestry_hash = sha3('')
+
+        self.chain = app.services.chain
+        self.genesis = self.chain.block(cfg['genesis_hash'])
+        assert self.genesis
+        self.store = LevelDBStore(self.db, self.epoch_length, self.genesis)
+        self.validator = self.store.validator(cfg['validator_id'])
 
         super(CasperService, self).__init__(app)
 
