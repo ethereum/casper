@@ -45,7 +45,7 @@ class CasperService(WiredService):
             self.db.commit()
 
         self.store = LevelDBStore(self.db)
-        self.validator = self.store.load_validator(cfg['validator_id'])
+        self.validator = self.store.validator(cfg['validator_id'])
         self.block = None
         self.epoch_block = None
         self.epoch_length = 5
@@ -130,11 +130,11 @@ class CasperService(WiredService):
     def is_preparable(self):
         if self.epoch_source != -1:
             pass  # TODO: check epoch_source/ancestor_hash quorum
-        if self.store.load_my_prepare(self.epoch):
+        if self.store.my_prepare(self.epoch):
             return False
         if not self.epoch_block:
             number = self.epoch * self.epoch_length
-            candidates = self.store.load_blocks_by_number(number)
+            candidates = self.store.blocks_by_number(number)
             if len(candidates) > 0:
                 self.epoch_block = candidates[0]  # TODO: better candidate selection strategy
             else:
