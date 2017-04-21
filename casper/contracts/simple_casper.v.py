@@ -252,7 +252,7 @@ def flick_status(logout_msg: bytes <= 1024):
     # Logging out
     else:
         # Check that we haven't already withdrawn
-        assert self.validators[validator_index].dynasty_end >= self.dynasty + 2
+        assert self.validators[validator_index].dynasty_end > self.dynasty + 2
         # Set the end dynasty
         self.validators[validator_index].dynasty_end = self.dynasty + 2
         self.second_next_dynasty_wei_delta -= self.validators[validator_index].deposit
@@ -261,16 +261,17 @@ def flick_status(logout_msg: bytes <= 1024):
 
 # Removes a validator from the validator pool
 def delete_validator(validator_index: num):
-    self.validators[validator_index] = {
-        deposit: 0,
-        dynasty_start: 0,
-        dynasty_end: 0,
-        original_dynasty_start: 0,
-        withdrawal_epoch: 0,
-        addr: None,
-        withdrawal_addr: None,
-        prev_commit_epoch: 0,
-    }
+    if msg.sender == self:
+        self.validators[validator_index] = {
+            deposit: 0,
+            dynasty_start: 0,
+            dynasty_end: 0,
+            original_dynasty_start: 0,
+            withdrawal_epoch: 0,
+            addr: None,
+            withdrawal_addr: None,
+            prev_commit_epoch: 0,
+        }
 
 # Withdraw deposited ether
 def withdraw(validator_index: num):
