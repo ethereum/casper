@@ -18,7 +18,7 @@ class CasperService(WiredService):
             validator_id=0,
             privkey='\x00'*32,
             epoch_length=5,
-            genesis_hash=''  # genesis of Casper, not block#0
+            genesis_hash=''  # genesis of Casper, not block#0, must be on epoch boundary
         )
     )
 
@@ -57,9 +57,10 @@ class CasperService(WiredService):
         self.chain = app.services.chain
         self.genesis = self.chain.block(cfg['genesis_hash'])
         assert self.genesis
+        assert self.genesis['number'] % self.epoch_length == 0
+
         self.store = LevelDBStore(self.db, self.epoch_length, self.genesis)
         self.validator = self.store.validator(cfg['validator_id'])
-
         super(CasperService, self).__init__(app)
 
     def on_wire_protocol_start(self, proto):
@@ -108,8 +109,12 @@ class CasperService(WiredService):
 
         try:
             epoch_start = blk['number'] % self.epoch_length == 0
-            # TODO: what if we received a blk on a new fork?
-            self.store.save_block(blk, epoch_start)
+            try:
+                # TODO: what if we received a blk on a new fork?
+                self.store.save_block(blk, epoch_start)
+            except KeyError:
+                self.sync_epoch(blk)
+
             # the blk comes from geth/parity, we just assume it's valid and skip PoW check
             self.block = blk
 
@@ -123,6 +128,16 @@ class CasperService(WiredService):
         except KeyError:
             log.debug(traceback.format_exc())
             log.error('failed to save block', hash=blk['hash'])
+
+    def sync_epoch(self, blk):
+        epoch_blocks = [blk]
+        while blk['number'] % self.epoch_length != 0:
+            blk = self.chain.block(blk['parentHash'])
+            epoch_blocks.insert(0, blk)
+        for b in epoch_blocks:
+            self.store.save_block(b, b['number'] % self.epoch_length == 0)
+            log.info("syncing epoch", number=b['number'], hash=b['hash'])
+        log.info("epoch %d synced" % (blk['number'] // self.epoch_length))
 
     def move(self):
         if self.is_commitable():

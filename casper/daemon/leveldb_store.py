@@ -54,6 +54,7 @@ class LevelDBStore(object):
         self.put_int(self.epoch_length_key, epoch_length)
         self.put_int(self.current_epoch_key, 0)
         self.put_int(self.checkpoint_count_key, 0)
+        self.save_block(genesis, True)
         log.info("db initialized")
 
     def epoch_length(self):
@@ -129,8 +130,8 @@ class LevelDBStore(object):
             return None
 
     def save_block(self, block, epoch_start):
-        self._save_block(block)
         self._update_block_index(block, epoch_start)
+        self._save_block(block)
         log.debug("block saved", hash=block['hash'])
 
     def _save_block(self, block):
@@ -143,8 +144,6 @@ class LevelDBStore(object):
             self.save_tail_membership(block['hash'], block['hash'])
             self.save_tail(block['hash'], block)
         else:
-            # TODO: sync history blocks on start?
-            #assert self.block(block['parentHash'])
             parent_cp_hash = self.tail_membership(block['parentHash'])
             self.save_tail_membership(block['hash'], parent_cp_hash)
             parent_tail = self.tail(parent_cp_hash)
@@ -188,7 +187,7 @@ class LevelDBStore(object):
 
     def get_list(self, k, element_sedes=rlp.sedes.binary):
         sedes = rlp.sedes.CountableList(element_sedes)
-        return rlp.decode(self.db.get(k), sedes=sedes)
+        return list(rlp.decode(self.db.get(k), sedes=sedes))
 
     def put_bin(self, k, v):
         self.db.put(k, v)
