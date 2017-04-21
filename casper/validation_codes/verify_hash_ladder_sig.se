@@ -1,0 +1,35 @@
+macro PUB: 0x41fd19e4450fd5fa8499231552a2e967e95a6e5a8e6bb5de5523b9cbdfc559e7
+macro NUM_SUBKEYS: 26
+macro DEPTH: 64
+macro PROOFLEN: 7
+
+# Copy signature into memory
+~calldatacopy(0, 32, 32 * NUM_SUBKEYS)
+
+# Climb down the hash ladder
+with i = 0:
+    while i < NUM_SUBKEYS:
+        ~mstore(32 * NUM_SUBKEYS + 32, ~calldataload(0))
+        with j = ~mod(~mload(32 * NUM_SUBKEYS + 32 - i), DEPTH):
+            while j < DEPTH:
+                ~mstore(i * 32, ~sha3(i * 32, 32))
+                j += 1
+        i += 1
+
+# ~return(0, 32 * NUM_SUBKEYS)
+# Pubkey hash
+with h = ~sha3(0, 32 * NUM_SUBKEYS):
+    with index = ~mod(~calldataload(~calldatasize() - 32), 65536):
+        with i = 0:
+            while i < PROOFLEN:
+                if index % 2:
+                    ~mstore(0, ~calldataload(32 + 32 * NUM_SUBKEYS + 32 * i))
+                    ~mstore(32, h)
+                else:
+                    ~mstore(32, ~calldataload(32 + 32 * NUM_SUBKEYS + 32 * i))
+                    ~mstore(0, h)
+                h = ~sha3(0, 64)
+                i += 1
+                index = ~div(index, 2)
+    assert h == PUB
+    return(1)
