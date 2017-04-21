@@ -1,3 +1,5 @@
+# Implements a version of https://gist.github.com/alexwebr/da8dd928002a236c4709
+
 try:
     from Crypto.Hash import keccak
     sha3 = lambda x: keccak.new(digest_bits=256, data=x).digest()
