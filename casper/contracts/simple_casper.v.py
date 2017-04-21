@@ -261,6 +261,7 @@ def flick_status(logout_msg: bytes <= 1024):
 
 # Removes a validator from the validator pool
 def delete_validator(validator_index: num):
+    assert msg.sender == self
     self.validators[validator_index] = {
         deposit: 0,
         dynasty_start: 0,
