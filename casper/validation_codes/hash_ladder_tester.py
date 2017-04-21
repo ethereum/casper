@@ -14,6 +14,7 @@ verifier_code = open('verify_hash_ladder_sig.se').read() \
 
 verifier = s.contract(verifier_code)
 
-s.send(t.k0, verifier, 0, b'\x81' * 32 + signer.sign(b'\x81' * 32, 9))
+msg = h.sha3(b'doge')
+print(s.send(t.k0, verifier, 0, msg + signer.sign(msg, 9)))
 print('Verification successful')
 print('Gas used: %d' % (s.state.receipts[-1].gas_used - s.state.receipts[-2].gas_used - s.last_tx.intrinsic_gas_used))

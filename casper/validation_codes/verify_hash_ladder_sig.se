@@ -1,32 +1,39 @@
 macro PUB: 0x41fd19e4450fd5fa8499231552a2e967e95a6e5a8e6bb5de5523b9cbdfc559e7
-macro NUM_SUBKEYS: 26
-macro DEPTH: 64
+macro NUM_SUBKEYS: 32
+macro DEPTH: 32
 macro PROOFLEN: 7
 
 # Copy signature into memory
-~calldatacopy(0, 32, 32 * NUM_SUBKEYS)
+~calldatacopy(0, 32, 32 * NUM_SUBKEYS + 32)
 
 # Climb down the hash ladder
-with i = 0:
-    while i < NUM_SUBKEYS:
-        ~mstore(32 * NUM_SUBKEYS + 32, ~calldataload(0))
-        with j = ~mod(~mload(32 * NUM_SUBKEYS + 32 - i), DEPTH):
-            while j < DEPTH:
-                ~mstore(i * 32, ~sha3(i * 32, 32))
-                j += 1
-        i += 1
+with totdepth = 0:
+    with i = 0:
+        while i < NUM_SUBKEYS * 32:
+            ~mstore(32 * NUM_SUBKEYS + 96, ~calldataload(0))
+            with j = ~mod(~mload(32 * NUM_SUBKEYS + 65 + ~div(i, 32)), DEPTH) :
+                totdepth += j
+                while j < DEPTH:
+                    ~mstore(i, ~sha3(i, 32))
+                    j += 1
+            i += 32
+    while totdepth > 0:
+        ~mstore(NUM_SUBKEYS * 32, ~sha3(NUM_SUBKEYS * 32, 32))
+        totdepth -= 1
+    # ~return(0, 32 * NUM_SUBKEYS + 32)
 
-# ~return(0, 32 * NUM_SUBKEYS)
+# ~return(0, 32 * NUM_SUBKEYS + 32)
 # Pubkey hash
-with h = ~sha3(0, 32 * NUM_SUBKEYS):
+with h = ~sha3(0, 32 * NUM_SUBKEYS + 32):
+    # Verify the Merkle proof
     with index = ~mod(~calldataload(~calldatasize() - 32), 65536):
         with i = 0:
             while i < PROOFLEN:
                 if index % 2:
-                    ~mstore(0, ~calldataload(32 + 32 * NUM_SUBKEYS + 32 * i))
+                    ~mstore(0, ~calldataload(64 + 32 * NUM_SUBKEYS + 32 * i))
                     ~mstore(32, h)
                 else:
-                    ~mstore(32, ~calldataload(32 + 32 * NUM_SUBKEYS + 32 * i))
+                    ~mstore(32, ~calldataload(64 + 32 * NUM_SUBKEYS + 32 * i))
                     ~mstore(0, h)
                 h = ~sha3(0, 64)
                 i += 1

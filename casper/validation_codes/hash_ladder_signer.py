@@ -7,8 +7,8 @@ except ImportError:
     import sha3 as _sha3
     sha3 = lambda x: _sha3.sha3_256(x).digest()
 
-NUM_SUBKEYS = 26
-DEPTH = 64
+NUM_SUBKEYS = 32
+DEPTH = 32
 
 def iterate_hash(msg, n):
     for i in range(n):
@@ -22,9 +22,9 @@ class LamportSigner():
         self.keys = []
         self.pubs = []
         for i in range(self.indexcount):
-            subkeys = [sha3(key + bytes([i // 256, i % 256, j])) for j in range(NUM_SUBKEYS)]
+            subkeys = [sha3(key + bytes([i // 256, i % 256, j])) for j in range(NUM_SUBKEYS + 1)]
             self.keys.append(subkeys)
-            pubs = [iterate_hash(k, DEPTH) for k in subkeys]
+            pubs = [iterate_hash(k, DEPTH) for k in subkeys[:-1]] + [iterate_hash(subkeys[-1], DEPTH * NUM_SUBKEYS)]
             self.pubs.append(b''.join(pubs))
             if i % 256 == 255:
                 print("Finished %d out of %d privkeys" % ((i + 1), self.indexcount))
@@ -45,7 +45,8 @@ class LamportSigner():
 
     def sign(self, msghash, index):
         assert isinstance(msghash, bytes)
-        subkeys = self.keys[index]
+        subkeys, balance_key = self.keys[index][:-1], self.keys[index][-1]
         depths = [msghash[i] % DEPTH for i in range(NUM_SUBKEYS)]
-        values = [iterate_hash(subkey, depth) for subkey, depth in zip(subkeys, depths)]
+        values = [iterate_hash(subkey, depth) for subkey, depth in zip(subkeys, depths)] + \
+                 [iterate_hash(balance_key, DEPTH * NUM_SUBKEYS - sum(depths))]
         return b''.join(values) + b''.join(self.merkle_prove_pubkey(index)) + bytes([index // 256, index % 256])
