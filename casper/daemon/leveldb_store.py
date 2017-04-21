@@ -10,10 +10,12 @@ validators = [
         id=0,
         deposit=100000000000000000000,
         dynasty_start=0,
+        original_dynasty_start=0,
         dynasty_end=100000000000000000,
-        withdrawal_time=100000000000000000000,
-        withdrawal_addr='',
+        withdrawal_epoch=100000000000000000000,
         addr='',
+        withdrawal_addr='',
+        prev_commit_epoch=0,
         max_prepared=0,
         max_committed=0
     )
@@ -54,9 +56,9 @@ class LevelDBStore(object):
         except KeyError:
             return None
 
-    def save_block(self, block):
+    def save_block(self, block, epoch_start):
         self._save_block(block)
-        self._update_block_index(block)
+        self._update_block_index(block, epoch_start)
         self._update_head(block)
 
     def _save_block(self, block):
@@ -66,14 +68,29 @@ class LevelDBStore(object):
         except KeyError:
             self.db.put(block['hash'], json.dumps(block))
 
-    def _update_block_index(self, block):
-        key = "block_by_number_%d" % block['number']
+    def _update_block_index(self, block, epoch_start):
+        k1 = "block_by_number_%d" % block['number']
         try:
-            hashes = rlp.decode(self.db.get(key))
+            hashes = rlp.decode(self.db.get(k1))
         except KeyError:
             hashes = []
         hashes.append(block['hash'])
-        self.db.put(key, rlp.encode(hashes))
+        self.db.put(k1, rlp.encode(hashes))
+
+        k2 = "tail_membership_%s" % block['hash']
+        k3 = "tails_%s" % block['hash']
+        if epoch_start:
+            self.db.put(k2, block['hash'])
+            self.db.put(k3, json.dumps(block))
+        else:
+            # assert it's part of the longest tail
+            self.db.get(block['parentHash'])
+            parent_membership = self.db.get("tail_membership_%s" % block['parentHash'])
+
+            self.db.put(k2, parent_membership)
+            parent_tail = json.loads(self.db.get("tails_%s" % parent_membership))
+            if block['number'] > parent_tail['number']:
+                self.db.put("tails_%s" % parent_membership, json.dumps(block))
 
     def _update_head(self, block):
         head = rlp.decode(self.db.get('HEAD'), sedes=rlp.sedes.big_endian_int)

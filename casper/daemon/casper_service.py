@@ -1,3 +1,4 @@
+import traceback
 from casper_messages import InvalidCasperMessage, PrepareMessage
 from casper_protocol import CasperProtocol
 from devp2p.service import WiredService
@@ -100,9 +101,11 @@ class CasperService(WiredService):
         log.info('on new block', block=blk)
 
         try:
-            self.store.save_block(blk)
-            self.block = blk
+            epoch_start = blk['number'] % self.epoch_length == 0
+            # TODO: what if we received a blk on a new fork?
+            self.store.save_block(blk, epoch_start)
             # the blk comes from geth/parity, we just assume it's valid and skip PoW check
+            self.block = blk
 
             new_epoch = blk['number'] // self.epoch_length
             if new_epoch != self.epoch:
@@ -112,6 +115,7 @@ class CasperService(WiredService):
 
             self.move()
         except KeyError:
+            log.debug(traceback.format_exc())
             log.error('failed to save block', hash=blk['hash'])
 
     def move(self):
