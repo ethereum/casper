@@ -249,6 +249,7 @@ def flick_status(logout_msg: bytes <= 1024):
         self.validators[validator_index].dynasty_start = new_ds
         self.validators[validator_index].dynasty_end = 1000000000000000000000000000000
         self.second_next_dynasty_wei_delta += self.validators[validator_index].deposit
+        self.validators[validator_index].withdrawal_epoch = 1000000000000000000000000000000
     # Logging out
     else:
         # Check that we haven't already withdrawn
