@@ -37,9 +37,12 @@ class LevelDBStore(object):
     tail_key_ = 'tail_%s'
     tail_membership_key_ = 'tail_mbs_%s'
     number_blockhashes_key_ = 'index_num_bhs_%d'
-    my_prepare_key_ = 'my_epoch_%d_pp'
+    my_prepare_key_ = 'epoch_%d_pp'
     prepare_count_key_ = 'ppcount_for_%s'
-    prepare_key_ = 'pp_for_%s_%d'
+    prepare_key_ = 'pp_%s_%d'
+    my_commit_key_ = 'epoch_%d_cm'
+    commit_count_key_ = 'cmcount_for_%s'
+    commit_key_ = 'cm_%s_%d'
 
     def __init__(self, db, epoch_length, genesis):
         self.db = db
@@ -129,18 +132,24 @@ class LevelDBStore(object):
         except KeyError:
             return None
 
-    def save_block(self, block, epoch_start):
-        self._update_block_index(block, epoch_start)
+    def save_block(self, block):
+        self._update_block_index(block)
+        self._collect_votes(block)
         self._save_block(block)
         log.debug("block saved", hash=block['hash'])
 
     def _save_block(self, block):
-        assert not self.block(block['hash'])
-        self.put_json(block['hash'], block)
+        if not self.block(block['hash']):
+            self.put_json(block['hash'], block)
 
-    def _update_block_index(self, block, epoch_start):
+    def _collect_votes(self, block):
+        # TODO: parse prepare/commit logs in block and persist them
+        # by self.save_prepare() and self.save_commit()
+        pass
+
+    def _update_block_index(self, block):
         self._update_number_blockhashes_index(block['number'], block['hash'])
-        if epoch_start:
+        if block['number'] % self.epoch_length() == 0:
             self.save_tail_membership(block['hash'], block['hash'])
             self.save_tail(block['hash'], block)
         else:
@@ -159,18 +168,24 @@ class LevelDBStore(object):
     def save_prepare(self, prepare, my=False):
         if my:
             self.db.put(self.my_prepare_key_ % prepare.epoch, rlp.encode(prepare))
-
-        # save prepares for certain proposal
-        count_key = self.prepare_count_key_ % prepare.proposal
+        count_key = self.prepare_count_key_ % prepare.hash
         try:
             count = self.get_int(count_key)
         except KeyError:
             count = 0
-        self.db.put(self.prepare_key_ % (prepare.proposal, count), rlp.encode(prepare))
+        self.db.put(self.prepare_key_ % (prepare.hash, count), rlp.encode(prepare))
         self.put_int(count_key, count+1)
 
-    def save_commit(self):
-        pass
+    def save_commit(self, commit, my=False):
+        if my:
+            self.db.put(self.my_commit_key_ % commit.epoch, rlp.encode(commit))
+        count_key = self.commit_count_key_ % commit.hash
+        try:
+            count = self.get_int(count_key)
+        except KeyError:
+            count = 0
+        self.db.put(self.commit_key_ % (commit.hash, count), rlp.encode(commit))
+        self.put_int(count_key, count+1)
 
     def commit(self):
         self.db.commit()

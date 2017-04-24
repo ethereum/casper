@@ -108,10 +108,9 @@ class CasperService(WiredService):
         log.info('on new block', block=blk)
 
         try:
-            epoch_start = blk['number'] % self.epoch_length == 0
             try:
                 # TODO: what if we received a blk on a new fork?
-                self.store.save_block(blk, epoch_start)
+                self.store.save_block(blk)
             except KeyError:
                 self.sync_epoch(blk)
 
