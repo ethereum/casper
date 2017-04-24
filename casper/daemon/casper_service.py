@@ -46,9 +46,7 @@ class CasperService(WiredService):
             self.db.put('network_id', str(cfg['network_id']))
             self.db.commit()
 
-        self.block = None
         self.epoch_length = cfg['epoch_length']
-        self.epoch_block = None
         self.epoch_source = -1
         self.epoch = 0
         self.ancestry_hash = sha3('')
@@ -114,16 +112,9 @@ class CasperService(WiredService):
             except KeyError:
                 self.sync_epoch(blk)
 
-            # the blk comes from geth/parity, we just assume it's valid and skip PoW check
-            self.block = blk
-
-            new_epoch = blk['number'] // self.epoch_length
-            if new_epoch != self.epoch:
-                self.epoch_source = self.epoch
-                self.epoch_block = blk
-                self.epoch = new_epoch
-
-            self.move()
+            self.checkpoint = self.checkpoint_for(blk)
+            self.check_checkpoint()
+            self.tick()
         except KeyError:
             log.debug(traceback.format_exc())
             log.error('failed to save block', hash=blk['hash'])
@@ -138,7 +129,19 @@ class CasperService(WiredService):
             log.info("syncing epoch", number=b['number'], hash=b['hash'])
         log.info("epoch %d synced" % (blk['number'] // self.epoch_length))
 
-    def move(self):
+    def check_checkpoint(self, block):
+        '''
+        Check if candidate committed, if so persist to db.
+        '''
+        if not self.store.checkpoint(block['hash']):
+            # TODO: check quorum and persist
+            self.store.add_checkpoint(block['hash'])
+
+    def checkpoint_for(self, blk):
+        hash = self.store.tail_membership(blk['hash'])
+        return self.store.block(hash)
+
+    def tick(self):
         if self.is_commitable():
             self.broadcast_commit()
         if self.is_preparable():

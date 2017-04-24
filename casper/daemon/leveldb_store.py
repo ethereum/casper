@@ -33,6 +33,7 @@ class LevelDBStore(object):
     genesis_key = 'genesis'
     current_epoch_key = 'cur'
     checkpoint_count_key = 'cpcount'
+    checkpoint_index_key_ = 'cp_index_%s'
     checkpoint_key_ = 'cp_%d'
     tail_key_ = 'tail_%s'
     tail_membership_key_ = 'tail_mbs_%s'
@@ -75,14 +76,22 @@ class LevelDBStore(object):
     def last_checkpoint(self):
         return self.checkpoint(self.checkpoint_count()-1)
 
-    def checkpoint(self, index):
+    def checkpoint_at(self, index):
         if index < 0 or index >= self.checkpoint_count():
             return None
         return self.get_bin(self.checkpoint_key_ % index)
 
+    def checkpoint(self, hash):
+        try:
+            index = self.get_int(self.checkpoint_index_key_ % hash)
+            return self.checkpoint_at(index)
+        except KeyError:
+            return None
+
     def add_checkpoint(self, hash):
         index = self.checkpoint_count()
         self.put_bin(self.checkpoint_key_ % index, hash)
+        self.put_int(self.checkpoint_index_key_ % hash, index)
         self.put_int(self.checkpoint_count_key, index+1)
         return index+1
 
