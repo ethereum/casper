@@ -58,7 +58,8 @@ class LevelDBStore(object):
         self.put_int(self.epoch_length_key, epoch_length)
         self.put_int(self.current_epoch_key, 0)
         self.put_int(self.checkpoint_count_key, 0)
-        self.save_block(genesis, True)
+        self.save_block(genesis)
+        self.add_checkpoint(genesis['hash'])
         log.info("db initialized")
 
     def epoch_length(self):
@@ -74,7 +75,7 @@ class LevelDBStore(object):
         return self.get_int(self.checkpoint_count_key)
 
     def last_checkpoint(self):
-        return self.checkpoint(self.checkpoint_count()-1)
+        return self.checkpoint_at(self.checkpoint_count()-1)
 
     def checkpoint_at(self, index):
         if index < 0 or index >= self.checkpoint_count():
@@ -195,6 +196,19 @@ class LevelDBStore(object):
             count = 0
         self.db.put(self.commit_key_ % (commit.hash, count), rlp.encode(commit))
         self.put_int(count_key, count+1)
+
+    def commits_for(self, hash):
+        count_key = self.commit_count_key_ % hash
+        try:
+            count = self.get_int(count_key)
+        except KeyError:
+            count = 0
+        return [
+            rlp.decode(
+                self.db.get(self.commit_key_ % (hash, i)),
+                sedes=CommitMessage
+            ) for i in range(0, count)
+        ]
 
     def commit(self):
         self.db.commit()

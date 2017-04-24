@@ -28,19 +28,14 @@ class PrepareMessage(rlp.Serializable):
         ('validator_id', rlp.sedes.big_endian_int),
         ('epoch', rlp.sedes.big_endian_int),
         ('hash', rlp.sedes.binary),
-        ('ancestry_hash', rlp.sedes.binary),
         ('epoch_source', rlp.sedes.big_endian_int),
-        ('source_ancestry_hash', rlp.sedes.binary),
         ('signature', rlp.sedes.binary)
     ]
 
-    def __init__(self, validator_id, epoch, hash, ancestry_hash, epoch_source, source_ancestry_hash, signature=''):
+    def __init__(self, validator_id, epoch, hash, epoch_source, signature=''):
         hash = normalize_hash(hash)
-        ancestry_hash = normalize_hash(ancestry_hash)
-        source_ancestry_hash = normalize_hash(source_ancestry_hash)
-
         super(PrepareMessage, self).__init__(
-            validator_id, epoch, hash, ancestry_hash, epoch_source, source_ancestry_hash, signature
+            validator_id, epoch, hash, epoch_source, signature
         )
 
     def validate(self):
@@ -54,12 +49,10 @@ class PrepareMessage(rlp.Serializable):
     @property
     def signing_hash(self):
         return sha3(
-            'prepare%s%s%s%s%s' % (
+            'prepare%s%s%s' % (
                 encode_int32(self.epoch),
                 self.hash,
-                self.ancestry_hash,
-                encode_int32(self.epoch_source),
-                self.source_ancestry_hash
+                encode_int32(self.epoch_source)
             )
         )
 
