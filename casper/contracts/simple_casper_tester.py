@@ -1,5 +1,4 @@
 import copy
-from ethereum import tester as t
 from ethereum import tester2
 from ethereum import utils, state_transition, transactions, abi, config
 from viper import compiler
@@ -10,38 +9,26 @@ config_string = ':info,eth.vm.log:trace,eth.vm.op:trace,eth.vm.stack:trace,eth.v
 #configure_logging(config_string=config_string)
 import rlp
 
-
 # The Casper-specific config declaration
 casper_config = copy.deepcopy(config.default_config)
 casper_config['HOMESTEAD_FORK_BLKNUM'] = 0
 casper_config['ANTI_DOS_FORK_BLKNUM'] = 0
 casper_config['CLEARING_FORK_BLKNUM'] = 0
 
-t2 = tester2.Chain(alloc={a: {'balance': 5*10**18} for a in tester2.accounts}, env=config.Env(config=casper_config))
-
-
-
-s = t.state()
-t.languages['viper'] = compiler.Compiler()
-t.gas_limit = 9999999
+t = tester2.Chain(alloc={a: {'balance': 5*10**18} for a in tester2.accounts}, env=config.Env(config=casper_config))
 
 EPOCH_LENGTH = 100
 
 def inject_tx(txhex):
     tx = rlp.decode(utils.decode_hex(txhex[2:]), transactions.Transaction)
-    s.state.set_balance(tx.sender, tx.startgas * tx.gasprice)  # NOTE: Old
-    state_transition.apply_transaction(s.state, tx)  # NOTE: Old
-
-    # Set test2 balance
-    t2.head_state.set_balance(tx.sender, tx.startgas * tx.gasprice)
-    t2.chain.state.set_balance(tx.sender, tx.startgas * tx.gasprice)
-    success, output = state_transition.apply_transaction(t2.head_state, tx)
-    t2.block.transactions.append(tx)
-    t2.mine()
-    assert success
-
+    t.head_state.set_balance(tx.sender, tx.startgas * tx.gasprice)
+    t.chain.state.set_balance(tx.sender, tx.startgas * tx.gasprice)
+    success, output = state_transition.apply_transaction(t.head_state, tx)
+    t.block.transactions.append(tx)
+    t.mine()
     contract_address = utils.mk_contract_address(tx.sender, 0)
-    assert s.state.get_code(contract_address)
+    assert success
+    assert t.chain.state.get_code(contract_address)
     return contract_address
 
 code_template = """
@@ -55,13 +42,12 @@ def mk_validation_code(address):
 
 # Install RLP decoder library
 rlp_decoder_address = inject_tx('0xf90237808506fc23ac00830330888080b902246102128061000e60003961022056600060007f010000000000000000000000000000000000000000000000000000000000000060003504600060c082121515585760f882121561004d5760bf820336141558576001905061006e565b600181013560f783036020035260005160f6830301361415585760f6820390505b5b368112156101c2577f010000000000000000000000000000000000000000000000000000000000000081350483602086026040015260018501945060808112156100d55760018461044001526001828561046001376001820191506021840193506101bc565b60b881121561014357608081038461044001526080810360018301856104600137608181141561012e5760807f010000000000000000000000000000000000000000000000000000000000000060018401350412151558575b607f81038201915060608103840193506101bb565b60c08112156101b857600182013560b782036020035260005160388112157f010000000000000000000000000000000000000000000000000000000000000060018501350402155857808561044001528060b6838501038661046001378060b6830301830192506020810185019450506101ba565bfe5b5b5b5061006f565b601f841315155857602060208502016020810391505b6000821215156101fc578082604001510182826104400301526020820391506101d8565b808401610420528381018161044003f350505050505b6000f31b2d4f')
-t2.mine()
+t.mine()
 
 # Install sig hasher
 
-s.state.set_balance('0x6e7406512b244843c1171840dfcd3d7532d979fe', 7291200000000000)  # NOTE: Old
-t2.chain.state.set_balance('0x6e7406512b244843c1171840dfcd3d7532d979fe', 7291200000000000)
-t2.head_state.set_balance('0x6e7406512b244843c1171840dfcd3d7532d979fe', 7291200000000000)
+t.chain.state.set_balance('0x6e7406512b244843c1171840dfcd3d7532d979fe', 7291200000000000)
+t.head_state.set_balance('0x6e7406512b244843c1171840dfcd3d7532d979fe', 7291200000000000)
 
 sighasher_address = inject_tx('0xf9016d808506fc23ac0083026a508080b9015a6101488061000e6000396101565660007f01000000000000000000000000000000000000000000000000000000000000006000350460f8811215610038576001915061003f565b60f6810391505b508060005b368312156100c8577f01000000000000000000000000000000000000000000000000000000000000008335048391506080811215610087576001840193506100c2565b60b881121561009d57607f8103840193506100c1565b60c08112156100c05760b68103600185013560b783036020035260005101840193505b5b5b50610044565b81810360388112156100f4578060c00160005380836001378060010160002060e052602060e0f3610143565b61010081121561010557600161011b565b6201000081121561011757600261011a565b60035b5b8160005280601f038160f701815382856020378282600101018120610140526020610140f350505b505050505b6000f31b2d4f')
 
@@ -71,16 +57,11 @@ purity_checker_address = inject_tx('0xf90467808506fc23ac00830583c88080b904546104
 
 ct = abi.ContractTranslator([{'name': 'check(address)', 'type': 'function', 'constant': True, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}, {'name': 'submit(address)', 'type': 'function', 'constant': False, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}])
 # Check that the RLP decoding library and the sig hashing library are "pure"
-assert utils.big_endian_to_int(s.send(t.k0, purity_checker_address, 0, ct.encode('submit', [rlp_decoder_address]))) == 1  # NOTE: Old
-assert utils.big_endian_to_int(s.send(t.k0, purity_checker_address, 0, ct.encode('submit', [sighasher_address]))) == 1  # NOTE: Old
-# Check for tester2
-assert utils.big_endian_to_int(t2.tx(tester2.k0, purity_checker_address, 0, ct.encode('submit', [rlp_decoder_address]))) == 1
-assert utils.big_endian_to_int(t2.tx(tester2.k0, purity_checker_address, 0, ct.encode('submit', [sighasher_address]))) == 1
+assert utils.big_endian_to_int(t.tx(tester2.k0, purity_checker_address, 0, ct.encode('submit', [rlp_decoder_address]))) == 1
+assert utils.big_endian_to_int(t.tx(tester2.k0, purity_checker_address, 0, ct.encode('submit', [sighasher_address]))) == 1
 
-k1_valcode_addr = s.send(t.k0, "", 0, mk_validation_code(t.a0))
-k1_valcode_addr = t2.tx(tester2.k0, "", 0, mk_validation_code(t.a0))
-assert utils.big_endian_to_int(s.send(t.k0, purity_checker_address, 0, ct.encode('submit', [k1_valcode_addr]))) == 1  # NOTE: Old
-assert utils.big_endian_to_int(t2.tx(tester2.k0, purity_checker_address, 0, ct.encode('submit', [k1_valcode_addr]))) == 1
+k1_valcode_addr = t.tx(tester2.k0, "", 0, mk_validation_code(tester2.a0))
+assert utils.big_endian_to_int(t.tx(tester2.k0, purity_checker_address, 0, ct.encode('submit', [k1_valcode_addr]))) == 1
 
 # Install Casper
 
@@ -90,12 +71,10 @@ casper_code = open('simple_casper.v.py').read().replace('0x1Db3439a222C519ab44bb
 
 print('Casper code length', len(compiler.compile(casper_code)))
 
-casper = s.abi_contract(casper_code, language='viper', startgas=5555555)  # NOTE: Old
-
-casper2 = t2.contract(casper_code, language='viper', startgas=4096181)
-t2.mine()
-
-print('Gas consumed to launch Casper', s.state.receipts[-1].gas_used - s.state.receipts[-2].gas_used)  # NOTE: Old
+casper = t.contract(casper_code, language='viper', startgas=4096181)
+print('Gas consumed to launch Casper', t.chain.state.receipts[-1].gas_used - t.chain.state.receipts[-2].gas_used)
+t.mine()
+assert False
 
 # Helper functions for making a prepare, commit, login and logout message
 
