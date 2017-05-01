@@ -452,7 +452,7 @@ def double_prepare_slash(prepare1: bytes <= 1000, prepare2: bytes <= 1000):
     validator_deposit = self.validators[validator_index].deposit
     send(msg.sender, validator_deposit / 25)
     self.total_destroyed += validator_deposit * 24 / 25
-    self.total_deposits[self.dynasty] -= (validator_deposit - validator_deposit / 25)
+    self.total_deposits[self.dynasty] -= validator_deposit
     self.delete_validator(validator_index)
 
 def prepare_commit_inconsistency_slash(prepare_msg: bytes <= 1024, commit_msg: bytes <= 1024):
