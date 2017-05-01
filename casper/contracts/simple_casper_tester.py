@@ -20,6 +20,7 @@ a0, a1, a2, a3, a4, a5, a6, a7, a8, a9 = tester2.accounts[:10]
 t = tester2.Chain(alloc={a: {'balance': 5*10**18} for a in tester2.accounts[:10]}, env=config.Env(config=casper_config))
 
 EPOCH_LENGTH = 100
+SLASH_DELAY = 8640
 
 def inject_tx(txhex):
     tx = rlp.decode(utils.decode_hex(txhex[2:]), transactions.Transaction)
@@ -66,7 +67,9 @@ assert utils.big_endian_to_int(t.tx(k0, purity_checker_address, 0, ct.encode('su
 
 # Install Casper
 
-casper_code = open('simple_casper.v.py').read().replace('0x1Db3439a222C519ab44bb1144fC28167b4Fa6EE6', utils.checksum_encode(k1_valcode_addr)) \
+casper_code = open('simple_casper.v.py').read().replace('epoch_length = 100', 'epoch_length = ' + str(EPOCH_LENGTH)) \
+                                               .replace('insufficiency_slash_delay = 86400', 'insufficiency_slash_delay = ' + str(SLASH_DELAY)) \
+                                               .replace('0x1Db3439a222C519ab44bb1144fC28167b4Fa6EE6', utils.checksum_encode(k1_valcode_addr)) \
                                                .replace('0x476c2cA9a7f3B16FeCa86512276271FAf63B6a24', utils.checksum_encode(sighasher_address)) \
                                                .replace('0xD7a3BD6C9eA32efF147d067f907AE6b22d436F91', utils.checksum_encode(purity_checker_address))
 
@@ -193,42 +196,39 @@ print("Epochs up to 5 initialized")
 # Dynasty not incremented because no commits were made
 assert casper.get_dynasty() == 3
 t.mine()
-epoch_5_anchash = utils.sha3(b'\x78' * 32 + epoch_4_anchash)
+epoch_5_anchash = utils.sha3(epoch_blockhash(4) + epoch_4_anchash)
 p5 = mk_prepare(0, 5, epoch_blockhash(4), epoch_4_anchash, 3, epoch_3_anchash, k0)
 assert casper.prepare(p5) is not False  # Prepare works, but no reward is given
-raise SystemExit
+t.mine()
 # Test the COMMIT_REQ slashing condition
 kommit = mk_commit(0, 5, b'\x80' * 32, 3, k0)
-epoch_inc = 1 + int(86400 / 14 / EPOCH_LENGTH)
+epoch_inc = 1 + int(SLASH_DELAY / 14 / EPOCH_LENGTH)
 print("Speeding up time to test remaining two slashing conditions")
 mine_and_init_epochs(epoch_inc)
 print("Epochs up to %d initialized" % (6 + epoch_inc))
-snapshot = s.snapshot()
-casper.commit_non_justification_slash(kommit)
-s.revert(snapshot)
-try:
-    casper.commit_non_justification_slash(0, epoch_2_commit)
-    success = True
-except:
-    success = False
-assert not success
+snapshot = t.snapshot()
+assert casper.commit_non_justification_slash(kommit) is not False
+t.revert(snapshot)
+assert casper.commit_non_justification_slash(epoch_2_commit) is False
+t.mine()
 print("COMMIT_REQ slashing condition works")
 # Test the PREPARE_REQ slashing condition
-casper.derive_parenthood(epoch_3_anchash, b'\x67' * 32, epoch_4_anchash)
+assert casper.derive_parenthood(epoch_3_anchash, epoch_blockhash(4), epoch_4_anchash) is not False
+t.mine()
 assert casper.get_ancestry(epoch_3_anchash, epoch_4_anchash) == 1
+t.mine()
 assert casper.get_ancestry(epoch_4_anchash, epoch_5_anchash) == 1
-casper.derive_ancestry(epoch_3_anchash, epoch_4_anchash, epoch_5_anchash)
+t.mine()
+assert casper.derive_ancestry(epoch_3_anchash, epoch_4_anchash, epoch_5_anchash) is not False
+t.mine()
 assert casper.get_ancestry(epoch_3_anchash, epoch_5_anchash) == 2
-snapshot = s.snapshot()
-casper.prepare_non_justification_slash(p4)
-s.revert(snapshot)
-try:
-    casper.prepare_non_justification_slash(p5)
-    success = True
-except:
-    success = False
-assert not success
+t.mine()
+snapshot = t.snapshot()
+assert casper.prepare_non_justification_slash(p4) is not False
+t.revert(snapshot)
+assert casper.prepare_non_justification_slash(p5) is False
 print("PREPARE_REQ slashing condition works")
+raise SystemExit
 
 print("Restarting the chain for test 2")
 # Restart the chain
