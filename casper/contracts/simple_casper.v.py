@@ -253,7 +253,7 @@ def flick_status(logout_msg: bytes <= 1024):
     # Logging out
     else:
         # Check that we haven't already withdrawn
-        assert self.validators[validator_index].dynasty_end >= self.dynasty + 2
+        assert self.validators[validator_index].dynasty_end > self.dynasty + 2
         # Set the end dynasty
         self.validators[validator_index].dynasty_end = self.dynasty + 2
         self.second_next_dynasty_wei_delta -= self.validators[validator_index].deposit
