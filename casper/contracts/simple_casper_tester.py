@@ -3,7 +3,6 @@ from ethereum import tester2
 from ethereum import utils, state_transition, transactions, abi, config
 from viper import compiler
 import serpent
-
 from ethereum.slogging import LogRecorder, configure_logging, set_level
 config_string = ':info,eth.vm.log:trace,eth.vm.op:trace,eth.vm.stack:trace,eth.vm.exit:trace,eth.pb.msg:trace,eth.pb.tx:debug'
 #configure_logging(config_string=config_string)
@@ -124,7 +123,6 @@ def mine_and_init_epochs(number_of_epochs):
 print("Starting tests")
 t, casper, purity_checker_address, ct = make_casper_chain()
 casper.initiate()
-
 # Initialize the first epoch
 mine_and_init_epochs(1)
 assert casper.get_nextValidatorIndex() == 1
@@ -158,10 +156,11 @@ print("Commit message processed")
 mine_and_init_epochs(1)
 # Check that the dynasty increased as expected
 assert casper.get_dynasty() == 1
-assert casper.get_total_deposits(1) == casper.get_total_deposits(0) > 0
 print("Second epoch initialized, dynasty increased as expected")
 # Send a prepare message
 casper.prepare(mk_prepare(0, 2, epoch_blockhash(2), epoch_1_anchash, 1, epoch_1_anchash, k0))
+# Save the total deposits after the prepare for later
+post_prepare_deposits = casper.get_total_deposits(1)
 # Send a commit message
 epoch_2_commit = mk_commit(0, 2, epoch_blockhash(2), 1, k0)
 casper.commit(epoch_2_commit)
@@ -169,6 +168,10 @@ epoch_2_anchash = utils.sha3(epoch_blockhash(2) + epoch_1_anchash)
 assert casper.get_consensus_messages__ancestry_hash_justified(2, epoch_2_anchash)
 # Check that we committed
 assert casper.get_consensus_messages__committed(2)
+# Check that the reward was given for the prepare and commit
+assert post_prepare_deposits - casper.get_total_deposits(0) > 0
+assert casper.get_total_deposits(1) - post_prepare_deposits > 0
+print('Initial deposits: %d, post-prepare: %d, post-commit: %d' % (casper.get_total_deposits(0), post_prepare_deposits, casper.get_total_deposits(1)))
 # Initialize the third epoch
 mine_and_init_epochs(1)
 print("Second epoch prepared and committed, third epoch initialized")
@@ -204,7 +207,7 @@ print("Epochs up to 5 initialized")
 assert casper.get_dynasty() == 3
 epoch_5_anchash = utils.sha3(epoch_blockhash(4) + epoch_4_anchash)
 p5 = mk_prepare(0, 5, epoch_blockhash(4), epoch_4_anchash, 3, epoch_3_anchash, k0)
-casper.prepare(p5)  # Prepare works, but no reward is given TODO: Add test for this!
+casper.prepare(p5)  # Prepare works, and no reward is given
 # Test the COMMIT_REQ slashing condition
 kommit = mk_commit(0, 5, b'\x80' * 32, 3, k0)
 epoch_inc = 1 + int(SLASH_DELAY / 14 / EPOCH_LENGTH)
