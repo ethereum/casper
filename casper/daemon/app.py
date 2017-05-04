@@ -65,7 +65,10 @@ def app(ctx, log_config, log_file, data_dir, unlock, password):
             'casper': {
                 'network_id': 0,
                 'validator_id': 0,
-                'privkey': ''
+                'privkey': '',
+                'epoch_length': 5,
+                # mainnet #3570000
+                'genesis_hash': '0xa9f4dc448a0b06a26ef0e4fd003e30d8450b87ab0c8e74ee50fc8f4d011a7c63'
             },
             'discovery': {
                 'listen_host': '0.0.0.0',

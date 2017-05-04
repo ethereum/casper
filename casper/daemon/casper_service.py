@@ -1,3 +1,4 @@
+import traceback
 from casper_messages import InvalidCasperMessage, PrepareMessage
 from casper_protocol import CasperProtocol
 from devp2p.service import WiredService
@@ -15,7 +16,9 @@ class CasperService(WiredService):
         casper=dict(
             network_id=0,
             validator_id=0,
-            privkey='\x00'*32
+            privkey='\x00'*32,
+            epoch_length=5,
+            genesis_hash=''  # genesis of Casper, not block#0, must be on epoch boundary
         )
     )
 
@@ -43,16 +46,19 @@ class CasperService(WiredService):
             self.db.put('network_id', str(cfg['network_id']))
             self.db.commit()
 
-        self.store = LevelDBStore(self.db)
-        self.validator = self.store.load_validator(cfg['validator_id'])
-        self.block = None
-        self.epoch_block = None
-        self.epoch_length = 5
+        self.epoch_length = cfg['epoch_length']
         self.epoch_source = -1
         self.epoch = 0
         self.ancestry_hash = sha3('')
         self.source_ancestry_hash = sha3('')
 
+        self.chain = app.services.chain
+        self.genesis = self.chain.block(cfg['genesis_hash'])
+        assert self.genesis
+        assert self.genesis['number'] % self.epoch_length == 0
+
+        self.store = LevelDBStore(self.db, self.epoch_length, self.genesis)
+        self.validator = self.store.validator(cfg['validator_id'])
         super(CasperService, self).__init__(app)
 
     def on_wire_protocol_start(self, proto):
@@ -100,58 +106,83 @@ class CasperService(WiredService):
         log.info('on new block', block=blk)
 
         try:
-            self.store.save_block(blk)
-            self.block = blk
-            # the blk comes from geth/parity, we just assume it's valid and skip PoW check
-
-            new_epoch = blk['number'] // self.epoch_length
-            if new_epoch != self.epoch:
-                self.epoch_source = self.epoch
-                self.epoch_block = blk
-                self.epoch = new_epoch
-
-            self.move()
+            try:
+                # TODO: what if we received a blk on a new fork?
+                self.store.save_block(blk)
+            except KeyError:
+                self.sync_epoch(blk)
+            self.check_checkpoint(self.checkpoint_for(blk))
+            self.try_prepare()
         except KeyError:
+            log.debug(traceback.format_exc())
             log.error('failed to save block', hash=blk['hash'])
 
-    def move(self):
-        if self.is_commitable():
-            self.broadcast_commit()
-        if self.is_preparable():
-            self.broadcast_prepare()
+    def sync_epoch(self, blk):
+        epoch_blocks = [blk]
+        while blk['number'] % self.epoch_length != 0:
+            blk = self.chain.block(blk['parentHash'])
+            epoch_blocks.insert(0, blk)
+        for b in epoch_blocks:
+            self.store.save_block(b)
+            log.info("syncing epoch", number=b['number'], hash=b['hash'])
+        log.info("epoch %d synced" % (blk['number'] // self.epoch_length))
 
-    def is_commitable(self):
-        return False
+    def check_checkpoint(self, block):
+        '''
+        Check if candidate committed, if so persist to db.
+        '''
+        if not self.store.checkpoint(block['hash']):
+            # TODO: check quorum and persist
+            self.store.add_checkpoint(block['hash'])
 
-    def is_preparable(self):
-        if self.epoch_source != -1:
-            pass  # TODO: check epoch_source/ancestor_hash quorum
-        if self.store.load_my_prepare(self.epoch):
-            return False
-        if not self.epoch_block:
-            number = self.epoch * self.epoch_length
-            candidates = self.store.load_blocks_by_number(number)
-            if len(candidates) > 0:
-                self.epoch_block = candidates[0]  # TODO: better candidate selection strategy
+    def checkpoint_for(self, blk):
+        hash = self.store.tail_membership(blk['hash'])
+        return self.store.block(hash)
+
+    def get_last_committed_checkpoint(self):
+        z = self.store.checkpoint_count() - 1
+        while True:
+            hash = self.store.checkpoint_at(z)
+            if self.is_committed(hash):
+                return self.store.block(hash)
             else:
-                log.warn("missing epoch block, cannot prepare",
-                         epoch=self.epoch,
-                         number=number)
-                return False
+                z -= 1
+
+    def is_committed(self, hash):
+        if hash == self.genesis['hash']:
+            return True
+        # TODO: better committed check
+        return len(self.store.commits_for(hash)) > 0
+
+    def is_ancestor(self, blk1, blk2):
+        '''
+        Return true if blk2 is blk1's ancestor.
+        '''
+        # TODO: implement
         return True
 
-    def broadcast_prepare(self, origin=None):
-        log.debug('broadcast prepare message',
-                  number=self.block['number'],
-                  hash=self.block['hash'])
+    def try_prepare(self):
+        target_block = self.store.block(self.store.last_checkpoint())
+        target_epoch = target_block['number'] // self.epoch_length
+        last_committed_checkpoint = self.get_last_committed_checkpoint()
+        if target_epoch > self.epoch:
+            # TODO: self.epoch need to be persist to prevent double prepare?
+            self.epoch = target_epoch
+            if self.is_ancestor(target_block, last_committed_checkpoint):
+                self.broadcast_prepare(target_block, last_committed_checkpoint)
 
+    def broadcast_prepare(self, checkpoint, last_committed_checkpoint, origin=None):
+        log.debug('broadcast prepare message',
+                  number=checkpoint['number'],
+                  hash=checkpoint['hash'])
+
+        epoch = checkpoint['number'] // self.epoch_length
+        epoch_source = last_committed_checkpoint['number'] // self.epoch_length
         prepare = PrepareMessage(
             validator_id=self.validator.id,
-            epoch=self.epoch,
-            hash=self.block['hash'],
-            ancestry_hash=self.ancestry_hash,
-            epoch_source=self.epoch_source,
-            source_ancestry_hash=self.source_ancestry_hash
+            epoch=epoch,
+            hash=checkpoint['hash'],
+            epoch_source=epoch_source
         )
         prepare.sign(self.privkey)
         self.store.save_prepare(prepare, my=True)
