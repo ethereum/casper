@@ -1,10 +1,10 @@
 import traceback
-from .casper_messages import InvalidCasperMessage, PrepareMessage
-from .casper_protocol import CasperProtocol
+from casper.daemon.casper_messages import InvalidCasperMessage, PrepareMessage
+from casper.daemon.casper_protocol import CasperProtocol
 from devp2p.service import WiredService
 from ethereum import slogging
 from ethereum.utils import encode_hex, sha3
-from .leveldb_store import LevelDBStore
+from casper.daemon.leveldb_store import LevelDBStore
 
 log = slogging.get_logger('casper.service')
 

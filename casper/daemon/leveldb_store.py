@@ -1,8 +1,8 @@
 import json
 
 import rlp
-from .casper_messages import PrepareMessage, CommitMessage
-from .validators import Validator
+from casper.daemon.casper_messages import PrepareMessage, CommitMessage
+from casper.daemon.validators import Validator
 from ethereum.utils import encode_hex
 from ethereum import slogging
 
