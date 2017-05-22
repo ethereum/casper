@@ -12,7 +12,7 @@ from ethereum.utils import privtopub  # this is different  than the one used in 
 from ethereum.utils import sha3, is_string, decode_hex, remove_0x_head, encode_hex
 log = get_logger('accounts')
 
-DEFAULT_COINBASE = 'de0b295669a9fd93d5f28d9ec85e40f4cb697bae'
+DEFAULT_COINBASE = decode_hex('de0b295669a9fd93d5f28d9ec85e40f4cb697bae')
 
 
 def mk_privkey(seed):
