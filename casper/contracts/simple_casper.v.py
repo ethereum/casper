@@ -376,7 +376,7 @@ def prepare(prepare_msg: bytes <= 1024):
     # Add a parent-child relation between ancestry hashes to the ancestry table
     if not self.ancestry[ancestry_hash][new_ancestry_hash]:
         self.ancestry[ancestry_hash][new_ancestry_hash] = 1
-    raw_log([self.prepare_log_topic], prepare_msg)
+    raw_log([self.prepare_log_topic], prepare_msg, (curdyn_prepares / self.total_deposits[self.dynasty]), (prevdyn_prepares / self.total_deposits[self.dynasty - 1]))
 
 # Process a commit message
 def commit(commit_msg: bytes <= 1024):
@@ -424,7 +424,7 @@ def commit(commit_msg: bytes <= 1024):
             self.consensus_messages[epoch].prev_dyn_commits[hash] >= self.total_deposits[self.dynasty - 1] * 2 / 3) and \
             not self.consensus_messages[epoch].committed:
         self.consensus_messages[epoch].committed = True
-    raw_log([self.commit_log_topic], commit_msg)
+    raw_log([self.commit_log_topic], commit_msg, (self.consensus_messages[epoch].commits[hash] / self.total_deposits[self.dynasty]), (self.consensus_messages[epoch].prev_dyn_commits[hash] / self.total_deposits[self.dynasty - 1]))
 
 # Cannot make two prepares in the same epoch
 def double_prepare_slash(prepare1: bytes <= 1000, prepare2: bytes <= 1000):
