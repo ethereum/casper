@@ -14,14 +14,17 @@ import rlp
 t.languages['viper'] = compiler.Compiler()
 # t.gas_limit = 9999999
 c = t.Chain()
+print("gas limit: ", c.chain.state.gas_limit)
 
 EPOCH_LENGTH = 100
 
 def inject_tx(txhex):
     tx = rlp.decode(utils.decode_hex(txhex[2:]), transactions.Transaction)
     # c.head_state.set_balance(tx.sender, tx.startgas * tx.gasprice)
+    # temporarily using account[8] to dispense required fee for injected txs
     c.tx(t.k9, tx.sender, tx.startgas * tx.gasprice)
     # state_transition.apply_transaction(c.head_state, tx)
+    c.direct_tx(tx)
     contract_address = utils.mk_contract_address(tx.sender, 0)
     assert c.head_state.get_code(contract_address)
     return contract_address
@@ -45,7 +48,7 @@ sighasher_address = inject_tx( '0xf9016d808506fc23ac0083026a508080b9015a61014880
 
 # Install purity checker
 purity_checker_address = inject_tx( '0xf90467808506fc23ac00830583c88080b904546104428061000e60003961045056600061033f537c0100000000000000000000000000000000000000000000000000000000600035047f80010000000000000000000000000000000000000030ffff1c0e00000000000060205263a1903eab8114156103f7573659905901600090523660048237600435608052506080513b806020015990590160009052818152602081019050905060a0526080513b600060a0516080513c6080513b8060200260200159905901600090528181526020810190509050610100526080513b806020026020015990590160009052818152602081019050905061016052600060005b602060a05103518212156103c957610100601f8360a051010351066020518160020a161561010a57fe5b80606013151561011e57607f811315610121565b60005b1561014f5780607f036101000a60018460a0510101510482602002610160510152605e8103830192506103b2565b60f18114801561015f5780610164565b60f282145b905080156101725780610177565b60f482145b9050156103aa5760028212151561019e5760606001830360200261010051015112156101a1565b60005b156101bc57607f6001830360200261010051015113156101bf565b60005b156101d157600282036102605261031e565b6004821215156101f057600360018303602002610100510151146101f3565b60005b1561020d57605a6002830360200261010051015114610210565b60005b1561022b57606060038303602002610100510151121561022e565b60005b1561024957607f60038303602002610100510151131561024c565b60005b1561025e57600482036102605261031d565b60028212151561027d57605a6001830360200261010051015114610280565b60005b1561029257600282036102605261031c565b6002821215156102b157609060018303602002610100510151146102b4565b60005b156102c657600282036102605261031b565b6002821215156102e65760806001830360200261010051015112156102e9565b60005b156103035760906001830360200261010051015112610306565b60005b1561031857600282036102605261031a565bfe5b5b5b5b5b604060405990590160009052600081526102605160200261016051015181602001528090502054156103555760016102a052610393565b60306102605160200261010051015114156103755760016102a052610392565b60606102605160200261010051015114156103915760016102a0525b5b5b6102a051151561039f57fe5b6001830192506103b1565b6001830192505b5b8082602002610100510152600182019150506100e0565b50506001604060405990590160009052600081526080518160200152809050205560016102e05260206102e0f35b63c23697a8811415610440573659905901600090523660048237600435608052506040604059905901600090526000815260805181602001528090502054610300526020610300f35b505b6000f31b2d4f')
-c.mine()
+
 ct = abi.ContractTranslator([{'name': 'check(address)', 'type': 'function', 'constant': True, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}, {'name': 'submit(address)', 'type': 'function', 'constant': False, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}])
 # Check that the RLP decoding library and the sig hashing library are "pure"
 assert utils.big_endian_to_int(c.tx(t.k0, purity_checker_address, 0, ct.encode('submit', [rlp_decoder_address]))) == 1
@@ -53,6 +56,7 @@ assert utils.big_endian_to_int(c.tx(t.k0, purity_checker_address, 0, ct.encode('
 
 k1_valcode_addr = c.tx(t.k0, "", 0, mk_validation_code(t.a0))
 assert utils.big_endian_to_int(c.tx(t.k0, purity_checker_address, 0, ct.encode('submit', [k1_valcode_addr]))) == 1
+c.mine()
 
 # Install Casper
 
@@ -63,8 +67,10 @@ casper_code = open('simple_casper.v.py').read().replace('0x1Db3439a222C519ab44bb
 print('Casper code length', len(compiler.compile(casper_code)))
 
 casper = c.contract(casper_code, language='viper', startgas=4300000)
-print('Gas consumed to launch Casper', c.head_state.receipts[-1].gas_used - c.head_state.receipts[-2].gas_used)
-c.mine(1)
+# print('Gas consumed to launch Casper', c.head_state.receipts[-1].gas_used - c.head_state.receipts[-2].gas_used)
+print('Gas consumed to launch Casper', c.head_state.receipts[-1].gas_used)
+c.mine()
+
 # Helper functions for making a prepare, commit, login and logout message
 
 def mk_prepare(validator_index, epoch, hash, ancestry_hash, source_epoch, source_ancestry_hash, key):
@@ -90,7 +96,8 @@ def mk_status_flicker(validator_index, epoch, login, key):
 print("Starting tests")
 casper.initiate()
 # Initialize the first epoch
-c.head_state.block_number = EPOCH_LENGTH 
+# c.head_state.block_number = EPOCH_LENGTH
+c.mine(EPOCH_LENGTH)
 print('foo', casper.initialize_epoch(1))
 assert casper.get_nextValidatorIndex() == 1
 start = c.snapshot()
@@ -101,6 +108,7 @@ print("Reward factor: %.8f" % (casper.get_reward_factor() * 2 / 3))
 casper.prepare(mk_prepare(0, 1, '\x35' * 32, '\x00' * 32, 0, '\x00' * 32, t.k0))
 print('Gas consumed for a prepare: %d (including %d intrinsic gas)' %
       (c.head_state.receipts[-1].gas_used - c.head_state.receipts[-2].gas_used, c.last_tx.intrinsic_gas_used))
+    # (c.head_state.receipts[-1].gas_used, c.last_tx.intrinsic_gas_used))
 epoch_1_anchash = utils.sha3(b'\x35' * 32 + b'\x00' * 32)
 assert casper.get_consensus_messages__hash_justified(1, b'\x35' * 32)
 assert casper.get_consensus_messages__ancestry_hash_justified(1, epoch_1_anchash)
@@ -112,18 +120,19 @@ except:
     success = False
 assert not success
 print("Prepare message fails the second time")
+c.mine()
 # Send a commit message
-
-c.head_state.gas_limit = 9000000
 casper.commit(mk_commit(0, 1, '\x35' * 32, 0, t.k0))
 print('Gas consumed for a commit: %d (including %d intrinsic gas)' %
-      (c.head_state.receipts[-1].gas_used - c.head_state.receipts[-2].gas_used, c.last_tx.intrinsic_gas_used))
+    #   (c.head_state.receipts[-1].gas_used - c.head_state.receipts[-2].gas_used, c.last_tx.intrinsic_gas_used))
+    (c.head_state.receipts[-1].gas_used, c.last_tx.intrinsic_gas_used))
 # Check that we committed
 assert casper.get_consensus_messages__committed(1)
 print("Commit message processed")
 # Initialize the second epoch 
-s.head_state.block_number += EPOCH_LENGTH
-casper.initialize_epoch(2)
+# c.head_state.block_number += EPOCH_LENGTH
+c.mine(EPOCH_LENGTH)
+casper.initialize_epoch(2) 
 # Check that the dynasty increased as expected
 assert casper.get_dynasty() == 1
 assert casper.get_total_deposits(1) == casper.get_total_deposits(0) > 0
@@ -138,7 +147,8 @@ assert casper.get_consensus_messages__ancestry_hash_justified(2, epoch_2_anchash
 # Check that we committed
 assert casper.get_consensus_messages__committed(2)
 # Initialize the third epoch
-s.head_state.block_number += EPOCH_LENGTH
+# c.head_state.block_number += EPOCH_LENGTH
+c.mine(EPOCH_LENGTH)
 casper.initialize_epoch(3)
 print("Second epoch prepared and committed, third epoch initialized")
 # Test the NO_DBL_PREPARE slashing condition
@@ -146,14 +156,15 @@ p1 = mk_prepare(0, 3, '\x56' * 32, epoch_2_anchash, 2, epoch_2_anchash, t.k0)
 p2 = mk_prepare(0, 3, '\x57' * 32, epoch_2_anchash, 2, epoch_2_anchash, t.k0)
 snapshot = c.snapshot()
 casper.double_prepare_slash(p1, p2)
-s.revert(snapshot)
+c.revert(snapshot)
 print("NO_DBL_PREPARE slashing condition works")
 # Test the PREPARE_COMMIT_CONSISTENCY slashing condition
 p3 = mk_prepare(0, 3, '\x58' * 32, epoch_2_anchash, 0, b'\x00' * 32, t.k0)
 snapshot = c.snapshot()
 casper.prepare_commit_inconsistency_slash(p3, epoch_2_commit)
-s.revert(snapshot)
+c.revert(snapshot)
 print("PREPARE_COMMIT_CONSISTENCY slashing condition works")
+c.mine()
 # Finish the third epoch
 casper.prepare(p1)
 casper.commit(mk_commit(0, 3, '\x56' * 32, 2, t.k0))
@@ -161,14 +172,16 @@ epoch_3_anchash = utils.sha3(b'\x56' * 32 + epoch_2_anchash)
 assert casper.get_consensus_messages__ancestry_hash_justified(3, epoch_3_anchash)
 assert casper.get_consensus_messages__committed(3)
 # Initialize the fourth epoch. Not doing prepares or commits during this epoch.
-s.head_state.block_number += EPOCH_LENGTH
+# s.head_state.block_number += EPOCH_LENGTH
+c.mine(EPOCH_LENGTH)
 casper.initialize_epoch(4)
 assert casper.get_dynasty() == 3
 epoch_4_anchash = utils.sha3(b'\x67' * 32 + epoch_3_anchash)
 # Not publishing this prepare for the time being
 p4 = mk_prepare(0, 4, '\x78' * 32, '\x12' * 32, 3, '\x24' * 32, t.k0)
 # Initialize the fifth epoch
-s.head_state.block_number += EPOCH_LENGTH
+# c.head_state.block_number += EPOCH_LENGTH
+c.mine(EPOCH_LENGTH)
 casper.initialize_epoch(5)
 print("Epochs up to 5 initialized")
 # Dynasty not incremented because no commits were made
@@ -179,10 +192,14 @@ casper.prepare(p5)
 # Test the COMMIT_REQ slashing condition
 kommit = mk_commit(0, 5, b'\x80' * 32, 3, t.k0)
 epoch_inc = 1 + int(86400 / 14 / EPOCH_LENGTH)
-s.head_state.block_number += EPOCH_LENGTH * epoch_inc
+print("going to mine %d blocks..." % (epoch_inc * EPOCH_LENGTH))
+assert False
+# c.head_state.block_number += EPOCH_LENGTH * epoch_inc
+c.mine(EPOCH_LENGTH * epoch_inc)
 print("Speeding up time to test remaining two slashing conditions")
 for i in range(6, 6 + epoch_inc):
     casper.initialize_epoch(i)
+    c.mine()
 print("Epochs up to %d initialized" % (6 + epoch_inc))
 snapshot = c.snapshot()
 casper.commit_non_justification_slash(kommit)
