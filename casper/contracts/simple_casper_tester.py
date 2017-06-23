@@ -18,6 +18,10 @@ EPOCH_LENGTH = 100
 
 purity_checker_address = ''
 ct = abi.ContractTranslator([{'name': 'check(address)', 'type': 'function', 'constant': True, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}, {'name': 'submit(address)', 'type': 'function', 'constant': False, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}])
+prepare_topic = utils.big_endian_to_int(utils.sha3('prepare()'))
+commit_topic = utils.big_endian_to_int(utils.sha3('commit()'))
+tmp_prepare_logs = []
+tmp_commit_logs = []
 
 # Function for applying RLP-encode raw transaction
 def inject_tx(txhex):
@@ -93,6 +97,37 @@ def mk_status_flicker(validator_index, epoch, login, key):
     v, r, s = utils.ecdsa_raw_sign(sighash, key)
     sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
     return rlp.encode([validator_index, epoch, login, sig])
+
+# Install prepare/commit event watcher
+def prepare_commit_filter(log):
+    global tmp_prepare_logs, tmp_commit_logs
+    if log.topics[0] == prepare_topic:
+        tmp_prepare_logs.append(log.data)
+    if log.topics[0] == commit_topic:
+        tmp_commit_logs.append(log.data)
+        
+    if len(tmp_prepare_logs) > 0 and len(tmp_prepare_logs) % 3 == 0:
+        print("prepare message: ", tmp_prepare_logs.pop(0))
+        tmp_log = tmp_prepare_logs.pop(0)
+        print("Previous dynasty, prepared deposit: %.8f ETH, total deposit: %.8f ETH" %
+            (utils.big_endian_to_int(tmp_log[:32]) / utils.denoms.ether
+            ,utils.big_endian_to_int(tmp_log[32:]) / utils.denoms.ether))
+        tmp_log = tmp_prepare_logs.pop(0)
+        print("Current dynasty, prepared deposit: %.8f ETH, total deposit: %.8f ETH" %
+            (utils.big_endian_to_int(tmp_log[:32]) / utils.denoms.ether
+            ,utils.big_endian_to_int(tmp_log[32:]) / utils.denoms.ether))
+    elif len(tmp_commit_logs) > 0 and len(tmp_commit_logs) % 3 == 0:
+        print("commit message: ", tmp_commit_logs.pop(0))
+        tmp_log = tmp_commit_logs.pop(0)
+        print("Previous dynasty, commit deposit: %.8f ETH, total deposit: %.8f ETH" %
+            (utils.big_endian_to_int(tmp_log[:32]) / utils.denoms.ether
+            ,utils.big_endian_to_int(tmp_log[32:]) / utils.denoms.ether))
+        tmp_log = tmp_commit_logs.pop(0)
+        print("Current dynasty, commit deposit: %.8f ETH, total deposit: %.8f ETH" %
+            (utils.big_endian_to_int(tmp_log[:32]) / utils.denoms.ether
+            ,utils.big_endian_to_int(tmp_log[32:]) / utils.denoms.ether))
+
+c.chain.state.log_listeners.append(prepare_commit_filter)
 
 # Begin the test
 casper = install_prerequisite_and_casper()
@@ -231,7 +266,10 @@ base_alloc[t.a0]['balance'] = 20 * 10**18
 # Restart the chain
 c = t.Chain(alloc=base_alloc)
 c.chain.env.config['MIN_GAS_LIMIT'] = 4707787
+# Initialize Casper
 casper = install_prerequisite_and_casper()
+# Install event watcher
+c.chain.state.log_listeners.append(prepare_commit_filter)
 print("Restarting the chain for test 2")
 casper.initiate()
 c.mine(EPOCH_LENGTH)
