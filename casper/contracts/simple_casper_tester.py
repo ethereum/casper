@@ -107,7 +107,10 @@ def prepare_commit_filter(log):
         tmp_commit_logs.append(log.data)
         
     if len(tmp_prepare_logs) > 0 and len(tmp_prepare_logs) % 3 == 0:
-        print("prepare message: ", tmp_prepare_logs.pop(0))
+        tmp_log = rlp.decode(tmp_prepare_logs.pop(0))
+        print("validator index: %d, prepare on epoch %d" %
+            (utils.big_endian_to_int(tmp_log[0])
+            ,utils.big_endian_to_int(tmp_log[1])))
         tmp_log = tmp_prepare_logs.pop(0)
         print("Previous dynasty, prepared deposit: %.8f ETH, total deposit: %.8f ETH" %
             (utils.big_endian_to_int(tmp_log[:32]) / utils.denoms.ether
@@ -117,7 +120,10 @@ def prepare_commit_filter(log):
             (utils.big_endian_to_int(tmp_log[:32]) / utils.denoms.ether
             ,utils.big_endian_to_int(tmp_log[32:]) / utils.denoms.ether))
     elif len(tmp_commit_logs) > 0 and len(tmp_commit_logs) % 3 == 0:
-        print("commit message: ", tmp_commit_logs.pop(0))
+        tmp_log = rlp.decode(tmp_commit_logs.pop(0))
+        print("validator index: %d, commit on epoch %d" %
+            (utils.big_endian_to_int(tmp_log[0])
+            ,utils.big_endian_to_int(tmp_log[1])))
         tmp_log = tmp_commit_logs.pop(0)
         print("Previous dynasty, commit deposit: %.8f ETH, total deposit: %.8f ETH" %
             (utils.big_endian_to_int(tmp_log[:32]) / utils.denoms.ether
@@ -154,7 +160,6 @@ try:
 except:
     success = False
 assert not success
-
 print("Prepare message fails the second time")
 # Send a commit message
 casper.commit(mk_commit(0, 1, '\x35' * 32, 0, t.k0))
