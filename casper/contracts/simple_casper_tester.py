@@ -108,8 +108,9 @@ def prepare_commit_filter(log):
         
     if len(tmp_prepare_logs) > 0 and len(tmp_prepare_logs) % 3 == 0:
         tmp_log = rlp.decode(tmp_prepare_logs.pop(0))
-        print("validator index: %d, prepare on epoch %d" %
+        print("validator index: %d, prepare %s, on epoch %d" %
             (utils.big_endian_to_int(tmp_log[0])
+            ,tmp_log[2]
             ,utils.big_endian_to_int(tmp_log[1])))
         tmp_log = tmp_prepare_logs.pop(0)
         print("Previous dynasty, prepared deposit: %.8f ETH, total deposit: %.8f ETH" %
@@ -121,8 +122,9 @@ def prepare_commit_filter(log):
             ,utils.big_endian_to_int(tmp_log[32:]) / utils.denoms.ether))
     elif len(tmp_commit_logs) > 0 and len(tmp_commit_logs) % 3 == 0:
         tmp_log = rlp.decode(tmp_commit_logs.pop(0))
-        print("validator index: %d, commit on epoch %d" %
+        print("validator index: %d, commit %s, on epoch %d" %
             (utils.big_endian_to_int(tmp_log[0])
+            ,tmp_log[2]
             ,utils.big_endian_to_int(tmp_log[1])))
         tmp_log = tmp_commit_logs.pop(0)
         print("Previous dynasty, commit deposit: %.8f ETH, total deposit: %.8f ETH" %
