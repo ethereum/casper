@@ -80,11 +80,14 @@ def install_prerequisite_and_casper():
 
 # Helper functions for making a prepare, commit, login and logout message
 
-def mk_prepare(validator_index, epoch, hash, ancestry_hash, source_epoch, source_ancestry_hash, key):
-    sighash = utils.sha3(rlp.encode([validator_index, epoch, hash, ancestry_hash, source_epoch, source_ancestry_hash]))
+# def mk_prepare(validator_index, epoch, hash, ancestry_hash, source_epoch, source_ancestry_hash, key):
+def mk_prepare(validator_index, epoch, ancestry_hash, source_epoch, source_ancestry_hash, key):
+    # sighash = utils.sha3(rlp.encode([validator_index, epoch, hash, ancestry_hash, source_epoch, source_ancestry_hash]))
+    sighash = utils.sha3(rlp.encode([validator_index, epoch, ancestry_hash, source_epoch, source_ancestry_hash]))
     v, r, s = utils.ecdsa_raw_sign(sighash, key)
     sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
-    return rlp.encode([validator_index, epoch, hash, ancestry_hash, source_epoch, source_ancestry_hash, sig])
+    # return rlp.encode([validator_index, epoch, hash, ancestry_hash, source_epoch, source_ancestry_hash, sig])
+    return rlp.encode([validator_index, epoch, ancestry_hash, source_epoch, source_ancestry_hash, sig])
 
 def mk_commit(validator_index, epoch, hash, prev_commit_epoch, key):
     sighash = utils.sha3(rlp.encode([validator_index, epoch, hash, prev_commit_epoch]))
@@ -110,7 +113,7 @@ def prepare_commit_filter(log):
         tmp_log = rlp.decode(tmp_prepare_logs.pop(0))
         print("validator index: %d, prepare %s, on epoch %d" %
             (utils.big_endian_to_int(tmp_log[0])
-            ,tmp_log[2]
+            ,utils.encode_hex(tmp_log[2])
             ,utils.big_endian_to_int(tmp_log[1])))
         tmp_log = tmp_prepare_logs.pop(0)
         print("Previous dynasty, prepared deposit: %.8f ETH, total deposit: %.8f ETH" %
@@ -124,7 +127,7 @@ def prepare_commit_filter(log):
         tmp_log = rlp.decode(tmp_commit_logs.pop(0))
         print("validator index: %d, commit %s, on epoch %d" %
             (utils.big_endian_to_int(tmp_log[0])
-            ,tmp_log[2]
+            ,utils.encode_hex(tmp_log[2])
             ,utils.big_endian_to_int(tmp_log[1])))
         tmp_log = tmp_commit_logs.pop(0)
         print("Previous dynasty, commit deposit: %.8f ETH, total deposit: %.8f ETH" %
@@ -143,28 +146,29 @@ print("Starting tests")
 casper.initiate()
 # Initialize the first epoch
 c.mine(EPOCH_LENGTH)
-print('foo', casper.initialize_epoch(1))
+casper.initialize_epoch(1)
 assert casper.get_nextValidatorIndex() == 1
 print("Epoch initialized")
 print("Reward factor: %.8f" % (casper.get_reward_factor() * 2 / 3))
 # Send a prepare message
 #configure_logging(config_string=config_string)
-casper.prepare(mk_prepare(0, 1, '\x35' * 32, '\x00' * 32, 0, '\x00' * 32, t.k0))
+epoch_1_anchash = utils.sha3(b'\x00' * 32 + c.chain.get_blockhash_by_number(1 * EPOCH_LENGTH))
+casper.prepare(mk_prepare(0, 1, epoch_1_anchash, 0, '\x00' * 32, t.k0))
 print('Gas consumed for a prepare: %d (including %d intrinsic gas)' %
       (c.head_state.receipts[-1].gas_used - c.head_state.receipts[-2].gas_used, c.last_tx.intrinsic_gas_used))
-epoch_1_anchash = utils.sha3(b'\x35' * 32 + b'\x00' * 32)
-assert casper.get_consensus_messages__hash_justified(1, b'\x35' * 32)
+# epoch_1_anchash = utils.sha3(b'\x35' * 32 + b'\x00' * 32)
+# assert casper.get_consensus_messages__hash_justified(1, b'\x35' * 32)
 assert casper.get_consensus_messages__ancestry_hash_justified(1, epoch_1_anchash)
 print("Prepare message processed")
 try:
-    casper.prepare(mk_prepare(0, 1, '\x35' * 32, '\x00' * 32, 0, '\x00' * 32, t.k0), startgas = 300000)
+    casper.prepare(mk_prepare(0, 1, '\x00' * 32, 0, '\x00' * 32, t.k0), startgas = 300000)
     success = True
 except:
     success = False
 assert not success
 print("Prepare message fails the second time")
 # Send a commit message
-casper.commit(mk_commit(0, 1, '\x35' * 32, 0, t.k0))
+casper.commit(mk_commit(0, 1, epoch_1_anchash, 0, t.k0))
 print('Gas consumed for a commit: %d (including %d intrinsic gas)' %
       (c.head_state.receipts[-1].gas_used - c.head_state.receipts[-2].gas_used, c.last_tx.intrinsic_gas_used))
 c.mine()
@@ -175,15 +179,17 @@ print("Commit message processed")
 c.mine(EPOCH_LENGTH)
 casper.initialize_epoch(2) 
 # Check that the dynasty increased as expected
+print("Reward factor: %.8f" % (casper.get_reward_factor() * 2 / 3))
 assert casper.get_dynasty() == 1
 assert casper.get_total_deposits(1) == casper.get_total_deposits(0) > 0
 print("Second epoch initialized, dynasty increased as expected")
 # Send a prepare message
-casper.prepare(mk_prepare(0, 2, '\x45' * 32, epoch_1_anchash, 1, epoch_1_anchash, t.k0))
+epoch_2_anchash = utils.sha3(epoch_1_anchash + c.chain.get_blockhash_by_number(2 * EPOCH_LENGTH))
+casper.prepare(mk_prepare(0, 2, epoch_2_anchash, 1, epoch_1_anchash, t.k0))
 # Send a commit message
-epoch_2_commit = mk_commit(0, 2, '\x45' * 32, 1, t.k0)
+epoch_2_commit = mk_commit(0, 2, epoch_2_anchash, 1, t.k0)
 casper.commit(epoch_2_commit)
-epoch_2_anchash = utils.sha3(b'\x45' * 32 + epoch_1_anchash)
+# epoch_2_anchash = utils.sha3(b'\x45' * 32 + epoch_1_anchash)
 assert casper.get_consensus_messages__ancestry_hash_justified(2, epoch_2_anchash)
 # Check that we committed
 assert casper.get_consensus_messages__committed(2)
@@ -192,14 +198,15 @@ c.mine(EPOCH_LENGTH)
 casper.initialize_epoch(3)
 print("Second epoch prepared and committed, third epoch initialized")
 # Test the NO_DBL_PREPARE slashing condition
-p1 = mk_prepare(0, 3, '\x56' * 32, epoch_2_anchash, 2, epoch_2_anchash, t.k0)
-p2 = mk_prepare(0, 3, '\x57' * 32, epoch_2_anchash, 2, epoch_2_anchash, t.k0)
+epoch_3_anchash = utils.sha3(epoch_2_anchash + c.chain.get_blockhash_by_number(3 * EPOCH_LENGTH))
+p1 = mk_prepare(0, 3, epoch_3_anchash, 2, epoch_2_anchash, t.k0)
+p2 = mk_prepare(0, 3, epoch_3_anchash, 1, epoch_1_anchash, t.k0)
 snapshot = c.snapshot()
 casper.double_prepare_slash(p1, p2)
 c.revert(snapshot)
 print("NO_DBL_PREPARE slashing condition works")
 # Test the PREPARE_COMMIT_CONSISTENCY slashing condition
-p3 = mk_prepare(0, 3, '\x58' * 32, epoch_2_anchash, 0, b'\x00' * 32, t.k0)
+p3 = mk_prepare(0, 3, epoch_3_anchash, 0, '\x00' * 32, t.k0)
 snapshot = c.snapshot()
 casper.prepare_commit_inconsistency_slash(p3, epoch_2_commit)
 c.revert(snapshot)
@@ -207,42 +214,44 @@ print("PREPARE_COMMIT_CONSISTENCY slashing condition works")
 c.mine()
 # Finish the third epoch
 casper.prepare(p1)
-casper.commit(mk_commit(0, 3, '\x56' * 32, 2, t.k0))
-epoch_3_anchash = utils.sha3(b'\x56' * 32 + epoch_2_anchash)
+casper.commit(mk_commit(0, 3, epoch_3_anchash, 2, t.k0))
+# epoch_3_anchash = utils.sha3(epoch_2_anchash + c.chain.get_blockhash_by_number(3 * EPOCH_LENGTH))
 assert casper.get_consensus_messages__ancestry_hash_justified(3, epoch_3_anchash)
 assert casper.get_consensus_messages__committed(3)
 # Initialize the fourth epoch. Not doing prepares or commits during this epoch.
 c.mine(EPOCH_LENGTH)
 casper.initialize_epoch(4)
 assert casper.get_dynasty() == 3
-epoch_4_anchash = utils.sha3(b'\x67' * 32 + epoch_3_anchash)
+epoch_4_anchash = utils.sha3(epoch_3_anchash + c.chain.get_blockhash_by_number(4 * EPOCH_LENGTH))
+# epoch_4_anchash = utils.sha3(b'\x67' * 32 + epoch_3_anchash)
 # Not publishing this prepare for the time being
-p4 = mk_prepare(0, 4, '\x78' * 32, '\x12' * 32, 3, '\x24' * 32, t.k0)
+p4 = mk_prepare(0, 4, epoch_4_anchash, 3, epoch_3_anchash, t.k0)
 # Initialize the fifth epoch
 c.mine(EPOCH_LENGTH)
 casper.initialize_epoch(5)
 print("Epochs up to 5 initialized")
 # Dynasty not incremented because no commits were made
 assert casper.get_dynasty() == 3
-epoch_5_anchash = utils.sha3(b'\x78' * 32 + epoch_4_anchash)
-p5 = mk_prepare(0, 5, '\x78' * 32, epoch_4_anchash, 3, epoch_3_anchash, t.k0)
-casper.prepare(p5)
+epoch_5_anchash = utils.sha3(epoch_4_anchash + c.chain.get_blockhash_by_number(5 * EPOCH_LENGTH))
+# epoch_5_anchash = utils.sha3(b'\x78' * 32 + epoch_4_anchash)
+p5 = mk_prepare(0, 5, epoch_5_anchash, 4, epoch_4_anchash, t.k0)
+# casper.prepare(p5)
 # Test the COMMIT_REQ slashing condition
-kommit = mk_commit(0, 5, b'\x80' * 32, 3, t.k0)
+kommit = mk_commit(0, 5, epoch_5_anchash, 3, t.k0)
 epoch_inc = 1 + int(86400 / 14 / EPOCH_LENGTH)
 print("going to mine %d blocks..." % (epoch_inc * EPOCH_LENGTH))
 
-c.mine(EPOCH_LENGTH * epoch_inc)
+# c.mine(EPOCH_LENGTH * epoch_inc)
 print("Speeding up time to test remaining two slashing conditions")
 for i in range(6, 6 + epoch_inc):
+    c.mine(EPOCH_LENGTH)
     casper.initialize_epoch(i)
-    c.mine()
 print("Epochs up to %d initialized" % (6 + epoch_inc))
 snapshot = c.snapshot()
 casper.commit_non_justification_slash(kommit)
 c.revert(snapshot)
 try:
-    casper.commit_non_justification_slash(0, epoch_2_commit)
+    casper.commit_non_justification_slash(epoch_2_commit)
     success = True
 except:
     success = False
@@ -250,16 +259,18 @@ assert not success
 c.mine()
 print("COMMIT_REQ slashing condition works")
 # Test the PREPARE_REQ slashing condition
-casper.derive_parenthood(epoch_3_anchash, b'\x67' * 32, epoch_4_anchash)
+# casper.derive_parenthood(epoch_3_anchash, c.chain.get_blockhash_by_number(4 * EPOCH_LENGTH), epoch_4_anchash)
+casper.prepare(p4)
 assert casper.get_ancestry(epoch_3_anchash, epoch_4_anchash) == 1
-assert casper.get_ancestry(epoch_4_anchash, epoch_5_anchash) == 1
-casper.derive_ancestry(epoch_3_anchash, epoch_4_anchash, epoch_5_anchash)
-assert casper.get_ancestry(epoch_3_anchash, epoch_5_anchash) == 2
+# assert casper.get_ancestry(epoch_4_anchash, epoch_5_anchash) == 1
+# casper.derive_ancestry(epoch_3_anchash, epoch_4_anchash, epoch_5_anchash)
+casper.derive_ancestry(epoch_2_anchash, epoch_3_anchash, epoch_4_anchash)
+assert casper.get_ancestry(epoch_2_anchash, epoch_4_anchash) == 2
 snapshot = c.snapshot()
-casper.prepare_non_justification_slash(p4)
+casper.prepare_non_justification_slash(p5)
 c.revert(snapshot)
 try:
-    casper.prepare_non_justification_slash(p5)
+    casper.prepare_non_justification_slash(p4)
     success = True
 except:
     success = False
