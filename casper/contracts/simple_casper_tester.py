@@ -277,7 +277,8 @@ except:
 assert not success
 c.mine()
 print("PREPARE_REQ slashing condition works")
-
+print("-------------------------------------------------------------------------------------------------")
+print("Restarting the chain for test 2")
 #alloc enough ether for t.a0
 base_alloc = t.base_alloc
 base_alloc[t.a0]['balance'] = 20 * 10**18
@@ -288,10 +289,9 @@ c.chain.env.config['MIN_GAS_LIMIT'] = 4707787
 casper = install_prerequisite_and_casper()
 # Install event watcher
 c.chain.state.log_listeners.append(prepare_commit_filter)
-print("Restarting the chain for test 2")
 casper.initiate()
 c.mine(EPOCH_LENGTH)
-print('foo', casper.initialize_epoch(1))
+casper.initialize_epoch(1)
 assert casper.get_nextValidatorIndex() == 1
 assert casper.get_dynasty() == 0
 assert casper.get_current_epoch() == 1
@@ -303,9 +303,10 @@ for k in (t.k1, t.k2, t.k3, t.k4, t.k5, t.k6):
     casper.deposit(valcode_addr, utils.privtoaddr(k), value=3 * 10**18)
     c.mine()
 print("Processed 6 deposits")
-casper.prepare(mk_prepare(0, 1, b'\x10' * 32, b'\x00' * 32, 0, b'\x00' * 32, t.k0))
-casper.commit(mk_commit(0, 1, b'\x10' * 32, 0, t.k0))
-epoch_1_anchash = utils.sha3(b'\x10' * 32 + b'\x00' * 32)
+epoch_1_anchash = utils.sha3(b'\x00' * 32 + c.chain.get_blockhash_by_number(1 * EPOCH_LENGTH))
+casper.prepare(mk_prepare(0, 1, epoch_1_anchash, 0, b'\x00' * 32, t.k0))
+casper.commit(mk_commit(0, 1, epoch_1_anchash, 0, t.k0))
+# epoch_1_anchash = utils.sha3(b'\x10' * 32 + b'\x00' * 32)
 c.mine()
 assert casper.get_consensus_messages__committed(1)
 print("Prepared and committed")
@@ -313,9 +314,10 @@ c.mine(EPOCH_LENGTH)
 casper.initialize_epoch(2)
 print("Epoch 2 initialized")
 assert casper.get_dynasty() == 1
-casper.prepare(mk_prepare(0, 2, b'\x20' * 32, epoch_1_anchash, 1, epoch_1_anchash, t.k0))
-casper.commit(mk_commit(0, 2, b'\x20' * 32, 1, t.k0))
-epoch_2_anchash = utils.sha3(b'\x20' * 32 + epoch_1_anchash)
+epoch_2_anchash = utils.sha3(epoch_1_anchash + c.chain.get_blockhash_by_number(2 * EPOCH_LENGTH))
+casper.prepare(mk_prepare(0, 2, epoch_2_anchash, 1, epoch_1_anchash, t.k0))
+casper.commit(mk_commit(0, 2, epoch_2_anchash, 1, t.k0))
+# epoch_2_anchash = utils.sha3(b'\x20' * 32 + epoch_1_anchash)
 c.mine()
 assert casper.get_consensus_messages__committed(2)
 print("Confirmed that one key is still sufficient to prepare and commit")
@@ -342,28 +344,29 @@ casper.flick_status(mk_status_flicker(6, 3, 0, t.k6))
 print("Logged out three validators")
 # Validators leave the fwd validator set in dynasty 4
 assert casper.get_validators__dynasty_end(4) == 4
-epoch_3_anchash = utils.sha3(b'\x30' * 32 + epoch_2_anchash)
+# epoch_3_anchash = utils.sha3(b'\x30' * 32 + epoch_2_anchash)
+epoch_3_anchash = utils.sha3(epoch_2_anchash + c.chain.get_blockhash_by_number(3 * EPOCH_LENGTH))
 # Prepare from one validator
-casper.prepare(mk_prepare(0, 3, b'\x30' * 32, epoch_2_anchash, 2, epoch_2_anchash, t.k0))
+casper.prepare(mk_prepare(0, 3, epoch_3_anchash, 2, epoch_2_anchash, t.k0))
 # Not prepared yet
-assert not casper.get_consensus_messages__hash_justified(3, b'\x30' * 32)
+assert not casper.get_consensus_messages__ancestry_hash_justified(3, epoch_3_anchash)
 c.mine()
 print("Prepare from one validator no longer sufficient")
 # Prepare from 3 more validators
 for i, k in ((1, t.k1), (2, t.k2), (3, t.k3)):
-    casper.prepare(mk_prepare(i, 3, b'\x30' * 32, epoch_2_anchash, 2, epoch_2_anchash, k))
+    casper.prepare(mk_prepare(i, 3, epoch_3_anchash, 2, epoch_2_anchash, k))
 # Still not prepared
-assert not casper.get_consensus_messages__hash_justified(3, b'\x30' * 32)
+assert not casper.get_consensus_messages__ancestry_hash_justified(3, epoch_3_anchash)
 print("Prepare from four of seven validators still not sufficient")
 # Prepare from a fifth validator
-casper.prepare(mk_prepare(4, 3, b'\x30' * 32, epoch_2_anchash, 2, epoch_2_anchash, t.k4))
+casper.prepare(mk_prepare(4, 3, epoch_3_anchash, 2, epoch_2_anchash, t.k4))
 # NOW we're prepared!
-assert casper.get_consensus_messages__hash_justified(3, b'\x30' * 32)
+assert casper.get_consensus_messages__ancestry_hash_justified(3, epoch_3_anchash)
 c.mine()
 print("Prepare from five of seven validators sufficient!")
 # Five commits
 for i, k in enumerate([t.k0, t.k1, t.k2, t.k3, t.k4]):
-    casper.commit(mk_commit(i, 3, b'\x30' * 32, 2 if i == 0 else 0, k))
+    casper.commit(mk_commit(i, 3, epoch_3_anchash, 2 if i == 0 else 0, k))
 # And we committed!
 assert casper.get_consensus_messages__committed(3)
 c.mine()
@@ -374,12 +377,13 @@ casper.initialize_epoch(4)
 assert casper.get_dynasty() == 3
 print("Epoch 4 initialized")
 # Prepare and commit
-epoch_4_anchash = utils.sha3(b'\x40' * 32 + epoch_3_anchash)
+# epoch_4_anchash = utils.sha3(b'\x40' * 32 + epoch_3_anchash)
+epoch_4_anchash = utils.sha3(epoch_3_anchash + c.chain.get_blockhash_by_number(4 * EPOCH_LENGTH))
 for i, k in enumerate([t.k0, t.k1, t.k2, t.k3, t.k4]):
-    casper.prepare(mk_prepare(i, 4, b'\x40' * 32, epoch_3_anchash, 3, epoch_3_anchash, k))
+    casper.prepare(mk_prepare(i, 4, epoch_4_anchash, 3, epoch_3_anchash, k))
 c.mine()
 for i, k in enumerate([t.k0, t.k1, t.k2, t.k3, t.k4]):
-    casper.commit(mk_commit(i, 4, b'\x40' * 32, 3, k))
+    casper.commit(mk_commit(i, 4, epoch_4_anchash, 3, k))
 assert casper.get_consensus_messages__committed(4)
 c.mine()
 print("Prepared and committed")
@@ -390,23 +394,24 @@ print("Epoch 5 initialized")
 assert casper.get_dynasty() == 4
 assert 21 * 10**18 <= casper.get_total_deposits(3) <= 22 * 10**18
 assert 12 * 10**18 <= casper.get_total_deposits(4) <= 13 * 10**18
-epoch_5_anchash = utils.sha3(b'\x50' * 32 + epoch_4_anchash)
+# epoch_5_anchash = utils.sha3(b'\x50' * 32 + epoch_4_anchash)
+epoch_5_anchash = utils.sha3(epoch_4_anchash + c.chain.get_blockhash_by_number(5 * EPOCH_LENGTH))
 # Do three prepares
 for i, k in enumerate([t.k0, t.k1, t.k2]):
-    casper.prepare(mk_prepare(i, 5, b'\x50' * 32, epoch_4_anchash, 4, epoch_4_anchash, k))
+    casper.prepare(mk_prepare(i, 5, epoch_5_anchash, 4, epoch_4_anchash, k))
 # Three prepares are insufficient because there are still five validators in the rear validator set
 c.mine()
-assert not casper.get_consensus_messages__hash_justified(5, b'\x50' * 32)
+assert not casper.get_consensus_messages__ancestry_hash_justified(5, epoch_5_anchash)
 print("Three prepares insufficient, as rear validator set still has seven")
 # Do two more prepares
 for i, k in [(3, t.k3), (4, t.k4)]:
-    casper.prepare(mk_prepare(i, 5, b'\x50' * 32, epoch_4_anchash, 4, epoch_4_anchash, k))
+    casper.prepare(mk_prepare(i, 5, epoch_5_anchash, 4, epoch_4_anchash, k))
 # Now we're good!
-assert casper.get_consensus_messages__hash_justified(5, b'\x50' * 32)
+assert casper.get_consensus_messages__ancestry_hash_justified(5, epoch_5_anchash)
 c.mine()
 print("Five prepares sufficient")
 for i, k in enumerate([t.k0, t.k1, t.k2, t.k3, t.k4]):
-    casper.commit(mk_commit(i, 5, b'\x50' * 32, 4, k))
+    casper.commit(mk_commit(i, 5, epoch_5_anchash, 4, k))
 # Committed!
 assert casper.get_consensus_messages__committed(5)
 # Start epoch 6 / dynasty 5
@@ -437,12 +442,13 @@ print("One validator logging back in")
 print("Penalty from %d epochs: %.4f" % (old_deposit_end - old_deposit_start, 1 - new_deposit / old_deposit))
 assert casper.get_validators__dynasty_start(4) == 7
 # Here three prepares and three commits should be sufficient!
-epoch_6_anchash = utils.sha3(b'\x60' * 32 + epoch_5_anchash)
+# epoch_6_anchash = utils.sha3(b'\x60' * 32 + epoch_5_anchash)
+epoch_6_anchash = utils.sha3(epoch_5_anchash + c.chain.get_blockhash_by_number(6 * EPOCH_LENGTH))
 for i, k in enumerate([t.k0, t.k1, t.k2]):
-    casper.prepare(mk_prepare(i, 6, b'\x60' * 32, epoch_5_anchash, 5, epoch_5_anchash, k))
+    casper.prepare(mk_prepare(i, 6, epoch_6_anchash, 5, epoch_5_anchash, k))
 c.mine()
 for i, k in enumerate([t.k0, t.k1, t.k2]):
-    casper.commit(mk_commit(i, 6, b'\x60' * 32, 5, k))
+    casper.commit(mk_commit(i, 6, epoch_6_anchash, 5, k))
 assert casper.get_consensus_messages__committed(6)
 print("Three of four prepares and commits sufficient")
 # Start epoch 7 / dynasty 6
@@ -451,11 +457,12 @@ casper.initialize_epoch(7)
 assert casper.get_dynasty() == 6
 print("Epoch 7 initialized")
 # Here three prepares and three commits should be sufficient!
-epoch_7_anchash = utils.sha3(b'\x70' * 32 + epoch_6_anchash)
+# epoch_7_anchash = utils.sha3(b'\x70' * 32 + epoch_6_anchash)
+epoch_7_anchash = utils.sha3(epoch_6_anchash + c.chain.get_blockhash_by_number(7 * EPOCH_LENGTH))
 for i, k in enumerate([t.k0, t.k1, t.k2]):
     #if i == 1:
     #    configure_logging(config_string=config_string)
-    casper.prepare(mk_prepare(i, 7, b'\x70' * 32, epoch_6_anchash, 6, epoch_6_anchash, k))
+    casper.prepare(mk_prepare(i, 7, epoch_7_anchash, 6, epoch_6_anchash, k))
     #if i == 1:
     #    import sys
     #    sys.exit()
@@ -463,7 +470,7 @@ print('Gas consumed for first prepare', c.head_state.receipts[-1].gas_used - c.h
 print('Gas consumed for second prepare', c.head_state.receipts[-2].gas_used - c.head_state.receipts[-3].gas_used)
 print('Gas consumed for third prepare', c.head_state.receipts[-3].gas_used - c.head_state.receipts[-4].gas_used)
 for i, k in enumerate([t.k0, t.k1, t.k2]):
-    casper.commit(mk_commit(i, 7, b'\x70' * 32, 6, k))
+    casper.commit(mk_commit(i, 7, epoch_7_anchash, 6, k))
 print('Gas consumed for first commit', c.head_state.receipts[-1].gas_used - c.head_state.receipts[-2].gas_used)
 print('Gas consumed for second commit', c.head_state.receipts[-2].gas_used - c.head_state.receipts[-3].gas_used)
 print('Gas consumed for third commit', c.head_state.receipts[-3].gas_used - c.head_state.receipts[-4].gas_used)
@@ -477,23 +484,24 @@ assert casper.get_dynasty() == 7
 print("Epoch 8 initialized")
 assert 12 * 10**18 <= casper.get_total_deposits(6) <= 13 * 10**18
 assert 15 * 10**18 <= casper.get_total_deposits(7) <= 16 * 10**18
-epoch_8_anchash = utils.sha3(b'\x80' * 32 + epoch_7_anchash)
+# epoch_8_anchash = utils.sha3(b'\x80' * 32 + epoch_7_anchash)
+epoch_8_anchash = utils.sha3(epoch_7_anchash + c.chain.get_blockhash_by_number(8 * EPOCH_LENGTH))
 c.mine()
 # Do three prepares
 for i, k in enumerate([t.k0, t.k1, t.k2]):
-    casper.prepare(mk_prepare(i, 8, b'\x80' * 32, epoch_7_anchash, 7, epoch_7_anchash, k))
+    casper.prepare(mk_prepare(i, 8, epoch_8_anchash, 7, epoch_7_anchash, k))
 # Three prepares are insufficient because there are still five validators in the rear validator set
-assert not casper.get_consensus_messages__hash_justified(8, b'\x80' * 32)
+assert not casper.get_consensus_messages__ancestry_hash_justified(8, epoch_8_anchash)
 print("Three prepares no longer sufficient, as the forward validator set has five validators")
 # Do one more prepare
 for i, k in [(3, t.k3)]:
-    casper.prepare(mk_prepare(i, 8, b'\x80' * 32, epoch_7_anchash, 7, epoch_7_anchash, k))
+    casper.prepare(mk_prepare(i, 8, epoch_8_anchash, 7, epoch_7_anchash, k))
 # Now we're good!
-assert casper.get_consensus_messages__hash_justified(8, b'\x80' * 32)
+assert casper.get_consensus_messages__ancestry_hash_justified(8, epoch_8_anchash)
 c.mine()
 print("Four of five prepares sufficient")
 for i, k in enumerate([t.k0, t.k1, t.k2, t.k3, t.k4]):
-    casper.commit(mk_commit(i, 8, b'\x80' * 32, 7 if i < 3 else 5, k))
+    casper.commit(mk_commit(i, 8, epoch_8_anchash, 7 if i < 3 else 5, k))
 assert casper.get_consensus_messages__committed(8)
 c.mine()
 print("Committed")
