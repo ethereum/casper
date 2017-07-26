@@ -348,7 +348,7 @@ def prepare(prepare_msg: bytes <= 1024):
     # Check that we have not yet prepared for this epoch
     # Pay the reward if the prepare was submitted in time and the blockhash is correct
     this_validators_deposit = self.validators[validator_index].deposit
-    if self.current_epoch == epoch:  #if blockhash(epoch * self.epoch_length) == hash:
+    if self.current_epoch == epoch and blockhash(epoch * self.epoch_length) == hash:
         reward = floor(this_validators_deposit * self.reward_factor)
         self.validators[validator_index].deposit += reward
         self.total_deposits[self.dynasty] += reward
@@ -408,7 +408,7 @@ def commit(commit_msg: bytes <= 1024):
     self.validators[validator_index].prev_commit_epoch = epoch
     this_validators_deposit = self.validators[validator_index].deposit
     # Pay the reward if the blockhash is correct
-    if True:  #if blockhash(epoch * self.epoch_length) == hash:
+    if blockhash(epoch * self.epoch_length) == hash:
         reward = floor(this_validators_deposit * self.reward_factor)
         self.validators[validator_index].deposit += reward
         self.total_deposits[self.dynasty] += reward
@@ -452,7 +452,7 @@ def double_prepare_slash(prepare1: bytes <= 1000, prepare2: bytes <= 1000):
     validator_deposit = self.validators[validator_index].deposit
     send(msg.sender, validator_deposit / 25)
     self.total_destroyed += validator_deposit * 24 / 25
-    self.total_deposits[self.dynasty] -= (validator_deposit - validator_deposit / 25)
+    self.total_deposits[self.dynasty] -= validator_deposit
     self.delete_validator(validator_index)
 
 def prepare_commit_inconsistency_slash(prepare_msg: bytes <= 1024, commit_msg: bytes <= 1024):
