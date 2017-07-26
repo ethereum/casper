@@ -46,8 +46,6 @@ consensus_messages: public({
     prev_dyn_prepares: wei_value[bytes32],
     # Is a prepare referencing the given ancestry hash justified?
     ancestry_hash_justified: bool[bytes32],
-    # Is a commit on the given hash justified?
-    hash_justified: bool[bytes32],
     # How many commits are there for this hash
     commits: wei_value[bytes32],
     # And from the previous dynasty
@@ -110,6 +108,9 @@ prepare_log_topic: bytes32
 # Log topic for commit
 commit_log_topic: bytes32
 
+# Real ancestry hash of each epoch
+real_ancestry_hash: public(bytes32[num])
+
 def initiate():
     assert not self.initialized
     self.initialized = True
@@ -143,6 +144,8 @@ def initiate():
     # Set an initial root of the epoch hash chain
     self.consensus_messages[0].ancestry_hash_justified[0x0000000000000000000000000000000000000000000000000000000000000000] = True
     # self.consensus_messages[0].committed = True
+    # Set ancestry_hash of epoch 0
+    self.real_ancestry_hash[0] = 0x0000000000000000000000000000000000000000000000000000000000000000
     # Set initial total deposit counter
     self.total_deposits[0] = as_wei_value(3, ether)
     # Set deposit scale factor
@@ -160,6 +163,9 @@ def initialize_epoch(epoch: num):
     assert epoch <= computed_current_epoch and epoch == self.current_epoch + 1
     # Set the epoch number
     self.current_epoch = epoch
+    # Set the ancestry hash of current epoch
+    self.real_ancestry_hash[self.current_epoch] = sha3(concat(self.real_ancestry_hash[self.current_epoch-1]
+                                                                , blockhash(self.current_epoch * self.epoch_length)))
     # Increment the dynasty
     if self.consensus_messages[epoch - 1].committed:
         self.dynasty += 1
@@ -318,17 +324,17 @@ def prepare(prepare_msg: bytes <= 1024):
     # consisting solely of RLP elements
     sighash = extract32(raw_call(self.sighasher, prepare_msg, gas=200000, outsize=32), 0)
     # Extract parameters
-    values = RLPList(prepare_msg, [num, num, bytes32, bytes32, num, bytes32, bytes])
+    values = RLPList(prepare_msg, [num, num, bytes32, num, bytes32, bytes])
     validator_index = values[0]
     epoch = values[1]
-    hash = values[2]
-    ancestry_hash = values[3]
-    source_epoch = values[4]
-    source_ancestry_hash = values[5]
-    sig = values[6]
-    new_ancestry_hash = sha3(concat(hash, ancestry_hash))
-    # Hash for purposes of identifying this (epoch, hash, ancestry_hash, source_epoch, source_ancestry_hash) combination
-    sourcing_hash = sha3(concat(as_bytes32(epoch), hash, ancestry_hash, as_bytes32(source_epoch), source_ancestry_hash))
+    ancestry_hash = values[2]
+    source_epoch = values[3]
+    source_ancestry_hash = values[4]
+    sig = values[5]
+    # Hash for purposes of identifying this (epoch, ancestry_hash, source_epoch, source_ancestry_hash) combination
+    sourcing_hash = sha3(concat(as_bytes32(epoch), ancestry_hash, as_bytes32(source_epoch), source_ancestry_hash))
+    # Check that preparing hash equals ancestry_hash
+    assert self.real_ancestry_hash[epoch] == ancestry_hash
     # Check the signature
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=500000, outsize=32), 0) == as_bytes32(1)
     # Check that we are in an epoch after we started validating
@@ -345,7 +351,6 @@ def prepare(prepare_msg: bytes <= 1024):
     assert in_current_dynasty or in_prev_dynasty
     # Check that the prepare is on top of a justified prepare
     assert self.consensus_messages[source_epoch].ancestry_hash_justified[source_ancestry_hash]
-    # Check that we have not yet prepared for this epoch
     # Pay the reward if the prepare was submitted in time and the blockhash is correct
     this_validators_deposit = self.validators[validator_index].deposit
     if self.current_epoch == epoch:  #if blockhash(epoch * self.epoch_length) == hash:
@@ -370,13 +375,14 @@ def prepare(prepare_msg: bytes <= 1024):
     # then the hash value is justified for commitment
     if (curdyn_prepares >= self.total_deposits[self.dynasty] * 2 / 3 and \
             prevdyn_prepares >= self.total_deposits[self.dynasty - 1] * 2 / 3) and \
-            not self.consensus_messages[epoch].ancestry_hash_justified[new_ancestry_hash]:
-        self.consensus_messages[epoch].ancestry_hash_justified[new_ancestry_hash] = True
-        self.consensus_messages[epoch].hash_justified[hash] = True
+            not self.consensus_messages[epoch].ancestry_hash_justified[ancestry_hash]:
+        self.consensus_messages[epoch].ancestry_hash_justified[ancestry_hash] = True
     # Add a parent-child relation between ancestry hashes to the ancestry table
-    if not self.ancestry[ancestry_hash][new_ancestry_hash]:
-        self.ancestry[ancestry_hash][new_ancestry_hash] = 1
+    if not self.ancestry[source_ancestry_hash][ancestry_hash]:
+        self.ancestry[source_ancestry_hash][ancestry_hash] = 1
     raw_log([self.prepare_log_topic], prepare_msg)
+    raw_log([self.prepare_log_topic], concat(as_bytes32(prevdyn_prepares), as_bytes32(self.total_deposits[self.dynasty-1])))
+    raw_log([self.prepare_log_topic], concat(as_bytes32(curdyn_prepares), as_bytes32(self.total_deposits[self.dynasty])))
 
 # Process a commit message
 def commit(commit_msg: bytes <= 1024):
@@ -385,7 +391,7 @@ def commit(commit_msg: bytes <= 1024):
     values = RLPList(commit_msg, [num, num, bytes32, num, bytes])
     validator_index = values[0]
     epoch = values[1]
-    hash = values[2]
+    ancestry_hash = values[2]
     prev_commit_epoch = values[3]
     sig = values[4]
     # Check the signature
@@ -393,10 +399,12 @@ def commit(commit_msg: bytes <= 1024):
     # Check that we are in the right epoch
     assert self.current_epoch == block.number / self.epoch_length
     assert self.current_epoch == epoch
+    # Check that committing hash equals ancestry_hash
+    assert self.real_ancestry_hash[epoch] == ancestry_hash
     # Check that we are at least (epoch length / 2) blocks into the epoch
     # assert block.number % self.epoch_length >= self.epoch_length / 2
     # Check that the commit is justified
-    assert self.consensus_messages[epoch].hash_justified[hash]
+    assert self.consensus_messages[epoch].ancestry_hash_justified[ancestry_hash]
     # Check that this validator was active in either the previous dynasty or the current one
     epochcheck = self.check_eligible_in_epoch(validator_index, epoch)
     in_current_dynasty = epochcheck >= 2
@@ -416,15 +424,17 @@ def commit(commit_msg: bytes <= 1024):
     # self.validators[validator_index].max_committed = epoch
     # Record that this commit took place
     if in_current_dynasty:
-        self.consensus_messages[epoch].commits[hash] += this_validators_deposit
+        self.consensus_messages[epoch].commits[ancestry_hash] += this_validators_deposit
     if in_prev_dynasty:
-        self.consensus_messages[epoch].prev_dyn_commits[hash] += this_validators_deposit
+        self.consensus_messages[epoch].prev_dyn_commits[ancestry_hash] += this_validators_deposit
     # Record if sufficient commits have been made for the block to be finalized
-    if (self.consensus_messages[epoch].commits[hash] >= self.total_deposits[self.dynasty] * 2 / 3 and \
-            self.consensus_messages[epoch].prev_dyn_commits[hash] >= self.total_deposits[self.dynasty - 1] * 2 / 3) and \
+    if (self.consensus_messages[epoch].commits[ancestry_hash] >= self.total_deposits[self.dynasty] * 2 / 3 and \
+            self.consensus_messages[epoch].prev_dyn_commits[ancestry_hash] >= self.total_deposits[self.dynasty - 1] * 2 / 3) and \
             not self.consensus_messages[epoch].committed:
         self.consensus_messages[epoch].committed = True
     raw_log([self.commit_log_topic], commit_msg)
+    raw_log([self.commit_log_topic], concat(as_bytes32(self.consensus_messages[epoch].prev_dyn_commits[ancestry_hash]), as_bytes32(self.total_deposits[self.dynasty - 1])))
+    raw_log([self.commit_log_topic], concat(as_bytes32(self.consensus_messages[epoch].commits[ancestry_hash]), as_bytes32(self.total_deposits[self.dynasty])))
 
 # Cannot make two prepares in the same epoch
 def double_prepare_slash(prepare1: bytes <= 1000, prepare2: bytes <= 1000):
@@ -433,14 +443,14 @@ def double_prepare_slash(prepare1: bytes <= 1000, prepare2: bytes <= 1000):
     sighash1 = extract32(raw_call(self.sighasher, prepare1, gas=200000, outsize=32), 0)
     sighash2 = extract32(raw_call(self.sighasher, prepare2, gas=200000, outsize=32), 0)
     # Extract parameters
-    values1 = RLPList(prepare1, [num, num, bytes32, bytes32, num, bytes32, bytes])
-    values2 = RLPList(prepare2, [num, num, bytes32, bytes32, num, bytes32, bytes])
+    values1 = RLPList(prepare1, [num, num, bytes32, num, bytes32, bytes])
+    values2 = RLPList(prepare2, [num, num, bytes32, num, bytes32, bytes])
     validator_index = values1[0]
     epoch1 = values1[1]
-    sig1 = values1[6]
+    sig1 = values1[5]
     assert validator_index == values2[0]
     epoch2 = values2[1]
-    sig2 = values2[6]
+    sig2 = values2[5]
     # Check the signatures
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash1, sig1), gas=500000, outsize=32), 0) == as_bytes32(1)
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash2, sig2), gas=500000, outsize=32), 0) == as_bytes32(1)
@@ -452,7 +462,7 @@ def double_prepare_slash(prepare1: bytes <= 1000, prepare2: bytes <= 1000):
     validator_deposit = self.validators[validator_index].deposit
     send(msg.sender, validator_deposit / 25)
     self.total_destroyed += validator_deposit * 24 / 25
-    self.total_deposits[self.dynasty] -= (validator_deposit - validator_deposit / 25)
+    self.total_deposits[self.dynasty] -= validator_deposit
     self.delete_validator(validator_index)
 
 def prepare_commit_inconsistency_slash(prepare_msg: bytes <= 1024, commit_msg: bytes <= 1024):
@@ -461,12 +471,12 @@ def prepare_commit_inconsistency_slash(prepare_msg: bytes <= 1024, commit_msg: b
     sighash1 = extract32(raw_call(self.sighasher, prepare_msg, gas=200000, outsize=32), 0)
     sighash2 = extract32(raw_call(self.sighasher, commit_msg, gas=200000, outsize=32), 0)
     # Extract parameters
-    values1 = RLPList(prepare_msg, [num, num, bytes32, bytes32, num, bytes32, bytes])
+    values1 = RLPList(prepare_msg, [num, num, bytes32, num, bytes32, bytes])
     values2 = RLPList(commit_msg, [num, num, bytes32, num, bytes])
     validator_index = values1[0]
     prepare_epoch = values1[1]
-    prepare_source_epoch = values1[4]
-    sig1 = values1[6]
+    prepare_source_epoch = values1[3]
+    sig1 = values1[5]
     assert validator_index == values2[0]
     commit_epoch = values2[1]
     sig2 = values2[4]
@@ -490,7 +500,7 @@ def commit_non_justification_slash(commit_msg: bytes <= 1024):
     values = RLPList(commit_msg, [num, num, bytes32, num, bytes])
     validator_index = values[0]
     epoch = values[1]
-    hash = values[2]
+    ancestry_hash = values[2]
     sig = values[4]
     # Check the signature
     assert len(sig) == 96
@@ -498,7 +508,7 @@ def commit_non_justification_slash(commit_msg: bytes <= 1024):
     # Check that the commit is old enough
     assert self.current_epoch == block.number / self.epoch_length
     assert (self.current_epoch - epoch) * self.epoch_length * self.block_time > self.insufficiency_slash_delay
-    assert not self.consensus_messages[epoch].hash_justified[hash]
+    assert not self.consensus_messages[epoch].ancestry_hash_justified[ancestry_hash]
     # Delete the offending validator, and give a 4% "finder's fee"
     validator_deposit = self.validators[validator_index].deposit
     send(msg.sender, validator_deposit / 25)
@@ -508,7 +518,7 @@ def commit_non_justification_slash(commit_msg: bytes <= 1024):
 
 # Fill in the table for which hash is what-degree ancestor of which other hash
 def derive_parenthood(older: bytes32, hash: bytes32, newer: bytes32):
-    assert sha3(concat(hash, older)) == newer
+    assert sha3(concat(older, hash)) == newer
     self.ancestry[older][newer] = 1
 
 # Fill in the table for which hash is what-degree ancestor of which other hash
@@ -522,14 +532,13 @@ def prepare_non_justification_slash(prepare_msg: bytes <= 1024) -> num:
     # consisting solely of RLP elements
     sighash = extract32(raw_call(self.sighasher, prepare_msg, gas=200000, outsize=32), 0)
     # Extract parameters
-    values = RLPList(prepare_msg, [num, num, bytes32, bytes32, num, bytes32, bytes])
+    values = RLPList(prepare_msg, [num, num, bytes32, num, bytes32, bytes])
     validator_index = values[0]
     epoch = values[1]
-    hash = values[2]
-    ancestry_hash = values[3]
-    source_epoch = values[4]
-    source_ancestry_hash = values[5]
-    sig = values[6]
+    ancestry_hash = values[2]
+    source_epoch = values[3]
+    source_ancestry_hash = values[4]
+    sig = values[5]
     # Check the signature
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=500000, outsize=32), 0) == as_bytes32(1)
     # Check that the view change is old enough
@@ -538,10 +547,7 @@ def prepare_non_justification_slash(prepare_msg: bytes <= 1024) -> num:
     # Check that the source ancestry hash not had enough prepares, OR that there is not the
     # correct ancestry link between the current ancestry hash and source ancestry hash
     c1 = self.consensus_messages[source_epoch].ancestry_hash_justified[source_ancestry_hash]
-    if epoch - 1 > source_epoch:
-        c2 = self.ancestry[source_ancestry_hash][ancestry_hash] == epoch - 1 - source_epoch
-    else:
-        c2 = source_ancestry_hash == ancestry_hash
+    c2 = self.ancestry[source_ancestry_hash][ancestry_hash] > 0
     assert not (c1 and c2)
     # Delete the offending validator, and give a 4% "finder's fee"
     validator_deposit = self.validators[validator_index].deposit
