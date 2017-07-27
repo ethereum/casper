@@ -372,6 +372,8 @@ def prepare(prepare_msg: bytes <= 1024):
         if ancestry_hash == self.ancestry_hashes[epoch]:
             self.is_hash_justified = True
     raw_log([self.prepare_log_topic], prepare_msg)
+    raw_log([self.prepare_log_topic], concat(as_bytes32(prevdyn_prepares), as_bytes32(self.total_deposits[self.dynasty-1])))
+    raw_log([self.prepare_log_topic], concat(as_bytes32(curdyn_prepares), as_bytes32(self.total_deposits[self.dynasty])))
 
 # Process a commit message
 def commit(commit_msg: bytes <= 1024):
@@ -428,6 +430,8 @@ def commit(commit_msg: bytes <= 1024):
             not self.consensus_messages[epoch].committed:
         self.consensus_messages[epoch].committed = True
     raw_log([self.commit_log_topic], commit_msg)
+    raw_log([self.commit_log_topic], concat(as_bytes32(self.consensus_messages[epoch].prev_dyn_commits[hash]), as_bytes32(self.total_deposits[self.dynasty - 1])))
+    raw_log([self.commit_log_topic], concat(as_bytes32(self.consensus_messages[epoch].commits[hash]), as_bytes32(self.total_deposits[self.dynasty])))
 
 # Cannot make two prepares in the same epoch
 def double_prepare_slash(prepare1: bytes <= 1000, prepare2: bytes <= 1000):
