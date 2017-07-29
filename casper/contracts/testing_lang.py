@@ -28,7 +28,7 @@ def interpret_test(test):
     markers = {}
     txs = []
     
-    for token in test.split(' '):
+    for token in test.split(''):
         letters, numbers = re.match('([A-Za-z]*)([0-9]*)', token).groups()
         if letters+numbers != token:
             raise Exception("Bad token: %s" % token)
