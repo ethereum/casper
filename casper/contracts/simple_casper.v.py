@@ -121,7 +121,7 @@ commit_log_topic: bytes32
 # Debugging
 latest_npf: public(decimal)
 latest_ncf: public(decimal)
-latest_interest: public(decimal)
+latest_resize_factor: public(decimal)
 
 def initiate(# Epoch length, delay in epochs for withdrawing
             _epoch_length: num, _withdrawal_delay: num,
@@ -200,23 +200,23 @@ def initialize_epoch(epoch: num):
         # If a validator prepares or commits, they pay this, but then get it back when rewarded
         # as part of the prepare or commit function
         if self.main_hash_justified:
-            interest = BIR - BP * (3 + non_prepare_frac / (1 - min(non_prepare_frac,0.5)) + non_commit_frac / (1 - min(non_commit_frac,0.5)))
+            resize_factor = (1 + BIR) / (1 + BP * (3 + non_prepare_frac / (1 - min(non_prepare_frac,0.5)) + non_commit_frac / (1 - min(non_commit_frac,0.5))))
         else:
-            interest = BIR - BP * (2 + non_prepare_frac / (1 - min(non_prepare_frac,0.5)))
+            resize_factor = (1 + BIR) / (1 + BP * (2 + non_prepare_frac / (1 - min(non_prepare_frac,0.5))))
     else:
         # If either current or prev dynasty is empty, then pay no interest, and all hashes justify and finalize
-        interest = 0
+        resize_factor = 1
         self.main_hash_justified = True
         self.consensus_messages[epoch - 1].ancestry_hash_justified[self.ancestry_hashes[epoch-1]] = True
         self.main_hash_finalized = True
     # Debugging
     self.latest_npf = non_prepare_frac
     self.latest_ncf = non_commit_frac
-    self.latest_interest = interest
+    self.latest_resize_factor = resize_factor
     # Set the epoch number
     self.current_epoch = epoch
     # Adjust counters for interest
-    self.deposit_scale_factor[epoch] = self.deposit_scale_factor[epoch - 1] * (1 + interest)
+    self.deposit_scale_factor[epoch] = self.deposit_scale_factor[epoch - 1] * resize_factor
     # Increment the dynasty (if there are no validators yet, then all hashes finalize)
     if self.main_hash_finalized:
         self.dynasty += 1
@@ -371,7 +371,7 @@ def prepare(prepare_msg: bytes <= 1024):
     # Check that the prepare is on top of a justified prepare
     assert self.consensus_messages[source_epoch].ancestry_hash_justified[source_ancestry_hash]
     # This validator's deposit size
-    deposit_size = self.validators[0].deposit
+    deposit_size = self.validators[validator_index].deposit
     # Check that we have not yet prepared for this epoch
     # Pay the reward if the prepare was submitted in time and the prepare is preparing the correct data
     if (self.current_epoch == epoch and self.ancestry_hashes[epoch] == ancestry_hash) and \
@@ -401,6 +401,15 @@ def prepare(prepare_msg: bytes <= 1024):
         if ancestry_hash == self.ancestry_hashes[epoch]:
             self.main_hash_justified = True
     raw_log([self.prepare_log_topic], prepare_msg)
+
+@constant
+def get_main_hash_prepared_frac() -> decimal:
+    sourcing_hash = sha3(concat(as_bytes32(self.current_epoch),
+                                self.ancestry_hashes[self.current_epoch],
+                                as_bytes32(self.expected_source_epoch),
+                                self.ancestry_hashes[self.expected_source_epoch]))
+    return min(self.consensus_messages[self.current_epoch].cur_dyn_prepares[sourcing_hash] / self.total_curdyn_deposits,
+               self.consensus_messages[self.current_epoch].prev_dyn_prepares[sourcing_hash] / self.total_prevdyn_deposits)
 
 # Process a commit message
 def commit(commit_msg: bytes <= 1024):
