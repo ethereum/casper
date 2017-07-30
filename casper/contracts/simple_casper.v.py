@@ -22,10 +22,10 @@ nextValidatorIndex: public(num)
 dynasty: public(num)
 
 # Amount of wei added to the total deposits in the next dynasty
-next_dynasty_wei_delta: decimal(wei / m)
+next_dynasty_wei_delta: public(decimal(wei / m))
 
 # Amount of wei added to the total deposits in the dynasty after that
-second_next_dynasty_wei_delta: decimal(wei / m)
+second_next_dynasty_wei_delta: public(decimal(wei / m))
 
 # Total deposits in the current dynasty
 total_curdyn_deposits: decimal(wei / m)
@@ -67,14 +67,11 @@ main_hash_finalized: public(bool)
 # Value used to calculate the per-epoch fee that validators should be charged
 deposit_scale_factor: public(decimal(m)[num])
 
-# Time between blocks
-block_time: timedelta
-
 # Length of an epoch in blocks
-epoch_length: num
+epoch_length: public(num)
 
-# Withdrawal delay
-withdrawal_delay: timedelta
+# Withdrawal delay in blocks
+withdrawal_delay: num
 
 # Current epoch
 current_epoch: public(num)
@@ -126,45 +123,37 @@ latest_npf: public(decimal)
 latest_ncf: public(decimal)
 latest_interest: public(decimal)
 
-def initiate():
+def initiate(# Epoch length, delay in epochs for withdrawing
+            _epoch_length: num, _withdrawal_delay: num,
+            # Owner (backdoor), sig hash calculator, purity checker
+            _owner: address, _sighasher: address, _purity_checker: address,
+            # Base interest and base penalty factors
+            _base_interest_factor: decimal, _base_penalty_factor: decimal):
     assert not self.initialized
     self.initialized = True
-    # Set Casper parameters
-    self.block_time = 14
-    self.epoch_length = 10
-    # Only ~11.5 days, for testing purposes
-    self.withdrawal_delay = 1000000
+    # Epoch length
+    self.epoch_length = _epoch_length
+    # Delay in epochs for withdrawing
+    self.withdrawal_delay = _withdrawal_delay
     # Temporary backdoor for testing purposes (to allow recovering destroyed deposits)
-    self.owner = 0x1Db3439a222C519ab44bb1144fC28167b4Fa6EE6
+    self.owner = _owner
     # Set deposit scale factor
     self.deposit_scale_factor[0] = 100.0
-    # Add an initial validator
-    self.validators[0] = {
-        deposit: floor(as_wei_value(3, ether) / self.deposit_scale_factor[0]),
-        dynasty_start: 0,
-        dynasty_end: 1000000000000000000000000000000,
-        addr: 0x1Db3439a222C519ab44bb1144fC28167b4Fa6EE6,
-        withdrawal_addr: 0x1Db3439a222C519ab44bb1144fC28167b4Fa6EE6,
-        prev_commit_epoch: 0,
-    }
-    self.nextValidatorIndex = 1
-    # Start dynasty counter at 1
-    self.dynasty = 1
+    # Start dynasty counter at 0
+    self.dynasty = 0
     # Initialize the epoch counter
     self.current_epoch = block.number / self.epoch_length
     # Set the sighash calculator address
-    self.sighasher = 0x476c2cA9a7f3B16FeCa86512276271FAf63B6a24
+    self.sighasher = _sighasher
     # Set the purity checker address
-    self.purity_checker = 0xD7a3BD6C9eA32efF147d067f907AE6b22d436F91
-    # Set an initial root of the epoch hash chain
-    self.consensus_messages[0].ancestry_hash_justified[0x0000000000000000000000000000000000000000000000000000000000000000] = True
+    self.purity_checker = _purity_checker
     # self.consensus_messages[0].committed = True
     # Set initial total deposit counter
-    self.total_curdyn_deposits = as_wei_value(3, ether) / self.deposit_scale_factor[0]
-    self.total_prevdyn_deposits = as_wei_value(3, ether) / self.deposit_scale_factor[0]
+    self.total_curdyn_deposits = 0
+    self.total_prevdyn_deposits = 0
     # Constants that affect interest rates and penalties
-    self.base_interest_factor = 0.01
-    self.base_penalty_factor = 0.000001
+    self.base_interest_factor = _base_interest_factor
+    self.base_penalty_factor = _base_penalty_factor
     # Log topics for prepare and commit
     self.prepare_log_topic = sha3("prepare()")
     self.commit_log_topic = sha3("commit()")
@@ -176,7 +165,7 @@ def initialize_epoch(epoch: num):
     assert epoch <= computed_current_epoch and epoch == self.current_epoch + 1
     # Compute square root factor
     ether_deposited_as_number = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) * 
-                                      self.deposit_scale_factor[epoch - 1] / as_wei_value(1, ether))
+                                      self.deposit_scale_factor[epoch - 1] / as_wei_value(1, ether)) + 1
     sqrt = ether_deposited_as_number / 2.0
     for i in range(20):
         sqrt = (sqrt + (ether_deposited_as_number / sqrt)) / 2
@@ -193,25 +182,33 @@ def initialize_epoch(epoch: num):
     # Base penalty rate
     BP = BIR + self.base_penalty_factor * log_dist
     self.current_penalty_factor = BP
-    # Fraction that prepared
-    sourcing_hash = sha3(concat(as_bytes32(epoch-1),
-                                self.ancestry_hashes[epoch-1],
-                                as_bytes32(self.expected_source_epoch),
-                                self.ancestry_hashes[self.expected_source_epoch]))
-    cur_prepare_frac = self.consensus_messages[epoch - 1].cur_dyn_prepares[sourcing_hash] / self.total_curdyn_deposits
-    prev_prepare_frac = self.consensus_messages[epoch - 1].prev_dyn_prepares[sourcing_hash] / self.total_prevdyn_deposits
-    non_prepare_frac = 1 - min(cur_prepare_frac, prev_prepare_frac)
-    # Fraction that committed
-    cur_commit_frac = self.consensus_messages[epoch - 1].cur_dyn_commits[self.ancestry_hashes[epoch - 1]] * 1.0 / (self.total_curdyn_deposits + 1)
-    prev_commit_frac = self.consensus_messages[epoch - 1].prev_dyn_commits[self.ancestry_hashes[epoch - 1]] * 1.0 / (self.total_prevdyn_deposits + 1)
-    non_commit_frac = 1 - min(cur_commit_frac, prev_commit_frac)
-    # Compute "interest" - base interest minus penalties for not preparing and not committing
-    # If a validator prepares or commits, they pay this, but then get it back when rewarded
-    # as part of the prepare or commit function
-    if self.main_hash_justified:
-        interest = BIR - BP * (3 + non_prepare_frac / (1 - min(non_prepare_frac, 0.5)) + non_commit_frac / (1 - min(non_commit_frac, 0.5)))
+    # Calculate interest rate for this epoch
+    if self.total_curdyn_deposits > 0 and self.total_prevdyn_deposits > 0:
+        # Fraction that prepared
+        sourcing_hash = sha3(concat(as_bytes32(epoch-1),
+                                    self.ancestry_hashes[epoch-1],
+                                    as_bytes32(self.expected_source_epoch),
+                                    self.ancestry_hashes[self.expected_source_epoch]))
+        cur_prepare_frac = self.consensus_messages[epoch - 1].cur_dyn_prepares[sourcing_hash] / self.total_curdyn_deposits
+        prev_prepare_frac = self.consensus_messages[epoch - 1].prev_dyn_prepares[sourcing_hash] / self.total_prevdyn_deposits
+        non_prepare_frac = 1 - min(cur_prepare_frac, prev_prepare_frac)
+        # Fraction that committed
+        cur_commit_frac = self.consensus_messages[epoch - 1].cur_dyn_commits[self.ancestry_hashes[epoch - 1]] / self.total_curdyn_deposits
+        prev_commit_frac = self.consensus_messages[epoch - 1].prev_dyn_commits[self.ancestry_hashes[epoch - 1]]/ self.total_prevdyn_deposits
+        non_commit_frac = 1 - min(cur_commit_frac, prev_commit_frac)
+        # Compute "interest" - base interest minus penalties for not preparing and not committing
+        # If a validator prepares or commits, they pay this, but then get it back when rewarded
+        # as part of the prepare or commit function
+        if self.main_hash_justified:
+            interest = BIR - BP * (3 + non_prepare_frac / (1 - min(non_prepare_frac,0.5)) + non_commit_frac / (1 - min(non_commit_frac,0.5)))
+        else:
+            interest = BIR - BP * (2 + non_prepare_frac / (1 - min(non_prepare_frac,0.5)))
     else:
-        interest = BIR - BP * (2 + non_prepare_frac / (1 - min(non_prepare_frac, 0.5)))
+        # If either current or prev dynasty is empty, then pay no interest, and all hashes justify and finalize
+        interest = 0
+        self.main_hash_justified = True
+        self.consensus_messages[epoch - 1].ancestry_hash_justified[self.ancestry_hashes[epoch-1]] = True
+        self.main_hash_finalized = True
     # Debugging
     self.latest_npf = non_prepare_frac
     self.latest_ncf = non_commit_frac
@@ -220,7 +217,7 @@ def initialize_epoch(epoch: num):
     self.current_epoch = epoch
     # Adjust counters for interest
     self.deposit_scale_factor[epoch] = self.deposit_scale_factor[epoch - 1] * (1 + interest)
-    # Increment the dynasty
+    # Increment the dynasty (if there are no validators yet, then all hashes finalize)
     if self.main_hash_finalized:
         self.dynasty += 1
         self.total_prevdyn_deposits = self.total_curdyn_deposits
