@@ -302,6 +302,7 @@ for commit in [mk_commit(i, _e, _a, casper.get_validators__prev_commit_epoch(i),
     casper.commit(commit)
 
 assert casper.get_main_hash_finalized()
+assert casper.get_main_hash_committed_frac() >= 0.667
 print("Deposits of remaining validators: %d %d" % (casper.get_deposit_size(1), casper.get_deposit_size(2)))
 print("Deposits of offline validators: %d %d" % (casper.get_deposit_size(3), casper.get_deposit_size(4)))
 print("Tests passed")

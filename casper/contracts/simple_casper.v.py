@@ -411,6 +411,12 @@ def get_main_hash_prepared_frac() -> decimal:
     return min(self.consensus_messages[self.current_epoch].cur_dyn_prepares[sourcing_hash] / self.total_curdyn_deposits,
                self.consensus_messages[self.current_epoch].prev_dyn_prepares[sourcing_hash] / self.total_prevdyn_deposits)
 
+@constant
+def get_main_hash_committed_frac() -> decimal:
+    ancestry_hash = self.ancestry_hashes[self.current_epoch]
+    return min(self.consensus_messages[self.current_epoch].cur_dyn_commits[ancestry_hash] / self.total_curdyn_deposits,
+               self.consensus_messages[self.current_epoch].prev_dyn_commits[ancestry_hash] / self.total_prevdyn_deposits)
+
 # Process a commit message
 def commit(commit_msg: bytes <= 1024):
     sighash = extract32(raw_call(self.sighasher, commit_msg, gas=200000, outsize=32), 0)
