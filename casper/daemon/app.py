@@ -10,10 +10,13 @@ import gevent
 from gevent.event import Event
 
 import ethereum.slogging as slogging
-from casper_service import CasperService
-from chain_service import ChainService
-from accounts import AccountsService, Account
-from db_service import DBService
+
+# import casper stuff
+from casper.daemon.casper_service import CasperService
+from casper.daemon.chain_service import ChainService
+from casper.daemon.accounts import AccountsService, Account
+from casper.daemon.db_service import DBService
+
 from devp2p.app import BaseApp
 from devp2p.discovery import NodeDiscovery
 from devp2p.peermanager import PeerManager

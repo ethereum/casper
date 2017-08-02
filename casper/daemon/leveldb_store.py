@@ -1,8 +1,8 @@
 import json
 
 import rlp
-from casper_messages import PrepareMessage
-from validators import Validator
+from casper.daemon.casper_messages import PrepareMessage
+from casper.daemon.validators import Validator
 from ethereum.utils import encode_hex
 from ethereum import slogging
 
@@ -238,4 +238,3 @@ class LevelDBStore(object):
 
     def get_int(self, k):
         return rlp.decode(self.db.get(k), sedes=rlp.sedes.big_endian_int)
-

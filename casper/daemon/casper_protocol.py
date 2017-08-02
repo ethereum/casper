@@ -1,5 +1,5 @@
 import rlp
-from casper_messages import PrepareMessage, CommitMessage
+from casper.daemon.casper_messages import PrepareMessage, CommitMessage
 from devp2p.protocol import BaseProtocol, SubProtocolError
 from ethereum import slogging
 
