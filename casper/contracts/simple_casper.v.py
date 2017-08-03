@@ -285,9 +285,10 @@ def get_total_prevdyn_deposits() -> wei_value:
     return floor(self.total_prevdyn_deposits * self.deposit_scale_factor[self.current_epoch])
 
 # Removes a validator from the validator pool
+@internal
 def delete_validator(validator_index: num):
-    assert msg.sender == self
-    self.next_dynasty_wei_delta -= self.validators[validator_index].deposit
+    if self.validators[validator_index].dynasty_end > self.dynasty + 2:
+        self.next_dynasty_wei_delta -= self.validators[validator_index].deposit
     self.validators[validator_index] = {
         deposit: 0,
         dynasty_start: 0,
