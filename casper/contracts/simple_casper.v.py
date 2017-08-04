@@ -302,7 +302,7 @@ def delete_validator(validator_index: num):
 def withdraw(validator_index: num):
     # heck that we can withdraw
     assert self.dynasty >= self.validators[validator_index].dynasty_end + 1
-    assert self.current_epoch >= self.dynasty_start_epoch[self.validators[validator_index].dynasty_end + 1]
+    assert self.current_epoch >= self.dynasty_start_epoch[self.validators[validator_index].dynasty_end + 1] + self.withdrawal_delay
     # Withdraw
     send(self.validators[validator_index].withdrawal_addr, self.get_deposit_size(validator_index))
     self.delete_validator(validator_index)
