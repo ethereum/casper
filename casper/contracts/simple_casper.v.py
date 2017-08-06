@@ -400,7 +400,7 @@ def prepare(prepare_msg: bytes <= 1024):
             prevdyn_prepares >= self.total_prevdyn_deposits * 2 / 3) and \
             not self.consensus_messages[epoch].ancestry_hash_justified[ancestry_hash]:
         self.consensus_messages[epoch].ancestry_hash_justified[ancestry_hash] = True
-        if ancestry_hash == self.ancestry_hashes[epoch]:
+        if ancestry_hash == self.ancestry_hashes[epoch] and epoch == self.current_epoch:
             self.main_hash_justified = True
     raw_log([self.prepare_log_topic], prepare_msg)
 
