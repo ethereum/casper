@@ -302,9 +302,11 @@ def delete_validator(validator_index: num):
 def withdraw(validator_index: num):
     # heck that we can withdraw
     assert self.dynasty >= self.validators[validator_index].dynasty_end + 1
-    assert self.current_epoch >= self.dynasty_start_epoch[self.validators[validator_index].dynasty_end + 1] + self.withdrawal_delay
+    end_epoch = self.dynasty_start_epoch[self.validators[validator_index].dynasty_end + 1]
+    assert self.current_epoch >= end_epoch + self.withdrawal_delay
     # Withdraw
-    send(self.validators[validator_index].withdrawal_addr, self.get_deposit_size(validator_index))
+    withdraw_amount = floor(self.validators[validator_index].deposit * self.deposit_scale_factor[end_epoch])
+    send(self.validators[validator_index].withdrawal_addr, withdraw_amount)
     self.delete_validator(validator_index)
 
 # Helper functions that clients can call to know what to prepare and commit
