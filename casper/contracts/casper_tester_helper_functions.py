@@ -31,6 +31,26 @@ casper_bytecode = compiler.compile(casper_code)
 casper_abi = compiler.mk_full_signature(casper_code)
 casper_ct = ContractTranslator(casper_abi)
 
+def custom_chain(tester, alloc={}, genesis_gas_limit=4712388, min_gas_limit=5000, startgas=3141592):
+    # alloc
+    for i in range(9):
+        alloc[utils.int_to_addr(i)] = {'balance': 1}
+    # genesis
+    from ethereum.genesis_helpers import mk_basic_state
+    header = {
+        "number": 0, "gas_limit": genesis_gas_limit,
+        "gas_used": 0, "timestamp": 1467446877, "difficulty": 1,
+        "uncles_hash": '0x'+utils.encode_hex(utils.sha3(rlp.encode([])))
+    }
+    genesis = mk_basic_state(alloc, header, tester.get_env(None))
+    # tester
+    tester.languages['viper'] = compiler.Compiler()
+    tester.STARTGAS = startgas
+    c = tester.Chain(alloc=alloc, genesis=genesis)
+    c.chain.env.config['MIN_GAS_LIMIT'] = min_gas_limit
+    c.mine(1)
+    return c
+
 def mk_initializers(config, sender_privkey, starting_nonce=0):
     o = []
     nonce = starting_nonce
@@ -41,7 +61,7 @@ def mk_initializers(config, sender_privkey, starting_nonce=0):
         o.append(tx)
         nonce += 1
     # Casper initialization transaction
-    casper_tx = Transaction(nonce, gasprice, 4500000, b'', 0, casper_bytecode).sign(sender_privkey)
+    casper_tx = Transaction(nonce, gasprice, 5000000, b'', 0, casper_bytecode).sign(sender_privkey)
     # Casper initiate call (separate from initialization to save gas)
     initiate_args = casper_ct.encode('initiate', [
         config["epoch_length"], config["withdrawal_delay"], config["owner"], sig_hasher_address,
@@ -50,3 +70,14 @@ def mk_initializers(config, sender_privkey, starting_nonce=0):
     casper_initiate_tx = Transaction(nonce + 1, gasprice, 1000000, casper_tx.creates, 0, initiate_args).sign(sender_privkey)
     # Return list of transactions and Casper address
     return o + [casper_tx, casper_initiate_tx], casper_tx.creates
+
+def new_epoch(chain, casper, epoch_length):
+    current_epoch = casper.get_current_epoch()
+    chain.mine(epoch_length * (current_epoch + 1) - chain.head_state.block_number)
+    casper.initialize_epoch(current_epoch + 1)
+    current_epoch += 1
+    print("Epoch %d initialized with %d validators" % (current_epoch, casper.get_nextValidatorIndex()))
+    print("Resize factor: %.8f" % (casper.get_latest_resize_factor()))
+    print("Penalty factor in epoch %d: %.8f" % (current_epoch, casper.get_current_penalty_factor()))
+    return casper.get_dynasty(), casper.get_current_epoch(), \
+            casper.get_recommended_ancestry_hash(), casper.get_recommended_source_epoch(), casper.get_recommended_source_ancestry_hash()
