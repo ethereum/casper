@@ -1,13 +1,15 @@
+import rlp
 from ethereum.tools import tester as t
 from ethereum import utils, common, transactions, abi
-from casper_tester_helper_functions import mk_initializers, casper_config, new_epoch, custom_chain, \
-    viper_rlp_decoder_address, sig_hasher_address, purity_checker_address, casper_abi, purity_checker_abi
+from casper_tester_helper_functions import mk_initializers, casper_config, \
+    new_epoch, custom_chain, viper_rlp_decoder_address, sig_hasher_address, \
+    purity_checker_address, casper_abi, purity_checker_abi
 from viper import compiler
 import serpent
 from ethereum.slogging import LogRecorder, configure_logging, set_level
 config_string = ':info,eth.vm.log:trace,eth.vm.op:trace,eth.vm.stack:trace,eth.vm.exit:trace,eth.pb.msg:trace,eth.pb.tx:debug'
-#configure_logging(config_string=config_string)
-import rlp
+# configure_logging(config_string=config_string)
+
 alloc = {}
 alloc[t.a0] = {'balance': 100000 * utils.denoms.ether}
 # alloc[t.a1] = {'balance': 10**22}
@@ -21,8 +23,10 @@ code_template = """
 return(~mload(0) == %s)
 """
 
+
 def mk_validation_code(address):
     return serpent.compile(code_template % (utils.checksum_encode(address)))
+
 
 # Install Casper, RLP decoder, purity checker, sighasher
 init_txs, casper_address = mk_initializers(casper_config, t.k0)
@@ -40,13 +44,14 @@ assert utils.big_endian_to_int(s.tx(t.k0, purity_checker_address, 0, ct.encode('
 casper = t.ABIContract(s, casper_abi, casper_address)
 s.mine(1)
 
-# Helper functions for making a prepare, commit, login and logout message
 
+# Helper functions for making a prepare, commit, login and logout message
 def mk_prepare(validator_index, epoch, ancestry_hash, source_epoch, source_ancestry_hash, key):
     sighash = utils.sha3(rlp.encode([validator_index, epoch, ancestry_hash, source_epoch, source_ancestry_hash]))
     v, r, s = utils.ecdsa_raw_sign(sighash, key)
     sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
     return rlp.encode([validator_index, epoch, ancestry_hash, source_epoch, source_ancestry_hash, sig])
+
 
 def mk_commit(validator_index, epoch, hash, prev_commit_epoch, key):
     sighash = utils.sha3(rlp.encode([validator_index, epoch, hash, prev_commit_epoch]))
@@ -54,19 +59,21 @@ def mk_commit(validator_index, epoch, hash, prev_commit_epoch, key):
     sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
     return rlp.encode([validator_index, epoch, hash, prev_commit_epoch, sig])
 
+
 def mk_logout(validator_index, epoch, key):
     sighash = utils.sha3(rlp.encode([validator_index, epoch]))
     v, r, s = utils.ecdsa_raw_sign(sighash, key)
     sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
     return rlp.encode([validator_index, epoch, sig])
 
+
 def induct_validator(casper, key, value):
     valcode_addr = s.tx(key, "", 0, mk_validation_code(utils.privtoaddr(key)))
     assert utils.big_endian_to_int(s.tx(key, purity_checker_address, 0, ct.encode('submit', [valcode_addr]))) == 1
     casper.deposit(valcode_addr, utils.privtoaddr(key), value=value)
 
-# Begin the test
 
+# Begin the test
 print("Starting tests")
 # Initialize the first epoch
 current_dyn, _e, _a, _se, _sa = new_epoch(s, casper, EPOCH_LENGTH)
@@ -105,7 +112,7 @@ print('Gas consumed for a commit: %d' % s.last_gas_used(with_tx=True))
 # Check that we committed
 assert casper.get_main_hash_finalized()
 print("Commit message processed")
-# Initialize the fourth epoch 
+# Initialize the fourth epoch
 current_dyn, _e, _a, _se, _sa = new_epoch(s, casper, EPOCH_LENGTH)
 # Check that the dynasty increased as expected
 assert current_dyn == 4
@@ -192,10 +199,10 @@ casper.commit(c4)
 current_dyn, _e, _a, _se, _sa = new_epoch(s, casper, EPOCH_LENGTH)
 assert abs(sum(map(casper.get_deposit_size, range(5))) - casper.get_total_curdyn_deposits()) < 5
 print("Validator induction works")
-for prepare in [mk_prepare(i, _e, _a, _se, _sa, k) for i, k in zip([0,1,2,3], [t.k1, t.k2, t.k3, t.k4])]:
+for prepare in [mk_prepare(i, _e, _a, _se, _sa, k) for i, k in enumerate([t.k1, t.k2, t.k3, t.k4])]:
     casper.prepare(prepare)
 assert casper.get_main_hash_justified()
-for commit in [mk_commit(i, _e, _a, casper.get_validators__prev_commit_epoch(i), k) for i, k in zip([0,1,2,3], [t.k1, t.k2, t.k3, t.k4])]:
+for commit in [mk_commit(i, _e, _a, casper.get_validators__prev_commit_epoch(i), k) for i, k in enumerate([t.k1, t.k2, t.k3, t.k4])]:
     casper.commit(commit)
 assert casper.get_main_hash_finalized()
 print("Epoch 11 finalized with 4/5 prepares/commits")
@@ -205,10 +212,10 @@ current_dyn, _e, _a, _se, _sa = new_epoch(s, casper, EPOCH_LENGTH)
 assert casper.get_deposit_size(4) < \
     casper.get_deposit_size(1) == casper.get_deposit_size(2) == casper.get_deposit_size(3)
 
-for prepare in [mk_prepare(i, _e, _a, _se, _sa, k) for i, k in zip([0,1,2,3], [t.k1, t.k2, t.k3, t.k4])]:
+for prepare in [mk_prepare(i, _e, _a, _se, _sa, k) for i, k in enumerate([t.k1, t.k2, t.k3, t.k4])]:
     casper.prepare(prepare)
 assert casper.get_main_hash_justified()
-for commit in [mk_commit(i, _e, _a, casper.get_validators__prev_commit_epoch(i), k) for i, k in zip([1,2,3,4], [t.k2, t.k3, t.k4, t.k5])]:
+for commit in [mk_commit(i, _e, _a, casper.get_validators__prev_commit_epoch(i), k) for i, k in enumerate([t.k2, t.k3, t.k4, t.k5], start=1)]:
     casper.commit(commit)
 assert casper.get_main_hash_finalized()
 
@@ -217,10 +224,10 @@ current_dyn, _e, _a, _se, _sa = new_epoch(s, casper, EPOCH_LENGTH)
 assert abs(sum(map(casper.get_deposit_size, range(1, 5))) - casper.get_total_curdyn_deposits()) < 5
 assert abs(sum(map(casper.get_deposit_size, range(5))) - casper.get_total_prevdyn_deposits()) < 5
 
-for prepare in [mk_prepare(i, _e, _a, _se, _sa, k) for i, k in zip([0,1,2,3], [t.k1, t.k2, t.k3, t.k4])]:
+for prepare in [mk_prepare(i, _e, _a, _se, _sa, k) for i, k in enumerate([t.k1, t.k2, t.k3, t.k4])]:
     casper.prepare(prepare)
 assert casper.get_main_hash_justified()
-for commit in [mk_commit(i, _e, _a, casper.get_validators__prev_commit_epoch(i), k) for i, k in zip([1,2,3,4], [t.k2, t.k3, t.k4, t.k5])]:
+for commit in [mk_commit(i, _e, _a, casper.get_validators__prev_commit_epoch(i), k) for i, k in enumerate([t.k2, t.k3, t.k4, t.k5], start=1)]:
     casper.commit(commit)
 assert casper.get_main_hash_finalized()
 print("Epoch 13 finalized with 4/5 prepares/commits")
@@ -232,7 +239,7 @@ assert abs(sum(map(casper.get_deposit_size, range(1, 5))) - casper.get_total_pre
 print("Verified post-deposit logouts")
 for i in range(15, 100):
     current_dyn, _e, _a, _se, _sa = new_epoch(s, casper, EPOCH_LENGTH)
-    for prepare in [mk_prepare(i, _e, _a, _se, _sa, k) for i, k in zip([1,2], [t.k2, t.k3])]:
+    for prepare in [mk_prepare(i, _e, _a, _se, _sa, k) for i, k in enumerate([t.k2, t.k3], start=1)]:
         casper.prepare(prepare)
     print(casper.get_main_hash_prepared_frac())
     assert abs(sum(map(casper.get_deposit_size, range(1, 5))) - casper.get_total_curdyn_deposits()) < 5
@@ -243,7 +250,7 @@ for i in range(15, 100):
         assert casper.get_main_hash_justified()
         break
 
-for commit in [mk_commit(i, _e, _a, casper.get_validators__prev_commit_epoch(i), k) for i, k in zip([1,2], [t.k2, t.k3])]:
+for commit in [mk_commit(i, _e, _a, casper.get_validators__prev_commit_epoch(i), k) for i, k in enumerate([t.k2, t.k3], start=1)]:
     casper.commit(commit)
 
 assert casper.get_main_hash_finalized()
