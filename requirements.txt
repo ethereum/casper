@@ -1,8 +1,9 @@
-gevent==1.1.0
+gevent
 leveldb
 click
 wheel
-rlp>=0.4.4
 devp2p>=0.8.0
-git+https://github.com/ethereum/pyethereum.git@state_revamp
 web3>=3.8.0
+pycryptodome==3.4.6
+https://github.com/ethereum/pyrlp/tarball/develop/
+https://github.com/ethereum/pyethereum/tarball/develop

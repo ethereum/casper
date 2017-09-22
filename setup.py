@@ -20,21 +20,33 @@ class PyTest(TestCommand):
         raise SystemExit(errno)
 
 
-INSTALL_REQUIRES_REPLACEMENTS = {}
-INSTALL_REQUIRES = list()
-with open('requirements.txt') as requirements_file:
-    for requirement in requirements_file:
-        # install_requires will break on git URLs, so skip them
-        if 'git+' in requirement:
-            continue
-        dependency = INSTALL_REQUIRES_REPLACEMENTS.get(
-            requirement.strip(),
-            requirement.strip(),
-        )
+def check_setuptools_features():
+    import pkg_resources
+    try:
+        list(pkg_resources.parse_requirements('foo~=1.0'))
+    except ValueError:
+        exit('Your Python distribution comes with an incompatible version '
+             'of `setuptools`. Please run:\n'
+             'pip install --upgrade setuptools\n'
+             'and then run this command again')
 
-        INSTALL_REQUIRES.append(dependency)
 
-INSTALL_REQUIRES = list(set(INSTALL_REQUIRES))
+# check if setuptools is up to date
+check_setuptools_features()
+
+# requirements
+install_requires = set(x.strip() for x in open('requirements.txt'))
+install_requires_replacements = {
+    'https://github.com/ethereum/pyrlp/tarball/develop/': 'rlp',
+    'https://github.com/ethereum/pyethereum/tarball/develop': 'ethereum',
+}
+install_requires = [install_requires_replacements.get(r, r) for r in install_requires]
+
+# dependency links
+dependency_links = [
+    'https://github.com/ethereum/pyrlp/tarball/develop/#egg=rlp-9.99.9',
+    'https://github.com/ethereum/pyethereum/tarball/develop#egg=ethereum-9.99.9'
+]
 
 # *IMPORTANT*: Don't manually change the version here. Use the 'bumpversion' utility.
 # see: https://github.com/ethereum/pyethapp/wiki/Development:-Versions-and-Releases
@@ -63,11 +75,11 @@ setup(
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.6',
     ],
     cmdclass={'test': PyTest},
-    install_requires=INSTALL_REQUIRES,
+    install_requires=install_requires,
+    dependency_links=dependency_links,
     tests_require=[],
     entry_points='''
     [console_scripts]
