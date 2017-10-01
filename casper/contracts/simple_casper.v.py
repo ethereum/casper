@@ -18,6 +18,9 @@ validators: public({
 # Number of validators
 nextValidatorIndex: public(num)
 
+# Mapping of validator's signature address to their index number
+validator_indexes: public(num[address])
+
 # The current dynasty (validator set changes between dynasties)
 dynasty: public(num)
 
@@ -164,7 +167,7 @@ def initialize_epoch(epoch: num):
     computed_current_epoch = block.number / self.epoch_length
     assert epoch <= computed_current_epoch and epoch == self.current_epoch + 1
     # Compute square root factor
-    ether_deposited_as_number = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) * 
+    ether_deposited_as_number = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) *
                                       self.deposit_scale_factor[epoch - 1] / as_wei_value(1, ether)) + 1
     sqrt = ether_deposited_as_number / 2.0
     for i in range(20):
@@ -246,6 +249,7 @@ def deposit(validation_addr: address, withdrawal_addr: address):
         withdrawal_addr: withdrawal_addr,
         prev_commit_epoch: 0,
     }
+    self.validator_indexes[validation_addr] = self.nextValidatorIndex
     self.nextValidatorIndex += 1
     self.second_next_dynasty_wei_delta += msg.value / self.deposit_scale_factor[self.current_epoch]
 
@@ -338,7 +342,7 @@ def proc_reward(validator_index: num, reward: num(wei/m)):
         self.next_dynasty_wei_delta -= reward
     if dc == de - 2:
         self.second_next_dynasty_wei_delta -= reward
-    
+
 
 # Process a prepare message
 def prepare(prepare_msg: bytes <= 1024):
