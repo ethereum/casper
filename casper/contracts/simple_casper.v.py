@@ -171,6 +171,8 @@ def initialize_epoch(epoch: num):
                                       self.deposit_scale_factor[epoch - 1] / as_wei_value(1, ether)) + 1
     sqrt = ether_deposited_as_number / 2.0
     for i in range(20):
+		if ether_deposited_as_number <= 0:
+            continue
         sqrt = (sqrt + (ether_deposited_as_number / sqrt)) / 2
     # Compute log of epochs since last finalized
     log_dist = 0
