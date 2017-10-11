@@ -138,6 +138,8 @@ def initiate(# Epoch length, delay in epochs for withdrawing
     self.epoch_length = _epoch_length
     # Delay in epochs for withdrawing
     self.withdrawal_delay = _withdrawal_delay
+    # Start validator index counter at 1 because validator_indexes[] requires non-zero values
+    self.nextValidatorIndex = 1
     # Temporary backdoor for testing purposes (to allow recovering destroyed deposits)
     self.owner = _owner
     # Set deposit scale factor
@@ -208,7 +210,7 @@ def initialize_epoch(epoch: num):
             resize_factor = (1 + BIR) / (1 + BP * (2 + non_prepare_frac / (1 - min(non_prepare_frac,0.5))))
     else:
         # If either current or prev dynasty is empty, then pay no interest, and all hashes justify and finalize
-        resize_factor = 1
+        resize_factor = 1.0
         self.main_hash_justified = True
         self.consensus_messages[epoch - 1].ancestry_hash_justified[self.ancestry_hashes[epoch-1]] = True
         self.main_hash_finalized = True
@@ -241,6 +243,7 @@ def initialize_epoch(epoch: num):
 def deposit(validation_addr: address, withdrawal_addr: address):
     assert self.current_epoch == block.number / self.epoch_length
     assert extract32(raw_call(self.purity_checker, concat('\xa1\x90>\xab', as_bytes32(validation_addr)), gas=500000, outsize=32), 0) != as_bytes32(0)
+    assert not self.validator_indexes[withdrawal_addr]
     self.validators[self.nextValidatorIndex] = {
         deposit: msg.value / self.deposit_scale_factor[self.current_epoch],
         dynasty_start: self.dynasty + 2,
@@ -249,7 +252,7 @@ def deposit(validation_addr: address, withdrawal_addr: address):
         withdrawal_addr: withdrawal_addr,
         prev_commit_epoch: 0,
     }
-    self.validator_indexes[validation_addr] = self.nextValidatorIndex
+    self.validator_indexes[withdrawal_addr] = self.nextValidatorIndex
     self.nextValidatorIndex += 1
     self.second_next_dynasty_wei_delta += msg.value / self.deposit_scale_factor[self.current_epoch]
 
