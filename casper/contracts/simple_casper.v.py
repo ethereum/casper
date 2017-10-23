@@ -190,7 +190,7 @@ def initialize_epoch(epoch: num):
             break
         d /= 2
         log_distance += 1
-    # Base interest rate. NOTE: Ask Vitalik what fac means
+    # Base interest rate.
     base_interest_rate = self.base_interest_factor / sqrt
     # Base penalty factor
     base_penalty = base_interest_rate + self.base_penalty_factor * log_distance
@@ -362,7 +362,7 @@ def vote(vote_msg: bytes <= 1024):
     if in_prev_dynasty:
         previous_dynasty_votes += self.validators[validator_index].deposit
         self.votes[target_epoch].prev_dyn_votes[source_epoch] = previous_dynasty_votes
-    # Process rewards. NOTE: Ask V if we can replace the if statement with an assert
+    # Process rewards.
     # Check that we have not yet voted for this target_epoch
     # Pay the reward if the vote was submitted in time and the vote is voting the correct data
     if self.current_epoch == target_epoch and self.expected_source_epoch == source_epoch:
@@ -422,7 +422,6 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     validator_deposit = self.get_deposit_size(validator_index_1)
     slashing_bounty = validator_deposit / 25
     self.total_destroyed += validator_deposit * 24 / 25
-    # self.total_deposits[self.dynasty] -= (validator_deposit - validator_deposit / 25) NOTE: Ask V
     self.delete_validator(validator_index_1)
     send(msg.sender, slashing_bounty)
 
