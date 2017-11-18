@@ -110,6 +110,7 @@ latest_npf: public(decimal)
 latest_ncf: public(decimal)
 latest_resize_factor: public(decimal)
 
+@public
 def __init__(  # Epoch length, delay in epochs for withdrawing
         _epoch_length: num, _withdrawal_delay: num,
         # Owner (backdoor), sig hash calculator, purity checker
@@ -145,33 +146,40 @@ def __init__(  # Epoch length, delay in epochs for withdrawing
 
 # ***** Constants *****
 # Gets the current deposit size
+@public
 @constant
 def get_main_hash_voted_frac() -> decimal:
     return min(self.votes[self.current_epoch].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits,
                self.votes[self.current_epoch].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits)
 
+@public
 @constant
 def get_deposit_size(validator_index: num) -> num(wei):
     return floor(self.validators[validator_index].deposit * self.deposit_scale_factor[self.current_epoch])
 
+@public
 @constant
 def get_total_curdyn_deposits() -> wei_value:
     return floor(self.total_curdyn_deposits * self.deposit_scale_factor[self.current_epoch])
 
+@public
 @constant
 def get_total_prevdyn_deposits() -> wei_value:
     return floor(self.total_prevdyn_deposits * self.deposit_scale_factor[self.current_epoch])
 
 # Helper functions that clients can call to know what to vote
+@public
 @constant
 def get_recommended_source_epoch() -> num:
     return self.expected_source_epoch
 
+@public
 @constant
 def get_recommended_target_hash() -> bytes32:
     return blockhash(self.current_epoch*self.epoch_length-1)
 
 # Called at the start of any epoch
+@public
 def initialize_epoch(epoch: num):
     # Check that the epoch actually has started
     computed_current_epoch = block.number / self.epoch_length
@@ -237,6 +245,7 @@ def initialize_epoch(epoch: num):
     self.main_hash_justified = False
 
 # Send a deposit to join the validator set
+@public
 @payable
 def deposit(validation_addr: address, withdrawal_addr: address):
     assert self.current_epoch == block.number / self.epoch_length
@@ -256,6 +265,7 @@ def deposit(validation_addr: address, withdrawal_addr: address):
 # Log in or log out from the validator set. A logged out validator can log
 # back in later, if they do not log in for an entire withdrawal period,
 # they can get their money out
+@public
 def logout(logout_msg: bytes <= 1024):
     assert self.current_epoch == block.number / self.epoch_length
     # Get hash for signature, and implicitly assert that it is an RLP list
@@ -289,6 +299,7 @@ def delete_validator(validator_index: num):
     }
 
 # Withdraw deposited ether
+@public
 def withdraw(validator_index: num):
     # Check that we can withdraw
     assert self.dynasty >= self.validators[validator_index].end_dynasty + 1
@@ -300,6 +311,7 @@ def withdraw(validator_index: num):
     self.delete_validator(validator_index)
 
 # Reward the given validator, and reflect this in total deposit figured
+@internal
 def proc_reward(validator_index: num, reward: num(wei/m)):
     start_epoch = self.dynasty_start_epoch[self.validators[validator_index].start_dynasty]
     self.validators[validator_index].deposit += reward
@@ -317,6 +329,7 @@ def proc_reward(validator_index: num, reward: num(wei/m)):
         self.second_next_dynasty_wei_delta -= reward
 
 # Process a vote message
+@public
 def vote(vote_msg: bytes <= 1024):
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
@@ -385,6 +398,7 @@ def vote(vote_msg: bytes <= 1024):
     raw_log([self.vote_log_topic], vote_msg)
 
 # Cannot make two prepares in the same epoch
+@public
 def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     # Message 1: Extract parameters
     sighash_1 = extract32(raw_call(self.sighasher, vote_msg_1, gas=200000, outsize=32), 0)
@@ -426,11 +440,13 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     send(msg.sender, slashing_bounty)
 
 # Temporary backdoor for testing purposes (to allow recovering destroyed deposits)
+@public
 def owner_withdraw():
     send(self.owner, self.total_destroyed)
     self.total_destroyed = 0
 
 # Change backdoor address (set to zero to remove entirely)
+@public
 def change_owner(new_owner: address):
     if self.owner == msg.sender:
         self.owner = new_owner
