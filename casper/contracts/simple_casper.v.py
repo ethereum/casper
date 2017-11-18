@@ -169,7 +169,7 @@ def get_recommended_source_epoch() -> num:
 
 @constant
 def get_recommended_target_hash() -> bytes32:
-    return blockhash(self.current_epoch*self.epoch_length)
+    return blockhash(self.current_epoch*self.epoch_length-1)
 
 # Called at the start of any epoch
 def initialize_epoch(epoch: num):
