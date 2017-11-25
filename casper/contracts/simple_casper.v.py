@@ -126,7 +126,7 @@ def __init__(  # Epoch length, delay in epochs for withdrawing
     # Temporary backdoor for testing purposes (to allow recovering destroyed deposits)
     self.owner = _owner
     # Set deposit scale factor
-    self.deposit_scale_factor[0] = 100.0
+    self.deposit_scale_factor[0] = 10000000000.0
     # Start dynasty counter at 0
     self.dynasty = 0
     # Initialize the epoch counter
