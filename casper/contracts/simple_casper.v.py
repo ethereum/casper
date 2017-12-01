@@ -286,7 +286,7 @@ def logout(logout_msg: bytes <= 1024):
     self.second_next_dynasty_wei_delta -= self.validators[validator_index].deposit
 
 # Removes a validator from the validator pool
-@internal
+@private
 def delete_validator(validator_index: num):
     if self.validators[validator_index].end_dynasty > self.dynasty + 2:
         self.next_dynasty_wei_delta -= self.validators[validator_index].deposit
@@ -311,7 +311,7 @@ def withdraw(validator_index: num):
     self.delete_validator(validator_index)
 
 # Reward the given validator, and reflect this in total deposit figured
-@internal
+@private
 def proc_reward(validator_index: num, reward: num(wei/m)):
     start_epoch = self.dynasty_start_epoch[self.validators[validator_index].start_dynasty]
     self.validators[validator_index].deposit += reward
