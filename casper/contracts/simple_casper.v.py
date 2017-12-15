@@ -145,7 +145,6 @@ def __init__(  # Epoch length, delay in epochs for withdrawing
     self.vote_log_topic = sha3("vote()")
 
 # ***** Constants *****
-# Gets the current deposit size
 @public
 @constant
 def get_main_hash_voted_frac() -> decimal:
@@ -184,7 +183,7 @@ def initialize_epoch(epoch: num):
     # Check that the epoch actually has started
     computed_current_epoch = block.number / self.epoch_length
     assert epoch <= computed_current_epoch and epoch == self.current_epoch + 1
-    # Compute square root factor
+    # Approximate square root of deposits
     ether_deposited_as_number = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) *
                                       self.deposit_scale_factor[epoch - 1] / as_wei_value(1, ether)) + 1
     sqrt = ether_deposited_as_number / 2.0
@@ -397,7 +396,7 @@ def vote(vote_msg: bytes <= 1024):
             self.last_finalized_epoch = source_epoch
     raw_log([self.vote_log_topic], vote_msg)
 
-# Cannot make two prepares in the same epoch
+# Cannot make two prepares in the same epoch; no surrond vote.
 @public
 def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     # Message 1: Extract parameters
