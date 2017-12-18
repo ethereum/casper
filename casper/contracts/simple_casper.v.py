@@ -151,6 +151,7 @@ def get_main_hash_voted_frac() -> decimal:
     return min(self.votes[self.current_epoch].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits,
                self.votes[self.current_epoch].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits)
 
+# Get deposit size of a given validator.
 @public
 @constant
 def get_deposit_size(validator_index: num) -> num(wei):
@@ -183,65 +184,16 @@ def initialize_epoch(epoch: num):
     # Check that the epoch actually has started
     computed_current_epoch = block.number / self.epoch_length
     assert epoch <= computed_current_epoch and epoch == self.current_epoch + 1
-    # Approximate square root of deposits
-    ether_deposited_as_number = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) *
-                                      self.deposit_scale_factor[epoch - 1] / as_wei_value(1, ether)) + 1
-    sqrt = ether_deposited_as_number / 2.0
-    for i in range(20):
-        sqrt = (sqrt + (ether_deposited_as_number / sqrt)) / 2
-    # Compute log of epochs since last finalized
-    log_distance = 0
-    d = epoch - self.last_finalized_epoch
-    for i in range(20):
-        if d <= 1:
-            break
-        d /= 2
-        log_distance += 1
-    # Base interest rate.
-    base_interest_rate = self.base_interest_factor / sqrt
-    # Base penalty factor
-    base_penalty = base_interest_rate + self.base_penalty_factor * log_distance
-    self.current_penalty_factor = base_penalty
-    # Calculate interest rate for this epoch
-    if self.total_curdyn_deposits > 0 and self.total_prevdyn_deposits > 0:
-        # Fraction that voted
-        cur_vote_frac = self.votes[epoch - 1].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits
-        prev_vote_frac = self.votes[epoch - 1].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits
-        non_vote_frac = 1 - min(cur_vote_frac, prev_vote_frac)
-        # Compute "interest" - base interest minus penalties for not voting
-        # If a validator votes they pay this, but then get it back when rewarded
-        # as part of the vote or commit function
-        if self.main_hash_justified:
-            resize_factor = (1 + base_interest_rate) / (1 + base_penalty * (3 + 2*non_vote_frac / (1 - min(non_vote_frac, 0.5))))
-        else:
-            resize_factor = (1 + base_interest_rate) / (1 + base_penalty * (2 + non_vote_frac / (1 - min(non_vote_frac, 0.5))))
-    else:
-        # If either current or prev dynasty is empty, then pay no interest, and all hashes justify and finalize
-        resize_factor = 1.0
-        self.main_hash_justified = True
-        self.votes[epoch - 1].is_justified = True
-        self.votes[epoch - 1].is_finalized = True
-        self.last_justified_epoch = epoch - 1
-        self.last_finalized_epoch = epoch - 1
-    # Debugging
-    self.latest_npf = non_vote_frac
-    self.latest_resize_factor = resize_factor
-    # Set the epoch number
-    self.current_epoch = epoch
+
+    base_interest_rate, base_penalty = self.get_base_constants(epoch)
+    self.current_penalty_factor = base_penalty # TODO Set differently.
+
     # Adjust counters for interest
+    resize_factor = self.get_resize_factor(epoch)
     self.deposit_scale_factor[epoch] = self.deposit_scale_factor[epoch - 1] * resize_factor
-    # Increment the dynasty if finalized
-    if self.votes[epoch-2].is_finalized:
-        self.dynasty += 1
-        self.total_prevdyn_deposits = self.total_curdyn_deposits
-        self.total_curdyn_deposits += self.next_dynasty_wei_delta
-        self.next_dynasty_wei_delta = self.second_next_dynasty_wei_delta
-        self.second_next_dynasty_wei_delta = 0
-        self.dynasty_start_epoch[self.dynasty] = epoch
-    self.dynasty_in_epoch[epoch] = self.dynasty
-    if self.main_hash_justified:
-        self.expected_source_epoch = epoch - 1
-    self.main_hash_justified = False
+
+    # Increment dynasty once checkpoint is finalized.
+    self.increment_dynasty(epoch)
 
 # Send a deposit to join the validator set
 @public
@@ -449,3 +401,78 @@ def owner_withdraw():
 def change_owner(new_owner: address):
     if self.owner == msg.sender:
         self.owner = new_owner
+
+# ***** Private *****
+
+# Get base interest and penalty rates. Returns (Base interest rate, base penalty factor)
+@private
+# TODO: Confirm that I can return tuples
+def get_base_constants(epoch: num) -> (decimal, decimal):
+    # Approximate square root of deposits
+    ether_deposited_as_number = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) *
+                                      self.deposit_scale_factor[epoch - 1] / as_wei_value(1, ether)) + 1
+    sqrt = ether_deposited_as_number / 2.0
+    for i in range(20):
+        sqrt = (sqrt + (ether_deposited_as_number / sqrt)) / 2
+    # Compute log of epochs since last finalized
+    log_distance = 0
+    d = epoch - self.last_finalized_epoch
+    for i in range(20):
+        if d <= 1:
+            break
+        d /= 2
+        log_distance += 1
+    # Base interest rate.
+    base_interest_rate = self.base_interest_factor / sqrt
+    # Base penalty factor
+    base_penalty = base_interest_rate + self.base_penalty_factor * log_distance
+    return base_interest_rate, base_penalty
+
+# Get interest rate for epoch.
+@private
+def get_resize_factor(epoch: num) -> decimal:
+    # Calculate interest rate for this epoch
+    deposits_exist = self.total_curdyn_deposits > 0 and self.total_prevdyn_deposits > 0
+    if deposits_exist:
+        # Fraction that voted
+        cur_vote_frac = self.votes[epoch - 1].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits
+        prev_vote_frac = self.votes[epoch - 1].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits
+        non_vote_frac = 1 - min(cur_vote_frac, prev_vote_frac)
+        # Compute "interest" - base interest minus penalties for not voting
+        # If a validator votes they pay this, but then get it back when rewarded
+        # as part of the vote or commit function
+        if self.main_hash_justified:
+            resize_factor = (1 + base_interest_rate) / (1 + base_penalty * (3 + 2*non_vote_frac / (1 - min(non_vote_frac, 0.5))))
+        else:
+            resize_factor = (1 + base_interest_rate) / (1 + base_penalty * (2 + non_vote_frac / (1 - min(non_vote_frac, 0.5))))
+    else:
+        # If either current or prev dynasty is empty, then pay no interest, and all hashes justify and finalize
+        resize_factor = 1.0
+        self.main_hash_justified = True
+        self.votes[epoch - 1].is_justified = True
+        self.votes[epoch - 1].is_finalized = True
+        self.last_justified_epoch = epoch - 1
+        self.last_finalized_epoch = epoch - 1
+    # Debugging
+    self.latest_npf = non_vote_frac
+    self.latest_resize_factor = resize_factor
+    # Set the epoch number
+    self.current_epoch = epoch
+
+# Increment dynasty when checkpoint is finalized.
+# TODO: Might want to split out the cases separately.
+@private
+def increment_dynasty(epoch):
+    # Increment the dynasty if finalized
+    if self.votes[epoch-2].is_finalized:
+        self.dynasty += 1
+        self.total_prevdyn_deposits = self.total_curdyn_deposits
+        self.total_curdyn_deposits += self.next_dynasty_wei_delta
+        self.next_dynasty_wei_delta = self.second_next_dynasty_wei_delta
+        self.second_next_dynasty_wei_delta = 0
+        self.dynasty_start_epoch[self.dynasty] = epoch
+    self.dynasty_in_epoch[epoch] = self.dynasty
+    if self.main_hash_justified:
+        self.expected_source_epoch = epoch - 1
+    self.main_hash_justified = False
+
