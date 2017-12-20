@@ -42,7 +42,7 @@ dynasty_in_epoch: public(num[num])
 
 # Information for use in processing cryptoeconomic commitments
 votes: public({
-    # How many votes are there for this hash (hash of message hash + view source) from the current dynasty
+    # How many votes are there for this source epoch from the current dynasty
     cur_dyn_votes: decimal(wei / m)[num],
     # From the previous dynasty
     prev_dyn_votes: decimal(wei / m)[num],
@@ -52,13 +52,17 @@ votes: public({
     is_justified: bool,
     # Is a vote referencing the given epoch finalized?
     is_finalized: bool
-}[num])  # index: epoch
+}[num])  # index: target epoch
 
 # Is the current expected hash justified
 main_hash_justified: public(bool)
 
 # Value used to calculate the per-epoch fee that validators should be charged
 deposit_scale_factor: public(decimal(m)[num])
+
+# For debug purposes
+last_nonvoter_rescale: public(decimal)
+last_voter_rescale: public(decimal)
 
 # Length of an epoch in blocks
 epoch_length: public(num)
@@ -108,7 +112,6 @@ vote_log_topic: bytes32
 # Debugging
 latest_npf: public(decimal)
 latest_ncf: public(decimal)
-latest_resize_factor: public(decimal)
 
 @public
 def __init__(  # Epoch length, delay in epochs for withdrawing
@@ -183,53 +186,44 @@ def initialize_epoch(epoch: num):
     # Check that the epoch actually has started
     computed_current_epoch = block.number / self.epoch_length
     assert epoch <= computed_current_epoch and epoch == self.current_epoch + 1
-    # Approximate square root of deposits
+    # Are both dynasties nonempty
+    is_nonempty_epoch = (self.total_curdyn_deposits > 0 and self.total_prevdyn_deposits > 0)
+    # Compute square root factor
     ether_deposited_as_number = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) *
                                       self.deposit_scale_factor[epoch - 1] / as_wei_value(1, ether)) + 1
     sqrt = ether_deposited_as_number / 2.0
     for i in range(20):
         sqrt = (sqrt + (ether_deposited_as_number / sqrt)) / 2
-    # Compute log of epochs since last finalized
-    log_distance = 0
+    # Compute # of epochs since last finalized
     d = epoch - self.last_finalized_epoch
-    for i in range(20):
-        if d <= 1:
-            break
-        d /= 2
-        log_distance += 1
-    # Base interest rate.
-    base_interest_rate = self.base_interest_factor / sqrt
-    # Base penalty factor
-    base_penalty = base_interest_rate + self.base_penalty_factor * log_distance
-    self.current_penalty_factor = base_penalty
-    # Calculate interest rate for this epoch
-    if self.total_curdyn_deposits > 0 and self.total_prevdyn_deposits > 0:
+    # If we finalized in the last two blocks, give everyone a reward proportional to the fraction that voted
+    collective_virtue_reward = 0.0
+    if is_nonempty_epoch and d <= 3:
         # Fraction that voted
         cur_vote_frac = self.votes[epoch - 1].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits
         prev_vote_frac = self.votes[epoch - 1].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits
-        non_vote_frac = 1 - min(cur_vote_frac, prev_vote_frac)
-        # Compute "interest" - base interest minus penalties for not voting
-        # If a validator votes they pay this, but then get it back when rewarded
-        # as part of the vote or commit function
-        if self.main_hash_justified:
-            resize_factor = (1 + base_interest_rate) / (1 + base_penalty * (3 + 2*non_vote_frac / (1 - min(non_vote_frac, 0.5))))
-        else:
-            resize_factor = (1 + base_interest_rate) / (1 + base_penalty * (2 + non_vote_frac / (1 - min(non_vote_frac, 0.5))))
-    else:
-        # If either current or prev dynasty is empty, then pay no interest, and all hashes justify and finalize
-        resize_factor = 1.0
+        vote_frac = min(cur_vote_frac, prev_vote_frac)
+        collective_virtue_reward = vote_frac * self.current_penalty_factor / 2
+    if not is_nonempty_epoch:
+        # If either current or prev dynasty is empty, and all hashes justify and finalize
         self.main_hash_justified = True
         self.votes[epoch - 1].is_justified = True
         self.votes[epoch - 1].is_finalized = True
         self.last_justified_epoch = epoch - 1
         self.last_finalized_epoch = epoch - 1
-    # Debugging
-    self.latest_npf = non_vote_frac
-    self.latest_resize_factor = resize_factor
     # Set the epoch number
     self.current_epoch = epoch
     # Adjust counters for interest
-    self.deposit_scale_factor[epoch] = self.deposit_scale_factor[epoch - 1] * resize_factor
+    self.last_nonvoter_rescale = (1 + collective_virtue_reward - self.current_penalty_factor)
+    self.last_voter_rescale = self.last_nonvoter_rescale * (1 + self.current_penalty_factor)
+    self.deposit_scale_factor[epoch] = self.deposit_scale_factor[epoch - 1] * self.last_nonvoter_rescale
+    # Compute the new penalty factor
+    if is_nonempty_epoch:
+        base_interest_rate = self.base_interest_factor / sqrt
+        self.current_penalty_factor = base_interest_rate + self.base_penalty_factor * d
+        assert self.current_penalty_factor > 0
+    else:
+        self.current_penalty_factor = 0
     # Increment the dynasty if finalized
     if self.votes[epoch-2].is_finalized:
         self.dynasty += 1
@@ -378,7 +372,7 @@ def vote(vote_msg: bytes <= 1024):
     # Check that we have not yet voted for this target_epoch
     # Pay the reward if the vote was submitted in time and the vote is voting the correct data
     if self.current_epoch == target_epoch and self.expected_source_epoch == source_epoch:
-        reward = floor(self.validators[validator_index].deposit * self.current_penalty_factor * 2)
+        reward = floor(self.validators[validator_index].deposit * self.current_penalty_factor)
         self.proc_reward(validator_index, reward)
     # If enough votes with the same source_epoch and hash are made,
     # then the hash value is justified
