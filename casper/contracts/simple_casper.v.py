@@ -61,6 +61,7 @@ main_hash_justified: public(bool)
 deposit_scale_factor: public(decimal(m)[num])
 
 # For debug purposes
+# TODO: Remove this when ready.
 last_nonvoter_rescale: public(decimal)
 last_voter_rescale: public(decimal)
 
@@ -103,15 +104,8 @@ base_interest_factor: public(decimal)
 # Base penalty factor
 base_penalty_factor: public(decimal)
 
-# Current penalty factor
-current_penalty_factor: public(decimal)
-
 # Log topic for vote
 vote_log_topic: bytes32
-
-# Debugging
-latest_npf: public(decimal)
-latest_ncf: public(decimal)
 
 @public
 def __init__(  # Epoch length, delay in epochs for withdrawing
@@ -186,44 +180,52 @@ def initialize_epoch(epoch: num):
     # Check that the epoch actually has started
     computed_current_epoch = block.number / self.epoch_length
     assert epoch <= computed_current_epoch and epoch == self.current_epoch + 1
+    # Set the epoch number
+    self.current_epoch = epoch
+
     # Are both dynasties nonempty
-    is_nonempty_epoch = (self.total_curdyn_deposits > 0 and self.total_prevdyn_deposits > 0)
+    deposit_exists = (self.total_curdyn_deposits > 0 and self.total_prevdyn_deposits > 0)
     # Compute square root factor
     ether_deposited_as_number = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) *
                                       self.deposit_scale_factor[epoch - 1] / as_wei_value(1, ether)) + 1
     sqrt = ether_deposited_as_number / 2.0
     for i in range(20):
         sqrt = (sqrt + (ether_deposited_as_number / sqrt)) / 2
+
     # Compute # of epochs since last finalized
     d = epoch - self.last_finalized_epoch
     # If we finalized in the last two blocks, give everyone a reward proportional to the fraction that voted
     collective_virtue_reward = 0.0
-    if is_nonempty_epoch and d <= 3:
+
+    # 2 epochs to finalize.
+    if deposit_exists and d <= 2:
         # Fraction that voted
         cur_vote_frac = self.votes[epoch - 1].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits
         prev_vote_frac = self.votes[epoch - 1].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits
         vote_frac = min(cur_vote_frac, prev_vote_frac)
-        collective_virtue_reward = vote_frac * self.current_penalty_factor / 2
-    if not is_nonempty_epoch:
+        collective_virtue_reward = vote_frac * self.reward_factor / 2
+    if not deposit_exists:
         # If either current or prev dynasty is empty, and all hashes justify and finalize
         self.main_hash_justified = True
         self.votes[epoch - 1].is_justified = True
         self.votes[epoch - 1].is_finalized = True
         self.last_justified_epoch = epoch - 1
         self.last_finalized_epoch = epoch - 1
-    # Set the epoch number
-    self.current_epoch = epoch
+
     # Adjust counters for interest
-    self.last_nonvoter_rescale = (1 + collective_virtue_reward - self.current_penalty_factor)
-    self.last_voter_rescale = self.last_nonvoter_rescale * (1 + self.current_penalty_factor)
+    # TODO: make `last_nonvoter_rescale` & `last_voter_rescale` local variables when ready to remove global variables.
+    self.last_nonvoter_rescale = (1 + collective_virtue_reward - self.reward_factor)
+    self.last_voter_rescale = self.last_nonvoter_rescale * (1 + self.reward_factor)
     self.deposit_scale_factor[epoch] = self.deposit_scale_factor[epoch - 1] * self.last_nonvoter_rescale
+
     # Compute the new penalty factor
-    if is_nonempty_epoch:
+    if deposit_exists:
         base_interest_rate = self.base_interest_factor / sqrt
-        self.current_penalty_factor = base_interest_rate + self.base_penalty_factor * d
-        assert self.current_penalty_factor > 0
+        self.reward_factor = base_interest_rate + self.base_penalty_factor * d
+        assert self.reward_factor > 0
     else:
-        self.current_penalty_factor = 0
+        self.reward_factor = 0
+
     # Increment the dynasty if finalized
     if self.votes[epoch-2].is_finalized:
         self.dynasty += 1
@@ -372,7 +374,7 @@ def vote(vote_msg: bytes <= 1024):
     # Check that we have not yet voted for this target_epoch
     # Pay the reward if the vote was submitted in time and the vote is voting the correct data
     if self.current_epoch == target_epoch and self.expected_source_epoch == source_epoch:
-        reward = floor(self.validators[validator_index].deposit * self.current_penalty_factor)
+        reward = floor(self.validators[validator_index].deposit * self.reward_factor)
         self.proc_reward(validator_index, reward)
     # If enough votes with the same source_epoch and hash are made,
     # then the hash value is justified
