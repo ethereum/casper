@@ -183,7 +183,7 @@ def deposit_exists() -> bool:
 # Increment dynasty when checkpoint is finalized.
 # TODO: Might want to split out the cases separately.
 @private
-def increment_dynasty(epoch):
+def increment_dynasty(epoch: num):
     # Increment the dynasty if finalized
     if self.votes[epoch-2].is_finalized:
         self.dynasty += 1
@@ -234,7 +234,7 @@ def get_sqrt_factor():
 
 # If we finalized in the last two blocks, give everyone a reward proportional to the fraction that voted
 @private
-def get_deposit_scale_factor(epoch):
+def get_deposit_scale_factor(epoch: num):
     # TODO: make `last_nonvoter_rescale` & `last_voter_rescale` local variables when ready to remove global variables.
     self.last_nonvoter_rescale = (1 + self.get_collective_reward(epoch) - self.reward_factor)
     self.last_voter_rescale = self.last_nonvoter_rescale * (1 + self.reward_factor)
