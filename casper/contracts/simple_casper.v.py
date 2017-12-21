@@ -184,7 +184,8 @@ def deposit_exists() -> bool:
 # Increment dynasty when checkpoint is finalized.
 # TODO: Might want to split out the cases separately.
 @private
-def increment_dynasty(epoch: num):
+def increment_dynasty():
+    epoch = self.current_epoch
     # Increment the dynasty if finalized
     if self.votes[epoch-2].is_finalized:
         self.dynasty += 1
@@ -200,13 +201,14 @@ def increment_dynasty(epoch: num):
 
 # Returns number of epochs since finalization.
 @private
-def get_esf(epoch: num) -> num:
+def get_esf() -> num:
+    epoch = self.current_epoch
     return epoch - self.last_finalized_epoch
 
 # This is a collective reward factor for high-voting levels.
 @private
-def get_collective_reward(epoch: num) -> decimal:
-    # TODO: bettter name for live?
+def get_collective_reward() -> decimal:
+    epoch = self.current_epoch
     live = self.get_esf(epoch) <= 2
     if not self.deposit_exists() or not live:
         return 0.0
@@ -216,9 +218,9 @@ def get_collective_reward(epoch: num) -> decimal:
     vote_frac = min(cur_vote_frac, prev_vote_frac)
     return vote_frac * self.reward_factor / 2
 
-# TODO: better method name?
 @private
-def finalize_all_hashes(epoch: num):
+def insta_finalize():
+    epoch = self.current_epoch
     self.main_hash_justified = True
     self.votes[epoch - 1].is_justified = True
     self.votes[epoch - 1].is_finalized = True
@@ -227,21 +229,13 @@ def finalize_all_hashes(epoch: num):
 
 # Compute square root factor
 @private
-def get_sqrt_factor() -> decimal:
+def get_sqrt_of_total_deposits() -> decimal:
     ether_deposited_as_number = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) *
                                       self.deposit_scale_factor[epoch - 1] / as_wei_value(1, ether)) + 1
     sqrt = ether_deposited_as_number / 2.0
     for i in range(20):
         sqrt = (sqrt + (ether_deposited_as_number / sqrt)) / 2
     return sqrt
-
-# If we finalized in the last two blocks, give everyone a reward proportional to the fraction that voted
-@private
-def get_deposit_scale_factor(epoch: num) -> decimal:
-    # TODO: make `last_nonvoter_rescale` & `last_voter_rescale` local variables when ready to remove global variables.
-    self.last_nonvoter_rescale = (1 + self.get_collective_reward(epoch) - self.reward_factor)
-    self.last_voter_rescale = self.last_nonvoter_rescale * (1 + self.reward_factor)
-    return self.deposit_scale_factor[epoch - 1] * self.last_nonvoter_rescale
 
 # ***** Public *****
 
@@ -256,17 +250,19 @@ def initialize_epoch(epoch: num):
     self.current_epoch = epoch
 
     # Reward if finalized at least in the last two epochs
-    self.deposit_scale_factor[epoch] = self.get_deposit_scale_factor(epoch)
+    self.last_nonvoter_rescale = (1 + self.get_collective_reward(epoch) - self.reward_factor)
+    self.last_voter_rescale = self.last_nonvoter_rescale * (1 + self.reward_factor)
+    self.deposit_scale_factor[epoch] = self.deposit_scale_factor[epoch - 1] * self.last_nonvoter_rescale
 
     if self.deposit_exists():
         # Set the reward factor for the next epoch.
-        adj_interest_base = self.base_interest_factor / self.get_sqrt_factor() # TODO: sqrt is based on previous epoch starting deposit
+        adj_interest_base = self.base_interest_factor / self.get_sqrt_of_total_deposits() # TODO: sqrt is based on previous epoch starting deposit
         self.reward_factor = adj_interest_base + self.base_penalty_factor * self.get_esf() # TODO: might not be bpf. clarify is positive?
         # ESF is only thing that is changing and reward_factor is being used above.
         assert self.reward_factor > 0
     else:
-        self.finalize_all_hashes(epoch) # TODO: comment on why.
-        self.reward_factor = 0 # TODO: redundant?
+        self.insta_finalize(epoch) # TODO: comment on why.
+        self.reward_factor = 0
 
     # Increment the dynasty if finalized
     self.increment_dynasty(epoch)
