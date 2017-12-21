@@ -180,6 +180,7 @@ def deposit_exists() -> bool:
     return self.total_curdyn_deposits > 0 and self.total_prevdyn_deposits > 0
 
 # ***** Private *****
+
 # Increment dynasty when checkpoint is finalized.
 # TODO: Might want to split out the cases separately.
 @private
@@ -197,23 +198,25 @@ def increment_dynasty(epoch: num):
         self.expected_source_epoch = epoch - 1
     self.main_hash_justified = False
 
+# Returns number of epochs since finalization.
 @private
-def get_esf(epoch: num):
+def get_esf(epoch: num) -> num:
     return epoch - self.last_finalized_epoch
 
 # This is a collective reward factor for high-voting levels.
 @private
-def get_collective_reward(epoch: num):
+def get_collective_reward(epoch: num) -> decimal:
     # TODO: bettter name for live?
     live = self.get_esf(epoch) <= 2
     if not self.deposit_exists() or not live:
-        return 0
+        return 0.0
     # Fraction that voted
     cur_vote_frac = self.votes[epoch - 1].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits
     prev_vote_frac = self.votes[epoch - 1].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits
     vote_frac = min(cur_vote_frac, prev_vote_frac)
     return vote_frac * self.reward_factor / 2
 
+# TODO: better method name?
 @private
 def finalize_all_hashes(epoch: num):
     self.main_hash_justified = True
@@ -224,7 +227,7 @@ def finalize_all_hashes(epoch: num):
 
 # Compute square root factor
 @private
-def get_sqrt_factor():
+def get_sqrt_factor() -> decimal:
     ether_deposited_as_number = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) *
                                       self.deposit_scale_factor[epoch - 1] / as_wei_value(1, ether)) + 1
     sqrt = ether_deposited_as_number / 2.0
@@ -234,7 +237,7 @@ def get_sqrt_factor():
 
 # If we finalized in the last two blocks, give everyone a reward proportional to the fraction that voted
 @private
-def get_deposit_scale_factor(epoch: num):
+def get_deposit_scale_factor(epoch: num) -> decimal:
     # TODO: make `last_nonvoter_rescale` & `last_voter_rescale` local variables when ready to remove global variables.
     self.last_nonvoter_rescale = (1 + self.get_collective_reward(epoch) - self.reward_factor)
     self.last_voter_rescale = self.last_nonvoter_rescale * (1 + self.reward_factor)
