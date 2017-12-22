@@ -13,6 +13,9 @@ validators: public({
     withdrawal_addr: address
 }[num])
 
+# Historical checkoint hashes
+checkpoint_hashes: public(bytes32[num])
+
 # Number of validators
 nextValidatorIndex: public(num)
 
@@ -256,16 +259,18 @@ def initialize_epoch(epoch: num):
 
     if self.deposit_exists():
         # Set the reward factor for the next epoch.
-        adj_interest_base = self.base_interest_factor / self.get_sqrt_of_total_deposits(epoch) # TODO: sqrt is based on previous epoch starting deposit
-        self.reward_factor = adj_interest_base + self.base_penalty_factor * self.get_esf() # TODO: might not be bpf. clarify is positive?
+        adj_interest_base = self.base_interest_factor / self.get_sqrt_of_total_deposits(epoch)  # TODO: sqrt is based on previous epoch starting deposit
+        self.reward_factor = adj_interest_base + self.base_penalty_factor * self.get_esf()  # TODO: might not be bpf. clarify is positive?
         # ESF is only thing that is changing and reward_factor is being used above.
         assert self.reward_factor > 0
     else:
-        self.insta_finalize(epoch) # TODO: comment on why.
+        self.insta_finalize(epoch)  # TODO: comment on why.
         self.reward_factor = 0
 
     # Increment the dynasty if finalized
     self.increment_dynasty(epoch)
+    # Store checkpoint hash for easy access
+    self.checkpoint_hashes[epoch] = self.get_recommended_target_hash()
 
 # Send a deposit to join the validator set
 @public
