@@ -275,7 +275,7 @@ def logout(logout_msg: bytes <= 1024):
     # Signature check
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=500000, outsize=32), 0) == as_bytes32(1)
     # Check that we haven't already withdrawn
-    assert self.validators[validator_index].end_dynasty >= self.dynasty + 2
+    assert self.validators[validator_index].end_dynasty > self.dynasty + 2
     # Set the end dynasty
     self.validators[validator_index].end_dynasty = self.dynasty + 2
     self.second_next_dynasty_wei_delta -= self.validators[validator_index].deposit
