@@ -40,9 +40,8 @@ dynasty_start_epoch: public(num[num])
 # Mapping of epoch to what dynasty it is
 dynasty_in_epoch: public(num[num])
 
-# TODO: Better comment here.
-# TODO: does this break anything outside?
-# Information for use in processing cryptoeconomic commitments
+# TODO: Does renaming this to `checkpoints` from `votes` break any dependencies?
+# Information about the checkpoints
 checkpoints: public({
     # How many votes are there for this source epoch from the current dynasty
     cur_dyn_vote_amount: decimal(wei / m)[num],
@@ -329,7 +328,7 @@ def proc_reward(validator_index: num, reward: num(wei/m)):
 
 # Extract values from vote_msg. Returns tuple.
 @private
-# TODO: make custom type for bytes <= 1024?
+# TODO: Would be cool if viper had custom types.
 def extract_msg_from_vote(vote_msg: bytes <= 1024) -> (num, bytes32, num, num, bytes):
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
@@ -342,23 +341,6 @@ def extract_msg_from_vote(vote_msg: bytes <= 1024) -> (num, bytes32, num, num, b
     source_epoch = values[3]
     sig = values[4]
     return validator_index, target_hash, target_epoch, source_epoch, sig
-
-@private
-def in_current_dynasty(validator_index: num) -> bool:
-    start_dynasty = self.validators[validator_index].start_dynasty
-    end_dynasty = self.validators[validator_index].end_dynasty
-    current_dynasty = self.dynasty_in_epoch[target_epoch]
-    in_current_dynasty = start_dynasty <= current_dynasty and current_dynasty < end_dynasty
-    return in_current_dynasty
-
-@private
-def in_previous_dynasty(validator_index: num) -> bool:
-    start_dynasty = self.validators[validator_index].start_dynasty
-    end_dynasty = self.validators[validator_index].end_dynasty
-    current_dynasty = self.dynasty_in_epoch[target_epoch]
-    past_dynasty = current_dynasty - 1
-    in_prev_dynasty = ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty))
-    return in_prev_dynasty
 
 # Check the conditions for valid vote are met.
 @private
@@ -375,24 +357,29 @@ def check_valid_vote(validator_index: num, target_hash: bytes32, target_epoch: n
     assert self.checkpoints[source_epoch].is_justified
     # Check that we are at least (epoch length / 4) blocks into the epoch
     # assert block.number % self.epoch_length >= self.epoch_length / 4
-    # Check if in past two dynasties to allow for dynamic validator sets.
-    assert self.in_current_dynasty(validator_index) or self.in_previous_dynasty(validator_index)
 
 @private
-def record_vote(validator_index: num, target_hash: bytes32, target_epoch: num, source_epoch: num, sig: bytes,
-                cur_dyn_vote_amount: decimal, prev_dyn_vote_amount: decimal):
+def record_vote(validator_index: num, target_hash: bytes32, target_epoch: num, source_epoch: num, sig: bytes):
     # Record that the validator voted for this target epoch so they can't again
     self.checkpoints[target_epoch].vote_bitmap[target_hash][validator_index / 256] = \
         bitwise_or(self.checkpoints[target_epoch].vote_bitmap[target_hash][validator_index / 256],
                    shift(as_num256(1), validator_index % 256))
+
+    start_dynasty = self.validators[validator_index].start_dynasty
+    end_dynasty = self.validators[validator_index].end_dynasty
+    current_dynasty = self.dynasty_in_epoch[target_epoch]
+    past_dynasty = current_dynasty - 1
+    is_in_current_dynasty = start_dynasty <= current_dynasty and current_dynasty < end_dynasty
+    is_in_prev_dynasty = start_dynasty <= past_dynasty and past_dynasty < end_dynasty
+
+    # Check if in past two dynasties to allow for dynamic validator sets.
+    assert is_in_current_dynasty(validator_index) or is_in_prev_dynasty(validator_index)
+
     # Record that this vote took place
-    # TODO: too much overhead. not make it function
-    if self.in_current_dynasty(validator_index):
-        cur_dyn_vote_amount += self.validators[validator_index].deposit
-        self.checkpoints[target_epoch].cur_dyn_vote_amount[source_epoch] = cur_dyn_vote_amount
-    if self.in_prevous_dynasty(validator_index):
-        prev_dyn_vote_amount += self.validators[validator_index].deposit
-        self.checkpoints[target_epoch].prev_dyn_vote_amount[source_epoch] = prev_dyn_vote_amount
+    if is_in_current_dynasty(validator_index):
+        self.checkpoints[target_epoch].cur_dyn_vote_amount[source_epoch] += self.validators[validator_index].deposit
+    if is_in_prev_dynasty(validator_index):
+        self.checkpoints[target_epoch].prev_dyn_vote_amount[source_epoch] += self.validators[validator_index].deposit
 
 @private
 # TODO: find all place where this should be used instead.
@@ -414,27 +401,25 @@ def finalize_epoch(e: num):
 # TODO: Rename to `submit_vote` and revise everything that calls it.
 @public
 def submit_vote(vote_msg: bytes <= 1024):
-    # TODO: RLP decoding only once.
     validator_index, target_hash, target_epoch, source_epoch, _sig = self.extract_msg_from_vote(vote_msg)
     self.check_valid_vote(validator_index, target_hash, target_epoch, source_epoch, sig)
 
-    cur_dyn_vote_amount = self.checkpoints[target_epoch].cur_dyn_vote_amount[source_epoch]
-    prev_dyn_vote_amount = self.checkpoints[target_epoch].prev_dyn_vote_amount[source_epoch]
-
-    # Keep track of vote and vote amount.
-    self.record_vote(validator_index, target_hash, target_epoch, source_epoch, sig,
-                     cur_dyn_vote_amount, prev_dyn_vote_amount)
+    # Keep track of vote and increment vote amount.
+    self.record_vote(validator_index, target_hash, target_epoch, source_epoch, sig)
 
     # Process rewards if applicable.
     timely = self.current_epoch == target_epoch
     correct = self.expected_source_epoch == source_epoch
     if timely and correct:
-        reward = floor(self.validators[validator_index].deposit * self.reward_factor) # TODO: Check correct reward factor is set.
+        reward = floor(self.validators[validator_index].deposit * self.reward_factor)  # TODO: Check correct reward factor is set.
         self.proc_reward(validator_index, reward)
 
     # Check if we have enough amount of votes to justify the checkpoint.
+    cur_dyn_vote_amount = self.checkpoints[target_epoch].cur_dyn_vote_amount[source_epoch]
+    prev_dyn_vote_amount = self.checkpoints[target_epoch].prev_dyn_vote_amount[source_epoch]
     cur_have_supermajority = cur_dyn_vote_amount >= self.total_curdyn_deposits * 2 / 3
     prev_have_supermajority = prev_dyn_vote_amount >= self.total_prevdyn_deposits * 2 / 3
+
     justified = self.checkpoints[target_epoch].is_justified
     if cur_have_supermajority and prev_have_supermajority and not justified:
         self.justify_epoch(target_epoch)
