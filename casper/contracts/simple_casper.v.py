@@ -218,8 +218,8 @@ def get_collective_reward() -> decimal:
     if not self.deposit_exists() or not live:
         return 0.0
     # Fraction that voted
-    cur_vote_frac = self.checkpoints[epoch - 1].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits
-    prev_vote_frac = self.checkpoints[epoch - 1].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits
+    cur_vote_frac = self.checkpoints[epoch - 1].cur_dyn_vote_amount[self.expected_source_epoch] / self.total_curdyn_deposits
+    prev_vote_frac = self.checkpoints[epoch - 1].prev_dyn_vote_amount[self.expected_source_epoch] / self.total_prevdyn_deposits
     vote_frac = min(cur_vote_frac, prev_vote_frac)
     return vote_frac * self.reward_factor / 2
 
