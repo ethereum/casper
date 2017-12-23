@@ -376,7 +376,7 @@ def proc_reward(validator_index: num, reward: num(wei/m)):
 
 # Extract values from vote_msg. Returns tuple.
 @private
-def extract_msg_from_vote(vote_msg: bytes <= 1024) -> (num, bytes32, num, num, bytes):
+def extract_msg_from_vote(vote_msg: bytes <= 1024) -> (num, bytes32, num, num, bytes <= 1024):
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
     sighash = extract32(raw_call(self.sighasher, vote_msg, gas=200000, outsize=32), 0)
@@ -392,7 +392,7 @@ def extract_msg_from_vote(vote_msg: bytes <= 1024) -> (num, bytes32, num, num, b
 # Check the conditions for valid vote are met.
 @private
 # TODO: Viper tuples as a param or struct support?
-def check_valid_vote(validator_index: num, target_hash: bytes32, target_epoch: num, source_epoch: num, sig: bytes):
+def check_valid_vote(validator_index: num, target_hash: bytes32, target_epoch: num, source_epoch: num, sig: bytes <= 1024):
     # Check the signature
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=500000, outsize=32), 0) == as_bytes32(1)
     # Check that this vote has not yet been made
@@ -406,7 +406,7 @@ def check_valid_vote(validator_index: num, target_hash: bytes32, target_epoch: n
     # assert block.number % self.epoch_length >= self.epoch_length / 4
 
 @private
-def record_vote(validator_index: num, target_hash: bytes32, target_epoch: num, source_epoch: num, sig: bytes):
+def record_vote(validator_index: num, target_hash: bytes32, target_epoch: num, source_epoch: num, sig: bytes <= 1024):
     # Record that the validator voted for this target epoch so they can't again
     self.checkpoints[target_epoch].vote_bitmap[target_hash][validator_index / 256] = \
         bitwise_or(self.checkpoints[target_epoch].vote_bitmap[target_hash][validator_index / 256],
