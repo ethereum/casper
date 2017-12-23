@@ -192,7 +192,7 @@ def deposit_exists() -> bool:
 def increment_dynasty():
     epoch = self.current_epoch
     # Increment the dynasty if finalized
-    if self.votes[epoch-2].is_finalized:
+    if self.checkpoints[epoch - 2].is_finalized:
         self.dynasty += 1
         self.total_prevdyn_deposits = self.total_curdyn_deposits
         self.total_curdyn_deposits += self.next_dynasty_wei_delta
@@ -218,17 +218,32 @@ def get_collective_reward() -> decimal:
     if not self.deposit_exists() or not live:
         return 0.0
     # Fraction that voted
-    cur_vote_frac = self.votes[epoch - 1].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits
-    prev_vote_frac = self.votes[epoch - 1].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits
+    cur_vote_frac = self.checkpoints[epoch - 1].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits
+    prev_vote_frac = self.checkpoints[epoch - 1].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits
     vote_frac = min(cur_vote_frac, prev_vote_frac)
     return vote_frac * self.reward_factor / 2
 
 @private
+def justify_epoch(e: num):
+    self.checkpoints[e].is_justified = True
+    self.last_justified_epoch = e
+    if e == self.current_epoch:
+        # TODO: might not need this any more.
+        self.main_hash_justified = True
+
+@private
+def finalize_epoch(e: num):
+    self.checkpoints[e].is_finalized = True
+    self.last_finalized_epoch = e
+    # TODO: `main_hash_finalized`?
+
+@private
+# TODO: refactor
 def insta_finalize():
     epoch = self.current_epoch
     self.main_hash_justified = True
-    self.votes[epoch - 1].is_justified = True
-    self.votes[epoch - 1].is_finalized = True
+    self.checkpoints[epoch - 1].is_justified = True
+    self.checkpoints[epoch - 1].is_finalized = True
     self.last_justified_epoch = epoch - 1
     self.last_finalized_epoch = epoch - 1
 
@@ -361,7 +376,6 @@ def proc_reward(validator_index: num, reward: num(wei/m)):
 
 # Extract values from vote_msg. Returns tuple.
 @private
-# TODO: Would be cool if viper had custom types.
 def extract_msg_from_vote(vote_msg: bytes <= 1024) -> (num, bytes32, num, num, bytes):
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
@@ -377,7 +391,7 @@ def extract_msg_from_vote(vote_msg: bytes <= 1024) -> (num, bytes32, num, num, b
 
 # Check the conditions for valid vote are met.
 @private
-# TODO: If viper supports tuple params, take that instead.
+# TODO: Viper tuples as a param or struct support?
 def check_valid_vote(validator_index: num, target_hash: bytes32, target_epoch: num, source_epoch: num, sig: bytes):
     # Check the signature
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=500000, outsize=32), 0) == as_bytes32(1)
@@ -414,24 +428,8 @@ def record_vote(validator_index: num, target_hash: bytes32, target_epoch: num, s
     if is_in_prev_dynasty(validator_index):
         self.checkpoints[target_epoch].prev_dyn_vote_amount[source_epoch] += self.validators[validator_index].deposit
 
-@private
-# TODO: find all place where this should be used instead.
-def justify_epoch(e: num):
-    self.checkpoints[e].is_justified = True
-    self.last_justified_epoch = e
-    if e == self.current_epoch:
-        # TODO: might not need this any more.
-        self.main_hash_justified = True
-
-@private
-# TODO: find all place where this should be used instead.
-def finalize_epoch(e: num):
-    self.checkpoints[e].is_finalized = True
-    self.last_finalized_epoch = e
-    # TODO: `main_hash_finalized`?
-
 # Process a vote message
-# TODO: Rename to `submit_vote` and revise everything that calls it.
+# TODO: Revise everything that calls it.
 @public
 def submit_vote(vote_msg: bytes <= 1024):
     validator_index, target_hash, target_epoch, source_epoch, _sig = self.extract_msg_from_vote(vote_msg)
