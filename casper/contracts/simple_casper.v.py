@@ -431,9 +431,9 @@ def record_vote(validator_index: num,
     assert is_in_current_dynasty(validator_index) or is_in_prev_dynasty(validator_index)
 
     # Record that this vote took place
-    if is_in_current_dynasty(validator_index):
+    if is_in_current_dynasty:
         self.checkpoints[target_epoch].cur_dyn_vote_amount[source_epoch] += self.validators[validator_index].deposit
-    if is_in_prev_dynasty(validator_index):
+    if is_in_prev_dynasty:
         self.checkpoints[target_epoch].prev_dyn_vote_amount[source_epoch] += self.validators[validator_index].deposit
 
 # Process a vote message
