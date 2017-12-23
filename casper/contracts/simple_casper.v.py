@@ -428,7 +428,7 @@ def record_vote(validator_index: num,
     is_in_prev_dynasty = start_dynasty <= past_dynasty and past_dynasty < end_dynasty
 
     # Check if in past two dynasties to allow for dynamic validator sets.
-    assert is_in_current_dynasty(validator_index) or is_in_prev_dynasty(validator_index)
+    assert is_in_current_dynasty or is_in_prev_dynasty
 
     # Record that this vote took place
     if is_in_current_dynasty:
