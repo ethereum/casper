@@ -13,6 +13,9 @@ validators: public({
     withdrawal_addr: address
 }[num])
 
+# Historical checkoint hashes
+checkpoint_hashes: public(bytes32[num])
+
 # Number of validators
 nextValidatorIndex: public(num)
 
@@ -69,7 +72,7 @@ last_voter_rescale: public(decimal)
 epoch_length: public(num)
 
 # Withdrawal delay in blocks
-withdrawal_delay: num
+withdrawal_delay: public(num)
 
 # Current epoch
 current_epoch: public(num)
@@ -268,6 +271,9 @@ def initialize_epoch(epoch: num):
     # Increment the dynasty if finalized
     self.increment_dynasty()
 
+    # Store checkpoint hash for easy access
+    self.checkpoint_hashes[epoch] = self.get_recommended_target_hash()
+
 # Send a deposit to join the validator set
 @public
 @payable
@@ -304,7 +310,7 @@ def logout(logout_msg: bytes <= 1024):
     # Signature check
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=500000, outsize=32), 0) == as_bytes32(1)
     # Check that we haven't already withdrawn
-    assert self.validators[validator_index].end_dynasty >= self.dynasty + 2
+    assert self.validators[validator_index].end_dynasty > self.dynasty + 2
     # Set the end dynasty
     self.validators[validator_index].end_dynasty = self.dynasty + 2
     self.second_next_dynasty_wei_delta -= self.validators[validator_index].deposit
@@ -314,6 +320,7 @@ def logout(logout_msg: bytes <= 1024):
 def delete_validator(validator_index: num):
     if self.validators[validator_index].end_dynasty > self.dynasty + 2:
         self.next_dynasty_wei_delta -= self.validators[validator_index].deposit
+    self.validator_indexes[self.validators[validator_index].withdrawal_addr] = 0
     self.validators[validator_index] = {
         deposit: 0,
         start_dynasty: 0,
@@ -334,7 +341,7 @@ def withdraw(validator_index: num):
     send(self.validators[validator_index].withdrawal_addr, withdraw_amount)
     self.delete_validator(validator_index)
 
-# Reward the given validator, and reflect this in total deposit figured
+# Reward the given validator & miner, and reflect this in total deposit figured
 @private
 def proc_reward(validator_index: num, reward: num(wei/m)):
     start_epoch = self.dynasty_start_epoch[self.validators[validator_index].start_dynasty]
@@ -351,6 +358,7 @@ def proc_reward(validator_index: num, reward: num(wei/m)):
         self.next_dynasty_wei_delta -= reward
     if current_dynasty == end_dynasty - 2:
         self.second_next_dynasty_wei_delta -= reward
+    send(block.coinbase, floor(reward * self.deposit_scale_factor[self.current_epoch] / 8))
 
 # Process a vote message
 @public
