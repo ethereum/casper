@@ -376,7 +376,7 @@ def proc_reward(validator_index: num, reward: num(wei/m)):
 
 # Extract values from vote_msg. Returns tuple.
 @private
-def extract_msg_from_vote(vote_msg: bytes <= 1024) -> (num, bytes32, num, num, bytes <= 1024):
+def extract_msg_from_vote(vote_msg: bytes <= 1024) -> (num, bytes32, num, num, bytes32):
     # Extract parameters
     values = RLPList(vote_msg, [num, bytes32, num, num, bytes])
     validator_index = values[0]
@@ -384,7 +384,8 @@ def extract_msg_from_vote(vote_msg: bytes <= 1024) -> (num, bytes32, num, num, b
     target_epoch = values[2]
     source_epoch = values[3]
     sig = values[4]
-    return validator_index, target_hash, target_epoch, source_epoch, sig
+    sig32 = extract32(sig, 0)
+    return validator_index, target_hash, target_epoch, source_epoch, sig32
 
 # Check the conditions for valid vote are met.
 @private
@@ -440,7 +441,13 @@ def record_vote(validator_index: num,
 # TODO: Revise everything that calls it.
 @public
 def submit_vote(vote_msg: bytes <= 1024):
-    validator_index, target_hash, target_epoch, source_epoch, _sig = self.extract_msg_from_vote(vote_msg)
+    # Extract parameters
+    values = RLPList(vote_msg, [num, bytes32, num, num, bytes])
+    validator_index = values[0]
+    target_hash = values[1]
+    target_epoch = values[2]
+    source_epoch = values[3]
+    sig = values[4]
     self.check_valid_vote(validator_index, target_hash, target_epoch, source_epoch, sig, vote_msg)
 
     # Keep track of vote and increment vote amount.
@@ -460,7 +467,7 @@ def submit_vote(vote_msg: bytes <= 1024):
     prev_have_supermajority = prev_dyn_vote_amount >= self.total_prevdyn_deposits * 2 / 3
 
     justified = self.checkpoints[target_epoch].is_justified
-    if cur_have_supermajority and prev_have_supermajority and not justified:
+    if (cur_have_supermajority and prev_have_supermajority) and not justified:
         self.justify_epoch(target_epoch)
         # If two epochs are justified consecutively, then the source_epoch finalized
         if target_epoch == source_epoch + 1:
