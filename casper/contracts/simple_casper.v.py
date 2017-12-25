@@ -269,7 +269,7 @@ def initialize_epoch(epoch: num):
     self.current_epoch = epoch
 
     # Reward if finalized at least in the last two epochs
-    self.last_nonvoter_rescale = (1 + self.get_collective_reward(epoch) - self.reward_factor)
+    self.last_nonvoter_rescale = (1 + self.get_collective_reward() - self.reward_factor)
     self.last_voter_rescale = self.last_nonvoter_rescale * (1 + self.reward_factor)
     self.deposit_scale_factor[epoch] = self.deposit_scale_factor[epoch - 1] * self.last_nonvoter_rescale
 
@@ -280,11 +280,11 @@ def initialize_epoch(epoch: num):
         # ESF is only thing that is changing and reward_factor is being used above.
         assert self.reward_factor > 0
     else:
-        self.insta_finalize(epoch)  # TODO: comment on why.
+        self.insta_finalize()  # TODO: comment on why.
         self.reward_factor = 0
 
     # Increment the dynasty if finalized
-    self.increment_dynasty(epoch)
+    self.increment_dynasty()
     # Store checkpoint hash for easy access
     self.checkpoint_hashes[epoch] = self.get_recommended_target_hash()
 
