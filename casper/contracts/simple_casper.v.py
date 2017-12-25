@@ -205,11 +205,11 @@ def get_esf() -> num:
     epoch = self.current_epoch
     return epoch - self.last_finalized_epoch
 
-# This is a collective reward factor for high-voting levels.
+# Returns the current collective reward factor, which rewards the dynasty for high-voting levels.
 @private
 def get_collective_reward() -> decimal:
     epoch = self.current_epoch
-    live = self.get_esf(epoch) <= 2
+    live = self.get_esf() <= 2
     if not self.deposit_exists() or not live:
         return 0.0
     # Fraction that voted
@@ -229,7 +229,8 @@ def insta_finalize():
 
 # Compute square root factor
 @private
-def get_sqrt_of_total_deposits(epoch: num) -> decimal:
+def get_sqrt_of_total_deposits() -> decimal:
+    epoch = self.current_epoch
     ether_deposited_as_number = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) *
                                       self.deposit_scale_factor[epoch - 1] / as_wei_value(1, ether)) + 1
     sqrt = ether_deposited_as_number / 2.0
@@ -250,22 +251,22 @@ def initialize_epoch(epoch: num):
     self.current_epoch = epoch
 
     # Reward if finalized at least in the last two epochs
-    self.last_nonvoter_rescale = (1 + self.get_collective_reward(epoch) - self.reward_factor)
+    self.last_nonvoter_rescale = (1 + self.get_collective_reward() - self.reward_factor)
     self.last_voter_rescale = self.last_nonvoter_rescale * (1 + self.reward_factor)
     self.deposit_scale_factor[epoch] = self.deposit_scale_factor[epoch - 1] * self.last_nonvoter_rescale
 
     if self.deposit_exists():
         # Set the reward factor for the next epoch.
-        adj_interest_base = self.base_interest_factor / self.get_sqrt_of_total_deposits(epoch) # TODO: sqrt is based on previous epoch starting deposit
+        adj_interest_base = self.base_interest_factor / self.get_sqrt_of_total_deposits() # TODO: sqrt is based on previous epoch starting deposit
         self.reward_factor = adj_interest_base + self.base_penalty_factor * self.get_esf() # TODO: might not be bpf. clarify is positive?
         # ESF is only thing that is changing and reward_factor is being used above.
         assert self.reward_factor > 0
     else:
-        self.insta_finalize(epoch) # TODO: comment on why.
+        self.insta_finalize() # TODO: comment on why.
         self.reward_factor = 0
 
     # Increment the dynasty if finalized
-    self.increment_dynasty(epoch)
+    self.increment_dynasty()
 
 # Send a deposit to join the validator set
 @public
