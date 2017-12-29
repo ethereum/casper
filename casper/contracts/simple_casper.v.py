@@ -110,13 +110,18 @@ base_penalty_factor: public(decimal)
 # Log topic for vote
 vote_log_topic: bytes32
 
+# Minimum deposit size if no one else is validating
+min_deposit_size: wei_value
+
 @public
 def __init__(  # Epoch length, delay in epochs for withdrawing
         _epoch_length: num, _withdrawal_delay: num,
         # Owner (backdoor), sig hash calculator, purity checker
         _owner: address, _sighasher: address, _purity_checker: address,
         # Base interest and base penalty factors
-        _base_interest_factor: decimal, _base_penalty_factor: decimal):
+        _base_interest_factor: decimal, _base_penalty_factor: decimal,
+        # Min deposit size
+        _min_deposit_size: wei_value):
     # Epoch length
     self.epoch_length = _epoch_length
     # Delay in epochs for withdrawing
@@ -143,6 +148,8 @@ def __init__(  # Epoch length, delay in epochs for withdrawing
     self.base_interest_factor = _base_interest_factor
     self.base_penalty_factor = _base_penalty_factor
     self.vote_log_topic = sha3("vote()")
+    # Constants that affect the min deposit size
+    self.min_deposit_size = _min_deposit_size
 
 # ***** Constants *****
 @public
@@ -279,6 +286,7 @@ def deposit(validation_addr: address, withdrawal_addr: address):
     assert self.current_epoch == block.number / self.epoch_length
     assert extract32(raw_call(self.purity_checker, concat('\xa1\x90>\xab', as_bytes32(validation_addr)), gas=500000, outsize=32), 0) != as_bytes32(0)
     assert not self.validator_indexes[withdrawal_addr]
+    assert msg.value >= self.min_deposit_size
     self.validators[self.nextValidatorIndex] = {
         deposit: msg.value / self.deposit_scale_factor[self.current_epoch],
         start_dynasty: self.dynasty + 2,
