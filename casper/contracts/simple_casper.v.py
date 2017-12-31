@@ -312,7 +312,7 @@ def logout(logout_msg: bytes <= 1024):
     validator_index = values[0]
     epoch = values[1]
     sig = values[2]
-    assert self.current_epoch == epoch
+    assert self.current_epoch >= epoch
     # Signature check
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=500000, outsize=32), 0) == as_bytes32(1)
     # Check that we haven't already withdrawn
