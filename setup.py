@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from setuptools import setup
+from setuptools import setup, find_packages
 from setuptools.command.test import test as TestCommand
 
 
@@ -19,22 +19,11 @@ class PyTest(TestCommand):
         errno = pytest.main(self.test_args)
         raise SystemExit(errno)
 
-
-INSTALL_REQUIRES_REPLACEMENTS = {}
-INSTALL_REQUIRES = list()
-with open('requirements.txt') as requirements_file:
-    for requirement in requirements_file:
-        # install_requires will break on git URLs, so skip them
-        if 'git+' in requirement:
-            continue
-        dependency = INSTALL_REQUIRES_REPLACEMENTS.get(
-            requirement.strip(),
-            requirement.strip(),
-        )
-
-        INSTALL_REQUIRES.append(dependency)
-
-INSTALL_REQUIRES = list(set(INSTALL_REQUIRES))
+install_requires = set(x.strip() for x in open('requirements.txt'))
+install_requires_replacements = {
+    'git+https://github.com/ethereum/pyethereum.git@state_revamp': 'ethereum',
+}
+install_requires = [install_requires_replacements.get(r, r) for r in install_requires]
 
 # *IMPORTANT*: Don't manually change the version here. Use the 'bumpversion' utility.
 # see: https://github.com/ethereum/pyethapp/wiki/Development:-Versions-and-Releases
@@ -47,9 +36,7 @@ setup(
     author='Ethereum Foundation',
     author_email='info@ethereum.org',
     url='https://github.com/ethereum/casper',
-    packages=[
-        'casper',
-    ],
+    packages=['casper'],
     package_data={},
     license='MIT',
     zip_safe=False,
@@ -67,10 +54,9 @@ setup(
         'Programming Language :: Python :: 2.7',
     ],
     cmdclass={'test': PyTest},
-    install_requires=INSTALL_REQUIRES,
+    install_requires=install_requires,
     tests_require=[],
-    entry_points='''
-    [console_scripts]
-    casper=casper.daemon.app:app
-    '''
+    entry_points={
+    'console_scripts':['casper-daemon=casper.daemon.app:app']
+    }
 )
