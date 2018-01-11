@@ -144,7 +144,7 @@ def __init__(  # Epoch length, delay in epochs for withdrawing
     # Constants that affect interest rates and penalties
     self.base_interest_factor = _base_interest_factor
     self.base_penalty_factor = _base_penalty_factor
-    self.vote_log_topic = sha3("submit_vote()")
+    self.vote_log_topic = sha3("vote()")
 
 # ***** Constants *****
 @public
@@ -440,7 +440,7 @@ def record_vote(validator_index: num,
 # Process a vote message
 # TODO: Revise everything that calls it.
 @public
-def submit_vote(vote_msg: bytes <= 1024):
+def vote(vote_msg: bytes <= 1024):
     # Extract parameters
     values = RLPList(vote_msg, [num, bytes32, num, num, bytes])
     validator_index = values[0]
