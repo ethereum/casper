@@ -112,13 +112,18 @@ base_penalty_factor: public(decimal)
 # Log topic for vote
 vote_log_topic: bytes32
 
+# Minimum deposit size if no one else is validating
+min_deposit_size: wei_value
+
 @public
 def __init__(  # Epoch length, delay in epochs for withdrawing
         _epoch_length: num, _withdrawal_delay: num,
         # Owner (backdoor), sig hash calculator, purity checker
         _owner: address, _sighasher: address, _purity_checker: address,
         # Base interest and base penalty factors
-        _base_interest_factor: decimal, _base_penalty_factor: decimal):
+        _base_interest_factor: decimal, _base_penalty_factor: decimal,
+        # Min deposit size
+        _min_deposit_size: wei_value):
     # Epoch length
     self.epoch_length = _epoch_length
     # Delay in epochs for withdrawing
@@ -145,6 +150,8 @@ def __init__(  # Epoch length, delay in epochs for withdrawing
     self.base_interest_factor = _base_interest_factor
     self.base_penalty_factor = _base_penalty_factor
     self.vote_log_topic = sha3("vote()")
+    # Constants that affect the min deposit size
+    self.min_deposit_size = _min_deposit_size
 
 # ***** Constants *****
 @public
@@ -210,11 +217,11 @@ def get_esf() -> num:
     epoch = self.current_epoch
     return epoch - self.last_finalized_epoch
 
-# This is a collective reward factor for high-voting levels.
+# Returns the current collective reward factor, which rewards the dynasty for high-voting levels.
 @private
 def get_collective_reward() -> decimal:
     epoch = self.current_epoch
-    live = self.get_esf(epoch) <= 2
+    live = self.get_esf() <= 2
     if not self.deposit_exists() or not live:
         return 0.0
     # Fraction that voted
@@ -249,7 +256,8 @@ def insta_finalize():
 
 # Compute square root factor
 @private
-def get_sqrt_of_total_deposits(epoch: num) -> decimal:
+def get_sqrt_of_total_deposits() -> decimal:
+    epoch = self.current_epoch
     ether_deposited_as_number = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) *
                                       self.deposit_scale_factor[epoch - 1] / as_wei_value(1, ether)) + 1
     sqrt = ether_deposited_as_number / 2.0
@@ -275,7 +283,7 @@ def initialize_epoch(epoch: num):
 
     if self.deposit_exists():
         # Set the reward factor for the next epoch.
-        adj_interest_base = self.base_interest_factor / self.get_sqrt_of_total_deposits(epoch)  # TODO: sqrt is based on previous epoch starting deposit
+        adj_interest_base = self.base_interest_factor / self.get_sqrt_of_total_deposits()  # TODO: sqrt is based on previous epoch starting deposit
         self.reward_factor = adj_interest_base + self.base_penalty_factor * self.get_esf()  # TODO: might not be bpf. clarify is positive?
         # ESF is only thing that is changing and reward_factor is being used above.
         assert self.reward_factor > 0
@@ -285,6 +293,7 @@ def initialize_epoch(epoch: num):
 
     # Increment the dynasty if finalized
     self.increment_dynasty()
+
     # Store checkpoint hash for easy access
     self.checkpoint_hashes[epoch] = self.get_recommended_target_hash()
 
@@ -295,6 +304,7 @@ def deposit(validation_addr: address, withdrawal_addr: address):
     assert self.current_epoch == block.number / self.epoch_length
     assert extract32(raw_call(self.purity_checker, concat('\xa1\x90>\xab', as_bytes32(validation_addr)), gas=500000, outsize=32), 0) != as_bytes32(0)
     assert not self.validator_indexes[withdrawal_addr]
+    assert msg.value >= self.min_deposit_size
     self.validators[self.nextValidatorIndex] = {
         deposit: msg.value / self.deposit_scale_factor[self.current_epoch],
         start_dynasty: self.dynasty + 2,
@@ -320,7 +330,7 @@ def logout(logout_msg: bytes <= 1024):
     validator_index = values[0]
     epoch = values[1]
     sig = values[2]
-    assert self.current_epoch == epoch
+    assert self.current_epoch >= epoch
     # Signature check
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=500000, outsize=32), 0) == as_bytes32(1)
     # Check that we haven't already withdrawn
