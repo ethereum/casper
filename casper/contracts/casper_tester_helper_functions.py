@@ -1,16 +1,18 @@
+import os
+import rlp
 from viper import compiler
 from ethereum.transactions import Transaction
 from ethereum import utils
 from ethereum.tools.tester import a0
 from ethereum.abi import ContractTranslator
-import rlp
+
 
 gasprice = 25 * 10**9
 
 casper_config = {
-    "epoch_length": 5, # 5 blocks
-    "withdrawal_delay": 100, # 100 epochs
-    "owner": utils.checksum_encode(a0), # Backdoor address
+    "epoch_length": 5,                      # 5 blocks
+    "withdrawal_delay": 100,                # 100 epochs
+    "owner": utils.checksum_encode(a0),     # Backdoor address
     "base_interest_factor": 0.02,
     "base_penalty_factor": 0.002
 }
@@ -26,12 +28,18 @@ purity_checker_abi = [{'name': 'check(address)', 'type': 'function', 'constant':
 viper_rlp_decoder_address = viper_rlp_decoder_tx.creates
 sig_hasher_address = sig_hasher_tx.creates
 
-casper_code = open('simple_casper.v.py').read()
+# casper contract
+contract_path = os.path.join(os.path.dirname(__file__), 'simple_casper.v.py')
+casper_code = open(contract_path).read()
 casper_bytecode = compiler.compile(casper_code)
 casper_abi = compiler.mk_full_signature(casper_code)
 casper_ct = ContractTranslator(casper_abi)
 
-def custom_chain(tester, alloc={}, genesis_gas_limit=4712388, min_gas_limit=5000, startgas=3141592):
+
+def custom_chain(tester, alloc={},
+                 genesis_gas_limit=4712388,
+                 min_gas_limit=5000,
+                 startgas=3141592):
     # alloc
     for i in range(9):
         alloc[utils.int_to_addr(i)] = {'balance': 1}
@@ -51,33 +59,55 @@ def custom_chain(tester, alloc={}, genesis_gas_limit=4712388, min_gas_limit=5000
     c.mine(1)
     return c
 
+
 def mk_initializers(config, sender_privkey, starting_nonce=0):
     o = []
     nonce = starting_nonce
-    # Create transactions for instantiating RLP decoder, sig hasher and purity checker, plus transactions for feeding the
-    # one-time accounts that generate those transactions
+    # Create transactions for instantiating RLP decoder, sig hasher and
+    # purity checker, plus transactions for feeding the one-time accounts
+    # that generate those transactions
     for tx in (viper_rlp_decoder_tx, sig_hasher_tx, purity_checker_tx):
-        o.append(Transaction(nonce, gasprice, 90000, tx.sender, tx.startgas * tx.gasprice + tx.value, '').sign(sender_privkey))
+        o.append(
+            Transaction(
+                nonce, gasprice, 90000, tx.sender,
+                tx.startgas * tx.gasprice + tx.value, ''
+            ).sign(sender_privkey)
+        )
         o.append(tx)
         nonce += 1
     # Casper initialization transaction
-    casper_tx = Transaction(nonce, gasprice, 5000000, b'', 0, casper_bytecode).sign(sender_privkey)
+    casper_tx = Transaction(
+        nonce, gasprice, 5000000, b'', 0, casper_bytecode).sign(sender_privkey)
     # Casper initiate call (separate from initialization to save gas)
     initiate_args = casper_ct.encode('initiate', [
-        config["epoch_length"], config["withdrawal_delay"], config["owner"], sig_hasher_address,
-        purity_checker_address, config["base_interest_factor"], config["base_penalty_factor"]
+        config["epoch_length"],
+        config["withdrawal_delay"],
+        config["owner"],
+        sig_hasher_address,
+        purity_checker_address,
+        config["base_interest_factor"],
+        config["base_penalty_factor"],
     ])
-    casper_initiate_tx = Transaction(nonce + 1, gasprice, 1000000, casper_tx.creates, 0, initiate_args).sign(sender_privkey)
+    casper_initiate_tx = Transaction(
+        nonce + 1, gasprice, 1000000, casper_tx.creates, 0, initiate_args
+    ).sign(sender_privkey)
     # Return list of transactions and Casper address
     return o + [casper_tx, casper_initiate_tx], casper_tx.creates
 
+
 def new_epoch(chain, casper, epoch_length):
     current_epoch = casper.get_current_epoch()
-    chain.mine(epoch_length * (current_epoch + 1) - chain.head_state.block_number)
+    chain.mine(
+        epoch_length * (current_epoch + 1) - chain.head_state.block_number)
     casper.initialize_epoch(current_epoch + 1)
     current_epoch += 1
-    print("Epoch %d initialized with %d validators" % (current_epoch, casper.get_nextValidatorIndex()))
+    print("Epoch %d initialized with %d validators" % (
+            current_epoch, casper.get_nextValidatorIndex()))
     print("Resize factor: %.8f" % (casper.get_latest_resize_factor()))
-    print("Penalty factor in epoch %d: %.8f" % (current_epoch, casper.get_current_penalty_factor()))
-    return casper.get_dynasty(), casper.get_current_epoch(), \
-            casper.get_recommended_ancestry_hash(), casper.get_recommended_source_epoch(), casper.get_recommended_source_ancestry_hash()
+    print("Penalty factor in epoch %d: %.8f" % (
+            current_epoch, casper.get_current_penalty_factor()))
+    return (casper.get_dynasty(),
+            casper.get_current_epoch(),
+            casper.get_recommended_ancestry_hash(),
+            casper.get_recommended_source_epoch(),
+            casper.get_recommended_source_ancestry_hash())
