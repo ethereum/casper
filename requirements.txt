@@ -8,3 +8,4 @@ git+https://github.com/ethereum/pyethereum.git@state_revamp
 web3>=3.8.0
 pytest==3.4.0
 viper==0.0.3
+ethereum-serpent==2.0.4
