@@ -3,3 +3,6 @@
 *.pyc
 *.egg-info
 data*
+build/
+dist/
+venv/
