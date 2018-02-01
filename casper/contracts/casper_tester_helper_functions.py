@@ -61,15 +61,18 @@ def mk_initializers(config, sender_privkey, starting_nonce=0):
         o.append(tx)
         nonce += 1
     # Casper initialization transaction
-    casper_tx = Transaction(nonce, gasprice, 5000000, b'', 0, casper_bytecode).sign(sender_privkey)
+
     # Casper initiate call (separate from initialization to save gas)
-    initiate_args = casper_ct.encode('initiate', [
+    init_args = casper_ct.encode_constructor_arguments([
         config["epoch_length"], config["withdrawal_delay"], config["owner"], sig_hasher_address,
         purity_checker_address, config["base_interest_factor"], config["base_penalty_factor"]
     ])
-    casper_initiate_tx = Transaction(nonce + 1, gasprice, 1000000, casper_tx.creates, 0, initiate_args).sign(sender_privkey)
+
+    deploy_code = casper_bytecode + (init_args)
+    casper_tx = Transaction(nonce, gasprice, 5000000, b'', 0, deploy_code).sign(sender_privkey)
+    # casper_initiate_tx = Transaction(nonce + 1, gasprice, 1000000, casper_tx.creates, 0, initiate_args).sign(sender_privkey)
     # Return list of transactions and Casper address
-    return o + [casper_tx, casper_initiate_tx], casper_tx.creates
+    return o + [casper_tx], casper_tx.creates
 
 def new_epoch(chain, casper, epoch_length):
     current_epoch = casper.get_current_epoch()

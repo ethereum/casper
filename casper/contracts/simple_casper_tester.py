@@ -40,6 +40,8 @@ assert utils.big_endian_to_int(s.tx(t.k0, purity_checker_address, 0, ct.encode('
 casper = t.ABIContract(s, casper_abi, casper_address)
 s.mine(1)
 
+print("Casper Contract deployed at: %s" % (casper_address))
+
 # Helper functions for making a prepare, commit, login and logout message
 
 def mk_prepare(validator_index, epoch, ancestry_hash, source_epoch, source_ancestry_hash, key):
