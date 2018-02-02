@@ -1,5 +1,5 @@
 from gevent.event import Event
-from web3 import Web3, KeepAliveRPCProvider
+from web3 import Web3, HTTPProvider
 from ethereum import slogging
 
 from devp2p.service import BaseService
@@ -25,10 +25,9 @@ class ChainService(BaseService):
         super(ChainService, self).__init__(app)
 
         if self.app.config['chain']['provider'] == 'jsonrpc':
-            self.web3 = Web3(KeepAliveRPCProvider(
-                host=self.app.config['chain']['jsonrpc']['host'],
-                port=self.app.config['chain']['jsonrpc']['port']
-            ))
+            url = "{}:{}".format(
+                self.app.config['chain']['jsonrpc']['host'], self.app.config['chain']['jsonrpc']['port'])
+            self.web3 = Web3(HTTPProvider(url))
         else:
             raise ValueError("unsupported chain provider %s" %
                              self.app.config['chain']['provider'])

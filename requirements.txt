@@ -6,3 +6,4 @@ rlp>=0.4.4
 devp2p>=0.8.0
 git+https://github.com/ethereum/pyethereum.git@state_revamp
 web3>=3.8.0
+gipc==0.6.0
