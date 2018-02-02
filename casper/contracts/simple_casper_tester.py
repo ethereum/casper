@@ -1,9 +1,10 @@
 from ethereum.tools import tester as t
 from ethereum import utils, common, transactions, abi
 from casper_tester_helper_functions import mk_initializers, casper_config, new_epoch, custom_chain, \
-    viper_rlp_decoder_address, sig_hasher_address, purity_checker_address, casper_abi, purity_checker_abi, \
-    mk_vote
+    viper_rlp_decoder_address, sig_hasher_address, purity_checker_address, purity_checker_abi, \
+    mk_vote, deploy_test_rlp
 from viper import compiler
+from viper import utils as viper_utils
 import serpent
 from ethereum.slogging import LogRecorder, configure_logging, set_level
 config_string = ':info,eth.vm.log:trace,eth.vm.op:trace,eth.vm.stack:trace,eth.vm.exit:trace,eth.pb.msg:trace,eth.pb.tx:debug'
@@ -11,7 +12,6 @@ config_string = ':info,eth.vm.log:trace,eth.vm.op:trace,eth.vm.stack:trace,eth.v
 import rlp
 alloc = {}
 alloc[t.a0] = {'balance': 100000 * utils.denoms.ether}
-# alloc[t.a1] = {'balance': 10**22}
 s = custom_chain(t, alloc, 9999999, 4707787, 2000000)
 
 EPOCH_LENGTH = casper_config["epoch_length"]
@@ -28,22 +28,27 @@ def mk_validation_code(address):
 
 
 # Install Casper, RLP decoder, purity checker, sighasher
-init_txs, casper_address = mk_initializers(casper_config, t.k0)
-for tx in init_txs:
-    if s.head_state.gas_used + tx.startgas > s.head_state.gas_limit:
-        s.mine(1)
-    s.direct_tx(tx)
+casper_address, casper_abi = mk_initializers(casper_config, s, t.k0)
 
 ct = abi.ContractTranslator(purity_checker_abi)
 # Check that the RLP decoding library and the sig hashing library are "pure"
 assert utils.big_endian_to_int(s.tx(t.k0, purity_checker_address, 0, ct.encode('submit', [viper_rlp_decoder_address]))) == 1
 assert utils.big_endian_to_int(s.tx(t.k0, purity_checker_address, 0, ct.encode('submit', [sig_hasher_address]))) == 1
+print("Sig hasher deployed at %s" % sig_hasher_address)
 
 
 casper = t.ABIContract(s, casper_abi, casper_address)
 s.mine(1)
 
+print(viper_rlp_decoder_address)
+print(viper_utils.RLP_DECODER_ADDRESS)
+assert viper_utils.bytes_to_int(viper_rlp_decoder_address) == viper_utils.RLP_DECODER_ADDRESS
+
 print("Casper Contract deployed at: %s" % (casper_address))
+
+rlp_abi, rlp_addr = deploy_test_rlp(s, t.k0)
+rlp = t.ABIContract(s, rlp_abi, rlp_addr)
+print("CHECK RLP SHOULD EQUAL 4: %s" %rlp.fos())
 
 # Helper functions for making a prepare, commit, login and logout message
 
@@ -74,32 +79,44 @@ def induct_validator(casper, key, value):
 
 print("Starting tests")
 # Initialize the first epoch
-current_dyn, _e, _se, _th = new_epoch(s, casper, EPOCH_LENGTH)
+current_dyn, _th, _te, _se = new_epoch(s, casper, EPOCH_LENGTH)
 assert casper.nextValidatorIndex() == 1
 assert casper.current_epoch() == 1
 print("Epoch initialized")
 
 # Deposit one validator
-induct_validator(casper, t.k1, 2000 * 10**18)
+VAL_1_DEPOSIT_SIZE = 2000 * 10**18
+induct_validator(casper, t.k1, VAL_1_DEPOSIT_SIZE)
 # Mine two epochs
-current_dyn, _e, _se, _th = new_epoch(s, casper, EPOCH_LENGTH)
-current_dyn, _e, _se, _th = new_epoch(s, casper, EPOCH_LENGTH)
-assert casper.get_total_curdyn_deposits() == 2000 * 10**18
+current_dyn, _th, _te, _se = new_epoch(s, casper, EPOCH_LENGTH)
+current_dyn, _th, _te, _se = new_epoch(s, casper, EPOCH_LENGTH)
+assert casper.get_total_curdyn_deposits() == VAL_1_DEPOSIT_SIZE
 assert casper.get_total_prevdyn_deposits() == 0
 
 print("target_hash: %s" % _th)
-print("target_epoch: %s" % _e)
-print("source_epuch: %s" % _se)
+print("target_epoch: %s" % _te)
+print("source_epoch: %s" % _se)
 print("current_dyn: %s" % current_dyn)
+print(_th)
+print(casper.get_recommended_target_hash())
 # Send a vote
+print("attempting to vote...")
 print('pre deposit', casper.get_deposit_size(1), casper.get_total_curdyn_deposits())
 assert casper.get_deposit_size(1) == casper.get_total_curdyn_deposits()
-casper.vote(mk_vote(1, _th, _e, _se, t.k1))
+
+# print(mk_vote(1, _th, _te, _se, t.k1))
+# print(casper.test_vote(mk_vote(1, _th, _te, _se, t.k1)))
+
+casper.vote(mk_vote(1, _th, _te, _se, t.k1))
 print('Gas consumed for a vote: %d' % s.last_gas_used(with_tx=True))
-sourcing_hash = utils.sha3(utils.encode_int32(_e) + _a + utils.encode_int32(_se) + _sa)
-assert casper.get_consensus_messages__ancestry_hash_justified(_e, _a)
-assert casper.get_main_hash_justified()
-print("Prepare message processed")
+print(casper.votes__cur_dyn_votes(_te, _se))
+print(casper.votes__is_justified(_te))
+
+assert casper.votes__cur_dyn_votes(_te, _se) == VAL_1_DEPOSIT_SIZE / casper.deposit_scale_factor(_te)
+assert casper.votes__is_justified(_te)
+assert casper.main_hash_justified()
+
+print("Vote message processed")
 try:
     casper.prepare(mk_prepare(0, 1, '\x35' * 32, '\x00' * 32, 0, '\x00' * 32, t.k0))
     success = True

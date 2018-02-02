@@ -368,6 +368,32 @@ def proc_reward(validator_index: num, reward: num(wei/m)):
         self.second_next_dynasty_wei_delta -= reward
     send(block.coinbase, floor(reward * self.deposit_scale_factor[self.current_epoch] / 8))
 
+@public
+def fot() -> num:
+    x = RLPList('\xc5\x83cow\x04', [bytes, num])
+    return x[1]
+
+@public
+def test_vote(vote_msg: bytes <= 1024) -> num:
+    # Get hash for signature, and implicitly assert that it is an RLP list
+    # consisting solely of RLP elements
+    sighash: bytes32 = extract32(raw_call(self.sighasher, vote_msg, gas=200000, outsize=32), 0)
+    # Extract parameters
+    # values = RLPList(vote_msg, [num, num, num])
+    x = RLPList('\xc5\x83cow\x03', [bytes, num])
+
+    # values = RLPList('\x05', [num])
+
+    # validator_index: num = values[0]
+    # return validator_index
+    return x[1]
+    # target_hash: bytes32 = values[1]
+    # target_epoch: num = values[2]
+    # source_epoch: num = values[3]
+    # sig: bytes <= 1024 = values[4]
+    # Check the signature
+    # assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=500000, outsize=32), 0) == as_bytes32(1)
+
 # Process a vote message
 @public
 def vote(vote_msg: bytes <= 1024):
