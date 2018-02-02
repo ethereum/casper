@@ -12,7 +12,8 @@ casper_config = {
     "withdrawal_delay": 100, # 100 epochs
     "owner": utils.checksum_encode(a0), # Backdoor address
     "base_interest_factor": 0.02,
-    "base_penalty_factor": 0.002
+    "base_penalty_factor": 0.002,
+    "min_deposit_size": 1000 * 10**18
 }
 
 viper_rlp_decoder_tx = rlp.hex_decode("0xf90237808506fc23ac00830330888080b902246102128061000e60003961022056600060007f010000000000000000000000000000000000000000000000000000000000000060003504600060c082121515585760f882121561004d5760bf820336141558576001905061006e565b600181013560f783036020035260005160f6830301361415585760f6820390505b5b368112156101c2577f010000000000000000000000000000000000000000000000000000000000000081350483602086026040015260018501945060808112156100d55760018461044001526001828561046001376001820191506021840193506101bc565b60b881121561014357608081038461044001526080810360018301856104600137608181141561012e5760807f010000000000000000000000000000000000000000000000000000000000000060018401350412151558575b607f81038201915060608103840193506101bb565b60c08112156101b857600182013560b782036020035260005160388112157f010000000000000000000000000000000000000000000000000000000000000060018501350402155857808561044001528060b6838501038661046001378060b6830301830192506020810185019450506101ba565bfe5b5b5b5061006f565b601f841315155857602060208502016020810391505b6000821215156101fc578082604001510182826104400301526020820391506101d8565b808401610420528381018161044003f350505050505b6000f31b2d4f", Transaction)
@@ -30,6 +31,7 @@ casper_code = open('simple_casper.v.py').read()
 casper_bytecode = compiler.compile(casper_code)
 casper_abi = compiler.mk_full_signature(casper_code)
 casper_ct = ContractTranslator(casper_abi)
+print(casper_abi)
 
 def custom_chain(tester, alloc={}, genesis_gas_limit=4712388, min_gas_limit=5000, startgas=3141592):
     # alloc
@@ -65,7 +67,8 @@ def mk_initializers(config, sender_privkey, starting_nonce=0):
     # Casper initiate call (separate from initialization to save gas)
     init_args = casper_ct.encode_constructor_arguments([
         config["epoch_length"], config["withdrawal_delay"], config["owner"], sig_hasher_address,
-        purity_checker_address, config["base_interest_factor"], config["base_penalty_factor"]
+        purity_checker_address, config["base_interest_factor"], config["base_penalty_factor"],
+        config["min_deposit_size"]
     ])
 
     deploy_code = casper_bytecode + (init_args)
@@ -75,12 +78,29 @@ def mk_initializers(config, sender_privkey, starting_nonce=0):
     return o + [casper_tx], casper_tx.creates
 
 def new_epoch(chain, casper, epoch_length):
-    current_epoch = casper.get_current_epoch()
+    current_epoch = casper.current_epoch()
     chain.mine(epoch_length * (current_epoch + 1) - chain.head_state.block_number)
     casper.initialize_epoch(current_epoch + 1)
     current_epoch += 1
-    print("Epoch %d initialized with %d validators" % (current_epoch, casper.get_nextValidatorIndex()))
-    print("Resize factor: %.8f" % (casper.get_latest_resize_factor()))
-    print("Penalty factor in epoch %d: %.8f" % (current_epoch, casper.get_current_penalty_factor()))
-    return casper.get_dynasty(), casper.get_current_epoch(), \
-            casper.get_recommended_ancestry_hash(), casper.get_recommended_source_epoch(), casper.get_recommended_source_ancestry_hash()
+    print("Epoch %d initialized with %d validators" % (current_epoch, casper.nextValidatorIndex() - 1))
+    print("NonVoter Rescale: %.8f" % (casper.last_nonvoter_rescale()))
+    print("Voter Rescale: %.8f" % (casper.last_voter_rescale()))
+    print("Reward factor in epoch %d: %.8f" % (current_epoch, casper.reward_factor()))
+    return casper.dynasty(), casper.current_epoch(), \
+           casper.get_recommended_source_epoch(), casper.get_recommended_target_hash()
+
+
+def mk_vote(validator_index, target_hash, target_epoch, source_epoch, key):
+    sighash = utils.sha3(rlp.encode([validator_index, target_hash, target_epoch, source_epoch]))
+    v, r, s = utils.ecdsa_raw_sign(sighash, key)
+    sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
+    return rlp.encode([validator_index, target_hash, target_epoch, source_epoch, sig])
+
+
+def mk_prepare(validator_index, epoch, ancestry_hash, source_epoch, source_ancestry_hash, key):
+    sighash = utils.sha3(rlp.encode([validator_index, epoch, ancestry_hash, source_epoch, source_ancestry_hash]))
+    v, r, s = utils.ecdsa_raw_sign(sighash, key)
+    sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
+    return rlp.encode([validator_index, epoch, ancestry_hash, source_epoch, source_ancestry_hash, sig])
+
+
