@@ -82,6 +82,9 @@ def app(ctx, log_config, log_file, data_dir, unlock, password):
                 'listen_port': 20170,
                 'max_peers': 4,
                 'min_peers': 4
+            },
+            'db': {
+                'data_dir': data_dir
             }
         },
         'unlock': unlock,
@@ -185,7 +188,7 @@ def new_account(ctx, uuid):
         password = click.prompt('Password to encrypt private key', default='', hide_input=True,
                                 confirmation_prompt=True, show_default=False)
     account = Account.new(password, uuid=id_)
-    account.path = os.path.join(app.services.accounts.keystore_dir, account.address.encode('hex'))
+    account.path = os.path.join(app.services.accounts.keystore_dir, encode_hex(account.address))
     try:
         app.services.accounts.add_account(account)
     except IOError:
@@ -194,7 +197,7 @@ def new_account(ctx, uuid):
         sys.exit(1)
     else:
         click.echo('Account creation successful')
-        click.echo('  Address: ' + account.address.encode('hex'))
+        click.echo('  Address: ' + encode_hex(account.address))
         click.echo('       Id: ' + str(account.uuid))
 
 
@@ -218,7 +221,7 @@ def list_accounts(ctx):
                                                                  locked='Locked'))
         for i, account in enumerate(accounts):
             click.echo(fmt.format(i='#' + str(i + 1),
-                                  address=(account.address or '').encode('hex'),
+                                  address=encode_hex(account.address or ''),
                                   id=account.uuid or '',
                                   locked='yes' if account.locked else 'no'))
 
@@ -253,7 +256,7 @@ def import_account(ctx, f, uuid):
         password = click.prompt('Password to encrypt private key', default='', hide_input=True,
                                 confirmation_prompt=True, show_default=False)
     account = Account.new(password, privkey, uuid=id_)
-    account.path = os.path.join(app.services.accounts.keystore_dir, account.address.encode('hex'))
+    account.path = os.path.join(app.services.accounts.keystore_dir, encode_hex(account.address))
     try:
         app.services.accounts.add_account(account)
     except IOError:

@@ -25,7 +25,7 @@ class ChainService(BaseService):
         super(ChainService, self).__init__(app)
 
         if self.app.config['chain']['provider'] == 'jsonrpc':
-            url = "{}:{}".format(
+            url = "http://{}:{}".format(
                 self.app.config['chain']['jsonrpc']['host'], self.app.config['chain']['jsonrpc']['port'])
             self.web3 = Web3(HTTPProvider(url))
         else:

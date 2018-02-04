@@ -4,6 +4,7 @@ from ethereum.db import BaseDB
 from gevent.event import Event
 import leveldb
 from ethereum import slogging
+from ethereum.utils import encode_hex, decode_hex
 
 slogging.set_level('db', 'debug')
 log = slogging.get_logger('db')
@@ -79,19 +80,19 @@ class LevelDB(BaseDB):
         self.db = leveldb.LevelDB(self.dbfile)
 
     def get(self, key):
-        log.trace('getting entry', key=key.encode('hex')[:8])
+        log.trace('getting entry', key=encode_hex(key)[:8])
         if key in self.uncommitted:
             if self.uncommitted[key] is None:
                 raise KeyError("key not in db")
             log.trace('from uncommitted')
             return self.uncommitted[key]
         log.trace('from db')
-        o = decompress(self.db.Get(key))
+        o = decompress(self.db.Get(key.encode()))
         self.uncommitted[key] = o
         return o
 
     def put(self, key, value):
-        log.trace('putting entry', key=key.encode('hex')[:8], len=len(value))
+        log.trace('putting entry', key=encode_hex(key)[:8], len=len(value))
         self.uncommitted[key] = value
 
     def commit(self):
@@ -99,9 +100,9 @@ class LevelDB(BaseDB):
         batch = leveldb.WriteBatch()
         for k, v in self.uncommitted.items():
             if v is None:
-                batch.Delete(k)
+                batch.Delete(k.encode())
             else:
-                batch.Put(k, compress(v))
+                batch.Put(k.encode(), compress(v.encode()))
         self.db.Write(batch, sync=False)
         self.uncommitted.clear()
         log.debug('committed', db=self, num=len(self.uncommitted))

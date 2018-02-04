@@ -231,7 +231,7 @@ class AccountsService(BaseService):
         super(AccountsService, self).__init__(app)
         self.keystore_dir = app.config['accounts']['keystore_dir']
         if not os.path.isabs(self.keystore_dir):
-            self.keystore_dir = os.path.abspath(os.path.join(app.config['data_dir'],
+            self.keystore_dir = os.path.abspath(os.path.join(app.config['node']['data_dir'],
                                                              self.keystore_dir))
         assert os.path.isabs(self.keystore_dir)
         self.accounts = []
