@@ -3,7 +3,6 @@ from ethereum import utils, common, transactions, abi
 from casper_tester_helper_functions import mk_initializers, casper_config, new_epoch, custom_chain, \
     viper_rlp_decoder_address, sig_hasher_address, purity_checker_address, casper_abi, purity_checker_abi
 from viper import compiler
-import serpent
 from ethereum.slogging import LogRecorder, configure_logging, set_level
 config_string = ':info,eth.vm.log:trace,eth.vm.op:trace,eth.vm.stack:trace,eth.vm.exit:trace,eth.pb.msg:trace,eth.pb.tx:debug'
 #configure_logging(config_string=config_string)
@@ -15,14 +14,15 @@ s = custom_chain(t, alloc, 9999999, 4707787, 2000000)
 
 EPOCH_LENGTH = casper_config["epoch_length"]
 
-code_template = """
-~calldatacopy(0, 0, 128)
-~call(3000, 1, 0, 0, 128, 0, 32)
-return(~mload(0) == %s)
-"""
 
 def mk_validation_code(address):
-    return serpent.compile(code_template % (utils.checksum_encode(address)))
+    # The precompiled bytecode of the validation code which
+    # verifies EC signatures
+    validation_code_bytecode = b"a\x009\x80a\x00\x0e`\x009a\x00GV`\x80`\x00`\x007` "
+    validation_code_bytecode += b"`\x00`\x80`\x00`\x00`\x01a\x0b\xb8\xf1Ps"
+    validation_code_bytecode += address
+    validation_code_bytecode += b"`\x00Q\x14` R` ` \xf3[`\x00\xf3"
+    return validation_code_bytecode
 
 # Install Casper, RLP decoder, purity checker, sighasher
 init_txs, casper_address = mk_initializers(casper_config, t.k0)

@@ -43,12 +43,13 @@ dynasty_start_epoch: public(num[num])
 # Mapping of epoch to what dynasty it is
 dynasty_in_epoch: public(num[num])
 
-# Information for use in processing cryptoeconomic commitments
-votes: public({
+# TODO: Does renaming this to `checkpoints` from `votes` break any dependencies?
+# Information about the checkpoints
+checkpoints: public({
     # How many votes are there for this source epoch from the current dynasty
-    cur_dyn_votes: decimal(wei / m)[num],
+    cur_dyn_vote_amount: decimal(wei / m)[num],
     # From the previous dynasty
-    prev_dyn_votes: decimal(wei / m)[num],
+    prev_dyn_vote_amount: decimal(wei / m)[num],
     # Bitmap of which validator IDs have already voted
     vote_bitmap: num256[num][bytes32],
     # Is a vote referencing the given epoch justified?
@@ -58,6 +59,7 @@ votes: public({
 }[num])  # index: target epoch
 
 # Is the current expected hash justified
+# TODO: do we need `main_hash_finalized`?
 main_hash_justified: public(bool)
 
 # Value used to calculate the per-epoch fee that validators should be charged
@@ -140,7 +142,7 @@ def __init__(  # Epoch length, delay in epochs for withdrawing
     self.sighasher = _sighasher
     # Set the purity checker address
     self.purity_checker = _purity_checker
-    # self.votes[0].committed = True
+    # self.checkpoints[0].committed = True
     # Set initial total deposit counter
     self.total_curdyn_deposits = 0
     self.total_prevdyn_deposits = 0
@@ -155,8 +157,8 @@ def __init__(  # Epoch length, delay in epochs for withdrawing
 @public
 @constant
 def get_main_hash_voted_frac() -> decimal:
-    return min(self.votes[self.current_epoch].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits,
-               self.votes[self.current_epoch].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits)
+    return min(self.checkpoints[self.current_epoch].cur_dyn_vote_amount[self.expected_source_epoch] / self.total_curdyn_deposits,
+               self.checkpoints[self.current_epoch].prev_dyn_vote_amount[self.expected_source_epoch] / self.total_prevdyn_deposits)
 
 @public
 @constant
@@ -182,7 +184,7 @@ def get_recommended_source_epoch() -> num:
 @public
 @constant
 def get_recommended_target_hash() -> bytes32:
-    return blockhash(self.current_epoch*self.epoch_length-1)
+    return blockhash(self.current_epoch * self.epoch_length - 1)
 
 @private
 @constant
@@ -197,7 +199,7 @@ def deposit_exists() -> bool:
 def increment_dynasty():
     epoch = self.current_epoch
     # Increment the dynasty if finalized
-    if self.votes[epoch-2].is_finalized:
+    if self.checkpoints[epoch - 2].is_finalized:
         self.dynasty += 1
         self.total_prevdyn_deposits = self.total_curdyn_deposits
         self.total_curdyn_deposits += self.next_dynasty_wei_delta
@@ -223,17 +225,32 @@ def get_collective_reward() -> decimal:
     if not self.deposit_exists() or not live:
         return 0.0
     # Fraction that voted
-    cur_vote_frac = self.votes[epoch - 1].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits
-    prev_vote_frac = self.votes[epoch - 1].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits
+    cur_vote_frac = self.checkpoints[epoch - 1].cur_dyn_vote_amount[self.expected_source_epoch] / self.total_curdyn_deposits
+    prev_vote_frac = self.checkpoints[epoch - 1].prev_dyn_vote_amount[self.expected_source_epoch] / self.total_prevdyn_deposits
     vote_frac = min(cur_vote_frac, prev_vote_frac)
     return vote_frac * self.reward_factor / 2
 
 @private
+def justify_epoch(e: num):
+    self.checkpoints[e].is_justified = True
+    self.last_justified_epoch = e
+    if e == self.current_epoch:
+        # TODO: might not need this any more.
+        self.main_hash_justified = True
+
+@private
+def finalize_epoch(e: num):
+    self.checkpoints[e].is_finalized = True
+    self.last_finalized_epoch = e
+    # TODO: `main_hash_finalized`?
+
+@private
+# TODO: refactor
 def insta_finalize():
     epoch = self.current_epoch
     self.main_hash_justified = True
-    self.votes[epoch - 1].is_justified = True
-    self.votes[epoch - 1].is_finalized = True
+    self.checkpoints[epoch - 1].is_justified = True
+    self.checkpoints[epoch - 1].is_finalized = True
     self.last_justified_epoch = epoch - 1
     self.last_finalized_epoch = epoch - 1
 
@@ -256,8 +273,7 @@ def initialize_epoch(epoch: num):
     # Check that the epoch actually has started
     computed_current_epoch = block.number / self.epoch_length
     assert epoch <= computed_current_epoch and epoch == self.current_epoch + 1
-
-    # Setup
+    # Set the epoch number (this is the only place it is and should be set).
     self.current_epoch = epoch
 
     # Reward if finalized at least in the last two epochs
@@ -368,12 +384,9 @@ def proc_reward(validator_index: num, reward: num(wei/m)):
         self.second_next_dynasty_wei_delta -= reward
     send(block.coinbase, floor(reward * self.deposit_scale_factor[self.current_epoch] / 8))
 
-# Process a vote message
-@public
-def vote(vote_msg: bytes <= 1024):
-    # Get hash for signature, and implicitly assert that it is an RLP list
-    # consisting solely of RLP elements
-    sighash = extract32(raw_call(self.sighasher, vote_msg, gas=200000, outsize=32), 0)
+# Extract values from vote_msg. Returns tuple.
+@private
+def extract_msg_from_vote(vote_msg: bytes <= 1024) -> (num, bytes32, num, num, bytes32):
     # Extract parameters
     values = RLPList(vote_msg, [num, bytes32, num, num, bytes])
     validator_index = values[0]
@@ -381,60 +394,94 @@ def vote(vote_msg: bytes <= 1024):
     target_epoch = values[2]
     source_epoch = values[3]
     sig = values[4]
+    sig32 = extract32(sig, 0)
+    return validator_index, target_hash, target_epoch, source_epoch, sig32
+
+# Check the conditions for valid vote are met.
+@private
+# TODO: Viper tuples as a param or struct support?
+def check_valid_vote(validator_index: num,
+                     target_hash: bytes32,
+                     target_epoch: num,
+                     source_epoch: num,
+                     sig: bytes <= 1024,
+                     vote_msg: bytes <= 1024):
+    # Get hash for signature, and implicitly assert that it is an RLP list consisting solely of RLP elements
+    sighash = extract32(raw_call(self.sighasher, vote_msg, gas=200000, outsize=32), 0)
     # Check the signature
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=500000, outsize=32), 0) == as_bytes32(1)
     # Check that this vote has not yet been made
-    assert not bitwise_and(self.votes[target_epoch].vote_bitmap[target_hash][validator_index / 256],
+    assert not bitwise_and(self.checkpoints[target_epoch].vote_bitmap[target_hash][validator_index / 256],
                            shift(as_num256(1), validator_index % 256))
     # Check that the vote's target hash is correct
     assert target_hash == self.get_recommended_target_hash()
     # Check that the vote source points to a justified epoch
-    assert self.votes[source_epoch].is_justified
+    assert self.checkpoints[source_epoch].is_justified
     # Check that we are at least (epoch length / 4) blocks into the epoch
     # assert block.number % self.epoch_length >= self.epoch_length / 4
-    # Original starting dynasty of the validator; fail if before
+
+@private
+def record_vote(validator_index: num,
+                target_hash: bytes32,
+                target_epoch: num,
+                source_epoch: num,
+                sig: bytes <= 1024):
+    # Record that the validator voted for this target epoch so they can't again
+    self.checkpoints[target_epoch].vote_bitmap[target_hash][validator_index / 256] = \
+        bitwise_or(self.checkpoints[target_epoch].vote_bitmap[target_hash][validator_index / 256],
+                   shift(as_num256(1), validator_index % 256))
+
     start_dynasty = self.validators[validator_index].start_dynasty
-    # Ending dynasty of the current login period
     end_dynasty = self.validators[validator_index].end_dynasty
-    # Dynasty of the vote
     current_dynasty = self.dynasty_in_epoch[target_epoch]
     past_dynasty = current_dynasty - 1
-    in_current_dynasty = ((start_dynasty <= current_dynasty) and (current_dynasty < end_dynasty))
-    in_prev_dynasty = ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty))
-    assert in_current_dynasty or in_prev_dynasty
-    # Record that the validator voted for this target epoch so they can't again
-    self.votes[target_epoch].vote_bitmap[target_hash][validator_index / 256] = \
-        bitwise_or(self.votes[target_epoch].vote_bitmap[target_hash][validator_index / 256],
-                   shift(as_num256(1), validator_index % 256))
+    is_in_current_dynasty = start_dynasty <= current_dynasty and current_dynasty < end_dynasty
+    is_in_prev_dynasty = start_dynasty <= past_dynasty and past_dynasty < end_dynasty
+
+    # Check if in past two dynasties to allow for dynamic validator sets.
+    assert is_in_current_dynasty or is_in_prev_dynasty
+
     # Record that this vote took place
-    current_dynasty_votes = self.votes[target_epoch].cur_dyn_votes[source_epoch]
-    previous_dynasty_votes = self.votes[target_epoch].prev_dyn_votes[source_epoch]
-    if in_current_dynasty:
-        current_dynasty_votes += self.validators[validator_index].deposit
-        self.votes[target_epoch].cur_dyn_votes[source_epoch] = current_dynasty_votes
-    if in_prev_dynasty:
-        previous_dynasty_votes += self.validators[validator_index].deposit
-        self.votes[target_epoch].prev_dyn_votes[source_epoch] = previous_dynasty_votes
-    # Process rewards.
-    # Check that we have not yet voted for this target_epoch
-    # Pay the reward if the vote was submitted in time and the vote is voting the correct data
-    if self.current_epoch == target_epoch and self.expected_source_epoch == source_epoch:
-        reward = floor(self.validators[validator_index].deposit * self.reward_factor)
+    if is_in_current_dynasty:
+        self.checkpoints[target_epoch].cur_dyn_vote_amount[source_epoch] += self.validators[validator_index].deposit
+    if is_in_prev_dynasty:
+        self.checkpoints[target_epoch].prev_dyn_vote_amount[source_epoch] += self.validators[validator_index].deposit
+
+# Process a vote message
+# TODO: Revise everything that calls it.
+@public
+def vote(vote_msg: bytes <= 1024):
+    # Extract parameters
+    values = RLPList(vote_msg, [num, bytes32, num, num, bytes])
+    validator_index = values[0]
+    target_hash = values[1]
+    target_epoch = values[2]
+    source_epoch = values[3]
+    sig = values[4]
+    self.check_valid_vote(validator_index, target_hash, target_epoch, source_epoch, sig, vote_msg)
+
+    # Keep track of vote and increment vote amount.
+    self.record_vote(validator_index, target_hash, target_epoch, source_epoch, sig)
+
+    # Process rewards if applicable.
+    timely = self.current_epoch == target_epoch
+    correct = self.expected_source_epoch == source_epoch
+    if timely and correct:
+        reward = floor(self.validators[validator_index].deposit * self.reward_factor)  # TODO: Check correct reward factor is set.
         self.proc_reward(validator_index, reward)
-    # If enough votes with the same source_epoch and hash are made,
-    # then the hash value is justified
-    if (current_dynasty_votes >= self.total_curdyn_deposits * 2 / 3 and
-            previous_dynasty_votes >= self.total_prevdyn_deposits * 2 / 3) and \
-            not self.votes[target_epoch].is_justified:
-        self.votes[target_epoch].is_justified = True
-        self.last_justified_epoch = target_epoch
-        if target_epoch == self.current_epoch:
-            self.main_hash_justified = True
-        # If two epochs are justified consecutively,
-        # then the source_epoch finalized
+
+    # Check if we have enough amount of votes to justify the checkpoint.
+    cur_dyn_vote_amount = self.checkpoints[target_epoch].cur_dyn_vote_amount[source_epoch]
+    prev_dyn_vote_amount = self.checkpoints[target_epoch].prev_dyn_vote_amount[source_epoch]
+    cur_have_supermajority = cur_dyn_vote_amount >= self.total_curdyn_deposits * 2 / 3
+    prev_have_supermajority = prev_dyn_vote_amount >= self.total_prevdyn_deposits * 2 / 3
+
+    justified = self.checkpoints[target_epoch].is_justified
+    if (cur_have_supermajority and prev_have_supermajority) and not justified:
+        self.justify_epoch(target_epoch)
+        # If two epochs are justified consecutively, then the source_epoch finalized
         if target_epoch == source_epoch + 1:
-            self.votes[source_epoch].is_finalized = True
-            self.last_finalized_epoch = source_epoch
+            self.finalize_epoch(source_epoch)
     raw_log([self.vote_log_topic], vote_msg)
 
 # Cannot make two prepares in the same epoch; no surrond vote.
