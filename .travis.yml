@@ -1,8 +1,13 @@
 sudo: required
 
+language: python
+
 services:
   - docker
 
 before_install:
   - docker build -t ethereum/casper:test .
   - docker run -it --rm ethereum/casper:test pytest pyethereum/ethereum/tests/hybrid_casper/test_chain.py
+
+script:
+  - python -c "pass"
