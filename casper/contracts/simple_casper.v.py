@@ -10,7 +10,9 @@ validators: public({
     # The address which the validator's signatures must verify to (to be later replaced with validation code)
     addr: address,
     # Addess to withdraw to
-    withdrawal_addr: address
+    withdrawal_addr: address,
+    # 1 - health = portion slashed
+    health: decimal
 }[num])
 
 # Historical checkoint hashes
@@ -37,6 +39,9 @@ total_curdyn_deposits: decimal(wei / m)
 # Total deposits in the previous dynasty
 total_prevdyn_deposits: decimal(wei / m)
 
+# Total deposits in any dynasty
+total_deposits: decimal(wei / m)[num]
+
 # Mapping of dynasty to start epoch of that dynasty
 dynasty_start_epoch: public(num[num])
 
@@ -56,6 +61,11 @@ votes: public({
     # Is a vote referencing the given epoch finalized?
     is_finalized: bool
 }[num])  # index: target epoch
+
+# Percent of slashings associated with a link source -> target
+slashings_at_link: decimal[num][num]
+# (validator, source, target)
+validator_slashed_at_link: bool[num][num][num]
 
 # Is the current expected hash justified
 main_hash_justified: public(bool)
@@ -201,6 +211,7 @@ def increment_dynasty():
         self.dynasty += 1
         self.total_prevdyn_deposits = self.total_curdyn_deposits
         self.total_curdyn_deposits += self.next_dynasty_wei_delta
+        self.total_deposits[self.dynasty] = self.total_curdyn_deposits
         self.next_dynasty_wei_delta = self.second_next_dynasty_wei_delta
         self.second_next_dynasty_wei_delta = 0
         self.dynasty_start_epoch[self.dynasty] = epoch
@@ -294,7 +305,8 @@ def deposit(validation_addr: address, withdrawal_addr: address):
         start_dynasty: self.dynasty + 2,
         end_dynasty: 1000000000000000000000000000000,
         addr: validation_addr,
-        withdrawal_addr: withdrawal_addr
+        withdrawal_addr: withdrawal_addr,
+        health: 1
     }
     self.validator_indexes[withdrawal_addr] = self.nextValidatorIndex
     self.nextValidatorIndex += 1
@@ -334,8 +346,15 @@ def delete_validator(validator_index: num):
         start_dynasty: 0,
         end_dynasty: 0,
         addr: None,
-        withdrawal_addr: None
+        withdrawal_addr: None,
+        health: 0
     }
+
+@private
+def reduce_validator_deposit(validator_index: num, by: decimal(wei / m)):
+    if self.validators[validator_index].end_dynasty > self.dynasty + 2:
+        self.next_dynasty_wei_delta -= by
+    self.validators[validator_index].deposit -= by
 
 # Withdraw deposited ether
 @public
@@ -472,12 +491,35 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
         # NO SURROUND VOTE
         slashing_condition_detected = True
     assert slashing_condition_detected
-    # Delete the offending validator, and give a 4% "finder's fee"
-    validator_deposit = self.get_deposit_size(validator_index_1)
-    slashing_bounty = validator_deposit / 25
-    self.total_destroyed += validator_deposit * 24 / 25
-    self.delete_validator(validator_index_1)
-    send(msg.sender, slashing_bounty)
+    # Check that the votes were valid
+    dynasty_of_vote_1 = self.dynasty_in_epoch[target_epoch_1]
+    dynasty_of_vote_2 = self.dynasty_in_epoch[target_epoch_2]
+    ok = (self.validators[validator_index_1].start_dynasty <= dynasty_of_vote_1 and \
+        dynasty_of_vote_1 <= self.validators[validator_index_1].end_dynasty) and \
+        (self.validators[validator_index_1].start_dynasty <= dynasty_of_vote_2 and \
+        dynasty_of_vote_1 <= self.validators[validator_index_2].end_dynasty)
+    assert ok
+    td1 = self.total_deposits[dynasty_of_vote_1]
+    td2 = self.total_deposits[dynasty_of_vote_2]
+    effective = False
+    if not self.validator_slashed_at_link[validator_index_1][source_epoch_1][target_epoch_1]:
+        self.validator_slashed_at_link[validator_index_1][source_epoch_1][target_epoch_1] = True
+        self.slashings_at_link[source_epoch_1][target_epoch_1] += self.validators[validator_index_1].deposit / td1
+        effective = True
+    if not self.validator_slashed_at_link[validator_index_1][source_epoch_2][target_epoch_2]:
+        self.validator_slashed_at_link[validator_index_1][source_epoch_2][target_epoch_2] = True
+        self.slashings_at_link[source_epoch_2][target_epoch_2] += self.validators[validator_index_1].deposit / td2
+        effective = True
+    new_health = min(0, 0.995 - max(self.slashings_at_link[source_epoch_1][target_epoch_1],
+                                    self.slashings_at_link[source_epoch_2][target_epoch_2]))
+    penalty = self.validators[validator_index_1].deposit * (1 - new_health / self.validators[validator_index_1].health)
+    # Require every slash call to do something, to prevent DoS
+    assert effective or (self.validators[validator_index_1].health - new_health) >= 0.005
+    self.validators[validator_index_1].health = new_health
+    # Penalize the offending validator, and give a 4% "finder's fee"
+    self.total_destroyed += floor(penalty * 24 / 25 * self.deposit_scale_factor[self.current_epoch])
+    self.reduce_validator_deposit(validator_index_1, penalty)
+    send(msg.sender, as_wei_value(floor(penalty / 25), wei))
 
 # Temporary backdoor for testing purposes (to allow recovering destroyed deposits)
 @public
