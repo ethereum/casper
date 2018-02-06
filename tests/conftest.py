@@ -2,6 +2,7 @@ import pytest
 import os
 import rlp
 
+import serpent
 from ethereum.abi import ContractTranslator
 from ethereum.genesis_helpers import mk_basic_state
 from ethereum.transactions import Transaction
@@ -18,6 +19,12 @@ VIPER_RLP_DECODER_TX_HEX = "0xf9035b808506fc23ac0083045f788080b90348610330566000
 SIG_HASHER_TX_HEX = "0xf9016d808506fc23ac0083026a508080b9015a6101488061000e6000396101565660007f01000000000000000000000000000000000000000000000000000000000000006000350460f8811215610038576001915061003f565b60f6810391505b508060005b368312156100c8577f01000000000000000000000000000000000000000000000000000000000000008335048391506080811215610087576001840193506100c2565b60b881121561009d57607f8103840193506100c1565b60c08112156100c05760b68103600185013560b783036020035260005101840193505b5b5b50610044565b81810360388112156100f4578060c00160005380836001378060010160002060e052602060e0f3610143565b61010081121561010557600161011b565b6201000081121561011757600261011a565b60035b5b8160005280601f038160f701815382856020378282600101018120610140526020610140f350505b505050505b6000f31b2d4f"
 PURITY_CHECKER_TX_HEX = "0xf90467808506fc23ac00830583c88080b904546104428061000e60003961045056600061033f537c0100000000000000000000000000000000000000000000000000000000600035047f80010000000000000000000000000000000000000030ffff1c0e00000000000060205263a1903eab8114156103f7573659905901600090523660048237600435608052506080513b806020015990590160009052818152602081019050905060a0526080513b600060a0516080513c6080513b8060200260200159905901600090528181526020810190509050610100526080513b806020026020015990590160009052818152602081019050905061016052600060005b602060a05103518212156103c957610100601f8360a051010351066020518160020a161561010a57fe5b80606013151561011e57607f811315610121565b60005b1561014f5780607f036101000a60018460a0510101510482602002610160510152605e8103830192506103b2565b60f18114801561015f5780610164565b60f282145b905080156101725780610177565b60f482145b9050156103aa5760028212151561019e5760606001830360200261010051015112156101a1565b60005b156101bc57607f6001830360200261010051015113156101bf565b60005b156101d157600282036102605261031e565b6004821215156101f057600360018303602002610100510151146101f3565b60005b1561020d57605a6002830360200261010051015114610210565b60005b1561022b57606060038303602002610100510151121561022e565b60005b1561024957607f60038303602002610100510151131561024c565b60005b1561025e57600482036102605261031d565b60028212151561027d57605a6001830360200261010051015114610280565b60005b1561029257600282036102605261031c565b6002821215156102b157609060018303602002610100510151146102b4565b60005b156102c657600282036102605261031b565b6002821215156102e65760806001830360200261010051015112156102e9565b60005b156103035760906001830360200261010051015112610306565b60005b1561031857600282036102605261031a565bfe5b5b5b5b5b604060405990590160009052600081526102605160200261016051015181602001528090502054156103555760016102a052610393565b60306102605160200261010051015114156103755760016102a052610392565b60606102605160200261010051015114156103915760016102a0525b5b5b6102a051151561039f57fe5b6001830192506103b1565b6001830192505b5b8082602002610100510152600182019150506100e0565b50506001604060405990590160009052600081526080518160200152809050205560016102e05260206102e0f35b63c23697a8811415610440573659905901600090523660048237600435608052506040604059905901600090526000815260805181602001528090502054610300526020610300f35b505b6000f31b2d4f"
 PURITY_CHECKER_ABI = [{'name': 'check(address)', 'type': 'function', 'constant': True, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}, {'name': 'submit(address)', 'type': 'function', 'constant': False, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}]
+VALIDATION_CODE_TEMPLATE = """
+~calldatacopy(0, 0, 128)
+~call(3000, 1, 0, 0, 128, 0, 32)
+return(~mload(0) == %s)
+"""
+
 
 EPOCH_LENGTH = 10
 WITHDRAWAL_DELAY = 100
@@ -44,6 +51,11 @@ def base_sender_privkey():
 @pytest.fixture
 def viper_rlp_decoder_tx():
     return rlp.hex_decode(VIPER_RLP_DECODER_TX_HEX, Transaction)
+
+
+@pytest.fixture
+def viper_rlp_decoder_address(viper_rlp_decoder_tx):
+    return viper_rlp_decoder_tx.creates
 
 
 @pytest.fixture
@@ -103,8 +115,6 @@ def test_chain(alloc={}, genesis_gas_limit=9999999, min_gas_limit=5000, startgas
 def casper_code():
     with open(get_dirs('simple_casper.v.py')[0]) as f:
         return f.read()
-    # casper_code = open('simple_casper.v.py').read()
-    # return
 
 
 @pytest.fixture
@@ -213,7 +223,62 @@ def create_abi(path):
 
 
 @pytest.fixture
-def assert_failed(t):
+def new_epoch(casper_chain, casper):
+    def new_epoch():
+        next_epoch = casper.current_epoch() + 1
+        epoch_length = casper.epoch_length()
+
+        casper_chain.mine(epoch_length * next_epoch - casper_chain.head_state.block_number)
+        casper.initialize_epoch(next_epoch)
+    return new_epoch
+
+
+@pytest.fixture
+def mk_validation_code():
+    def mk_validation_code(address):
+        return serpent.compile(VALIDATION_CODE_TEMPLATE % (utils.checksum_encode(address)))
+    return mk_validation_code
+
+
+@pytest.fixture
+def mk_vote():
+    def mk_vote(validator_index, target_hash, target_epoch, source_epoch, privkey):
+        sighash = utils.sha3(
+            rlp.encode([validator_index, target_hash, target_epoch, source_epoch])
+        )
+        v, r, s = utils.ecdsa_raw_sign(sighash, privkey)
+        sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
+        return rlp.encode([validator_index, target_hash, target_epoch, source_epoch, sig])
+    return mk_vote
+
+
+@pytest.fixture
+def mk_suggested_vote(casper, mk_vote):
+    def mk_suggested_vote(validator_index, privkey):
+        target_hash = casper.get_recommended_target_hash()
+        target_epoch = casper.current_epoch()
+        source_epoch = casper.get_recommended_source_epoch()
+        return mk_vote(validator_index, target_hash, target_epoch, source_epoch, privkey)
+    return mk_suggested_vote
+
+
+@pytest.fixture
+def induct_validator(casper_chain, casper, purity_checker_address,
+                     purity_checker_ct, mk_validation_code):
+    def induct_validator(privkey, value):
+        addr = utils.privtoaddr(privkey)
+        valcode_addr = casper_chain.tx(
+            privkey,
+            "",
+            0,
+            mk_validation_code(addr)
+        )
+        casper.deposit(valcode_addr, addr, value=value)
+    return induct_validator
+
+
+@pytest.fixture
+def assert_failed(casper_chain):
     def assert_failed(function_to_test, exception):
         with pytest.raises(exception):
             function_to_test()
@@ -221,12 +286,12 @@ def assert_failed(t):
 
 
 @pytest.fixture
-def assert_tx_failed(t):
+def assert_tx_failed(casper_chain):
     def assert_tx_failed(function_to_test, exception=tester.TransactionFailed):
-        initial_state = t.chain.snapshot()
+        initial_state = casper_chain.snapshot()
         with pytest.raises(exception):
             function_to_test()
-        t.chain.revert(initial_state)
+        casper_chain.revert(initial_state)
     return assert_tx_failed
 
 

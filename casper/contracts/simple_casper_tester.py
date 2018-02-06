@@ -91,9 +91,7 @@ except:
     success = False
 assert not success
 print("Vote fails the second time")
-# Send a commit message
 print('post deposit', casper.get_deposit_size(1))
-# Check that we committed
 
 # Initialize the fourth epoch 
 current_dyn, _th, _te, _se = new_epoch(s, casper, EPOCH_LENGTH)
