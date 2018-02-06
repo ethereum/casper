@@ -125,3 +125,40 @@ def test_non_finalization_loss(casper, privkey, amount, new_epoch,
         ds_cur_non_finalized = casper.get_deposit_size(validator_index)
         assert ds_cur_non_finalized < ds_prev_non_finalized
         ds_prev_non_finalized = ds_cur_non_finalized
+
+
+@pytest.mark.parametrize(
+    'privkey, amount',
+    [
+        (tester.k1, 2000 * 10**18),
+    ]
+)
+def test_consensus_after_non_finalization_streak(casper, privkey, amount, new_epoch,
+                                                 induct_validator, mk_suggested_vote,
+                                                 assert_tx_failed):
+    # induct validator and step forward two dynasties
+    validator_index = casper.nextValidatorIndex()
+    induct_validator(privkey, amount)
+    for i in range(3):
+        new_epoch()
+    assert casper.get_total_curdyn_deposits() == amount
+
+    casper.vote(mk_suggested_vote(validator_index, privkey))
+    new_epoch()
+    casper.vote(mk_suggested_vote(validator_index, privkey))
+    new_epoch()
+
+    for i in range(5):
+        new_epoch()
+
+    assert not casper.main_hash_justified()
+    assert not casper.votes__is_finalized(casper.get_recommended_source_epoch())
+
+    casper.vote(mk_suggested_vote(validator_index, privkey))
+    assert casper.main_hash_justified()
+    assert not casper.votes__is_finalized(casper.get_recommended_source_epoch())
+
+    new_epoch()
+    casper.vote(mk_suggested_vote(validator_index, privkey))
+    assert casper.main_hash_justified()
+    assert casper.votes__is_finalized(casper.get_recommended_source_epoch())
