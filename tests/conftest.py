@@ -38,7 +38,7 @@ CASPER_CONFIG = {
 
 @pytest.fixture
 def base_sender_privkey():
-    return tester.a0
+    return tester.k0
 
 
 @pytest.fixture
@@ -49,6 +49,12 @@ def viper_rlp_decoder_tx():
 @pytest.fixture
 def sig_hasher_tx():
     return rlp.hex_decode(SIG_HASHER_TX_HEX, Transaction)
+
+
+@pytest.fixture
+def sig_hasher_address(sig_hasher_tx):
+    return sig_hasher_tx.creates
+
 
 @pytest.fixture
 def purity_checker_tx():
@@ -71,8 +77,10 @@ def casper_config():
 
 
 @pytest.fixture
-def test_chain(tester, alloc={}, genesis_gas_limit=4712388, min_gas_limit=5000, startgas=3141592):
+def test_chain(alloc={}, genesis_gas_limit=9999999, min_gas_limit=5000, startgas=3141592):
     # alloc
+    alloc[tester.a0] = {'balance': 100000 * utils.denoms.ether}
+
     for i in range(9):
         alloc[utils.int_to_addr(i)] = {'balance': 1}
     # genesis
@@ -93,8 +101,10 @@ def test_chain(tester, alloc={}, genesis_gas_limit=4712388, min_gas_limit=5000, 
 
 @pytest.fixture
 def casper_code():
-    casper_code = open('simple_casper.v.py').read()
-    return
+    with open(get_dirs('simple_casper.v.py')[0]) as f:
+        return f.read()
+    # casper_code = open('simple_casper.v.py').read()
+    # return
 
 
 @pytest.fixture
@@ -123,6 +133,11 @@ def casper_address(dependency_transactions, base_sender_privkey):
         "0x0"
     ).sign(base_sender_privkey)
     return mock_tx.creates
+
+
+@pytest.fixture
+def casper(casper_chain, casper_abi, casper_address):
+    return tester.ABIContract(casper_chain, casper_abi, casper_address)
 
 
 @pytest.fixture
