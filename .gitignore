@@ -3,3 +3,7 @@
 *.pyc
 *.egg-info
 data*
+.cache/
+.python-version
+build/
+dist/
