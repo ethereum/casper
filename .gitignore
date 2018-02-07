@@ -1,10 +1,14 @@
-.idea
+.cache/
 .env
+.idea
 .pytest_cache
+.python-version
+
 *.pyc
 *.egg-info
 data*
+notes.txt
+
 build/
 dist/
 venv/
-notes.txt
