@@ -3,22 +3,11 @@ import pytest
 from ethereum.tools import tester
 
 
-@pytest.mark.parametrize(
-    'privkey, amount',
-    [
-        (tester.k1, 2000 * 10**18),
-        (tester.k1, 1000 * 10**18),
-        (tester.k2, 1500 * 10**18),
-    ]
-)
-def test_slash_no_dbl_prepare(casper, privkey, amount, new_epoch,
-                              induct_validator, mk_vote, assert_tx_failed):
-    # induct validator and step forward two dynasties
+def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount, new_epoch,
+                              induct_validators, mk_vote, assert_tx_failed):
     validator_index = casper.nextValidatorIndex()
-    induct_validator(privkey, amount)
-    for i in range(3):
-        new_epoch()
-    assert casper.get_total_curdyn_deposits() == amount
+    induct_validators([funded_privkey], [deposit_amount])
+    assert casper.get_total_curdyn_deposits() == deposit_amount
 
     fake_hash = b'\xbc' * 32
     vote_1 = mk_vote(
@@ -26,36 +15,25 @@ def test_slash_no_dbl_prepare(casper, privkey, amount, new_epoch,
         casper.get_recommended_target_hash(),
         casper.current_epoch(),
         casper.get_recommended_source_epoch(),
-        privkey
+        funded_privkey
     )
     vote_2 = mk_vote(
         validator_index,
         fake_hash,
         casper.current_epoch(),
         casper.get_recommended_source_epoch(),
-        privkey
+        funded_privkey
     )
 
     casper.slash(vote_1, vote_2)
     assert casper.get_deposit_size(validator_index) == 0
 
 
-@pytest.mark.parametrize(
-    'privkey, amount',
-    [
-        (tester.k1, 2000 * 10**18),
-        (tester.k1, 1000 * 10**18),
-        (tester.k2, 1500 * 10**18),
-    ]
-)
-def test_slash_no_surround(casper, privkey, amount, new_epoch,
-                           induct_validator, mk_vote, assert_tx_failed):
-    # induct validator and step forward two dynasties
+def test_slash_no_surround(casper, funded_privkey, deposit_amount, new_epoch,
+                           induct_validators, mk_vote, assert_tx_failed):
     validator_index = casper.nextValidatorIndex()
-    induct_validator(privkey, amount)
-    for i in range(3):
-        new_epoch()
-    assert casper.get_total_curdyn_deposits() == amount
+    induct_validators([funded_privkey], [deposit_amount])
+    assert casper.get_total_curdyn_deposits() == deposit_amount
 
     fake_hash = b'\xbc' * 32
     vote_1 = mk_vote(
@@ -63,17 +41,15 @@ def test_slash_no_surround(casper, privkey, amount, new_epoch,
         casper.get_recommended_target_hash(),
         casper.current_epoch(),
         casper.get_recommended_source_epoch() - 1,
-        privkey
+        funded_privkey
     )
     vote_2 = mk_vote(
         validator_index,
         fake_hash,
         casper.current_epoch() - 1,
         casper.get_recommended_source_epoch(),
-        privkey
+        funded_privkey
     )
 
     casper.slash(vote_1, vote_2)
     assert casper.get_deposit_size(validator_index) == 0
-
-

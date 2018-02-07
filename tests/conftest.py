@@ -42,10 +42,27 @@ CASPER_CONFIG = {
     "min_deposit_size": MIN_DEPOSIT_SIZE
 }
 
+FUNDED_PRIVKEYS = [tester.k1, tester.k2, tester.k3]
+DEPOSIT_AMOUNTS = [
+    2000 * 10**18,
+    1000 * 10**18,
+    1500 * 10**18
+]
+
 
 @pytest.fixture
 def base_sender_privkey():
     return tester.k0
+
+
+@pytest.fixture(params=FUNDED_PRIVKEYS)
+def funded_privkey(request):
+    return request.param
+
+
+@pytest.fixture(params=DEPOSIT_AMOUNTS)
+def deposit_amount(request):
+    return request.param
 
 
 @pytest.fixture
@@ -263,9 +280,8 @@ def mk_suggested_vote(casper, mk_vote):
 
 
 @pytest.fixture
-def induct_validator(casper_chain, casper, purity_checker_address,
-                     purity_checker_ct, mk_validation_code):
-    def induct_validator(privkey, value):
+def deposit_validator(casper_chain, casper, mk_validation_code):
+    def deposit_validator(privkey, value):
         addr = utils.privtoaddr(privkey)
         valcode_addr = casper_chain.tx(
             privkey,
@@ -274,7 +290,24 @@ def induct_validator(casper_chain, casper, purity_checker_address,
             mk_validation_code(addr)
         )
         casper.deposit(valcode_addr, addr, value=value)
-    return induct_validator
+    return deposit_validator
+
+
+# deposits list of (privkey, value) and steps forward two epochs
+# to step dynasties forward to induct validators
+# NOTE: This method only works when no deposits exist and chain insta-finalizes
+#       If inducting validators when desposits exists, use `deposit_validator` and
+#       manually finalize
+@pytest.fixture
+def induct_validators(casper_chain, casper, deposit_validator, new_epoch):
+    def induct_validators(privkeys, values):
+        if casper.current_epoch() == 0:
+            new_epoch()
+        for privkey, value in zip(privkeys, values):
+            deposit_validator(privkey, value)
+        new_epoch()
+        new_epoch()
+    return induct_validators
 
 
 @pytest.fixture
