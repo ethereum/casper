@@ -1,12 +1,6 @@
-import pytest
-
-from ethereum.tools import tester
-
-
 def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount, new_epoch,
-                              induct_validators, mk_vote, assert_tx_failed):
-    validator_index = casper.nextValidatorIndex()
-    induct_validators([funded_privkey], [deposit_amount])
+                              induct_validator, mk_vote, assert_tx_failed):
+    validator_index = induct_validator(funded_privkey, deposit_amount)
     assert casper.get_total_curdyn_deposits() == deposit_amount
 
     fake_hash = b'\xbc' * 32
@@ -30,9 +24,8 @@ def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount, new_epoch,
 
 
 def test_slash_no_surround(casper, funded_privkey, deposit_amount, new_epoch,
-                           induct_validators, mk_vote, assert_tx_failed):
-    validator_index = casper.nextValidatorIndex()
-    induct_validators([funded_privkey], [deposit_amount])
+                           induct_validator, mk_vote, assert_tx_failed):
+    validator_index = induct_validator(funded_privkey, deposit_amount)
     assert casper.get_total_curdyn_deposits() == deposit_amount
 
     fake_hash = b'\xbc' * 32

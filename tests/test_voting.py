@@ -41,10 +41,8 @@ def test_deposit(casper_chain, casper, privkey, amount,
 
 
 def test_vote_single_validator(casper, funded_privkey, deposit_amount,
-                               new_epoch, induct_validators, mk_suggested_vote):
-    # induct validator and step forward two dynasties
-    validator_index = casper.nextValidatorIndex()
-    induct_validators([funded_privkey], [deposit_amount])
+                               new_epoch, induct_validator, mk_suggested_vote):
+    validator_index = induct_validator(funded_privkey, deposit_amount)
     assert casper.get_total_curdyn_deposits() == deposit_amount
 
     prev_dynasty = casper.dynasty()
@@ -58,9 +56,8 @@ def test_vote_single_validator(casper, funded_privkey, deposit_amount,
 
 
 def test_vote_target_epoch_twice(casper, funded_privkey, deposit_amount, new_epoch,
-                                 induct_validators, mk_suggested_vote, assert_tx_failed):
-    validator_index = casper.nextValidatorIndex()
-    induct_validators([funded_privkey], [deposit_amount])
+                                 induct_validator, mk_suggested_vote, assert_tx_failed):
+    validator_index = induct_validator(funded_privkey, deposit_amount)
     assert casper.get_total_curdyn_deposits() == deposit_amount
 
     casper.vote(mk_suggested_vote(validator_index, funded_privkey))
@@ -69,10 +66,8 @@ def test_vote_target_epoch_twice(casper, funded_privkey, deposit_amount, new_epo
 
 
 def test_non_finalization_loss(casper, funded_privkey, deposit_amount, new_epoch,
-                               induct_validators, mk_suggested_vote, assert_tx_failed):
-    # induct validator and step forward two dynasties
-    validator_index = casper.nextValidatorIndex()
-    induct_validators([funded_privkey], [deposit_amount])
+                               induct_validator, mk_suggested_vote, assert_tx_failed):
+    validator_index = induct_validator(funded_privkey, deposit_amount)
     assert casper.get_total_curdyn_deposits() == deposit_amount
 
     casper.vote(mk_suggested_vote(validator_index, funded_privkey))
@@ -89,10 +84,9 @@ def test_non_finalization_loss(casper, funded_privkey, deposit_amount, new_epoch
 
 
 def test_consensus_after_non_finalization_streak(casper, funded_privkey, deposit_amount, new_epoch,
-                                                 induct_validators, mk_suggested_vote,
+                                                 induct_validator, mk_suggested_vote,
                                                  assert_tx_failed):
-    validator_index = casper.nextValidatorIndex()
-    induct_validators([funded_privkey], [deposit_amount])
+    validator_index = induct_validator(funded_privkey, deposit_amount)
     assert casper.get_total_curdyn_deposits() == deposit_amount
 
     # finalize an epoch as a base to the test

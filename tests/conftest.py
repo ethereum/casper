@@ -42,11 +42,10 @@ CASPER_CONFIG = {
     "min_deposit_size": MIN_DEPOSIT_SIZE
 }
 
-FUNDED_PRIVKEYS = [tester.k1, tester.k2, tester.k3]
+FUNDED_PRIVKEYS = [tester.k1, tester.k2, tester.k3, tester.k4, tester.k5]
 DEPOSIT_AMOUNTS = [
     2000 * 10**18,
     1000 * 10**18,
-    1500 * 10**18
 ]
 
 
@@ -55,9 +54,14 @@ def base_sender_privkey():
     return tester.k0
 
 
-@pytest.fixture(params=FUNDED_PRIVKEYS)
+@pytest.fixture(params=FUNDED_PRIVKEYS[0:3])
 def funded_privkey(request):
     return request.param
+
+
+@pytest.fixture
+def funded_privkeys():
+    return FUNDED_PRIVKEYS
 
 
 @pytest.fixture(params=DEPOSIT_AMOUNTS)
@@ -233,12 +237,6 @@ def get_dirs(path):
     return path, extra_args
 
 
-def create_abi(path):
-    path, extra_args = get_dirs(path)
-    abi = _solidity.compile_last_contract(path, combined='abi', extra_args=extra_args)['abi']
-    return ContractTranslator(abi)
-
-
 @pytest.fixture
 def new_epoch(casper_chain, casper):
     def new_epoch():
@@ -293,6 +291,24 @@ def deposit_validator(casper_chain, casper, mk_validation_code):
     return deposit_validator
 
 
+# deposits privkey, value and steps forward two epochs
+# to step dynasties forward to induct validator
+# NOTE: This method only works when no deposits exist and chain insta-finalizes
+#       If inducting a validator when desposits exists, use `deposit_validator` and
+#       manually finalize
+@pytest.fixture
+def induct_validator(casper_chain, casper, deposit_validator, new_epoch):
+    def induct_validator(privkey, value):
+        validator_index = casper.nextValidatorIndex()
+        if casper.current_epoch() == 0:
+            new_epoch()
+        deposit_validator(privkey, value)
+        new_epoch()
+        new_epoch()
+        return validator_index
+    return induct_validator
+
+
 # deposits list of (privkey, value) and steps forward two epochs
 # to step dynasties forward to induct validators
 # NOTE: This method only works when no deposits exist and chain insta-finalizes
@@ -301,12 +317,14 @@ def deposit_validator(casper_chain, casper, mk_validation_code):
 @pytest.fixture
 def induct_validators(casper_chain, casper, deposit_validator, new_epoch):
     def induct_validators(privkeys, values):
+        start_index = casper.nextValidatorIndex()
         if casper.current_epoch() == 0:
             new_epoch()
         for privkey, value in zip(privkeys, values):
             deposit_validator(privkey, value)
         new_epoch()
         new_epoch()
+        return list(range(start_index, start_index + len(privkeys)))
     return induct_validators
 
 
@@ -326,16 +344,3 @@ def assert_tx_failed(casper_chain):
             function_to_test()
         casper_chain.revert(initial_state)
     return assert_tx_failed
-
-
-@pytest.fixture
-def get_contract(t, u):
-    def create_contract(path, args=(), sender=t.k0):
-        pass
-        # abi, hexcode = Deployer().compile_contract(path, args)
-        # bytecode = u.decode_hex(hexcode)
-        # ct = ContractTranslator(abi)
-        # code = bytecode + (ct.encode_constructor_arguments(args) if args else b'')
-        # address = t.chain.tx(sender=sender, to=b'', startgas=(4 * 10 ** 6), value=0, data=code)
-        # return t.ABIContract(t.chain, abi, address)
-    return create_contract
