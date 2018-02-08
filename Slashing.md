@@ -1,9 +1,10 @@
 # Design Document
 
 ## Questions:
-1)
-In line 448 we do : `self.total_destroyed += validator_deposit * 24 / 25`
+1)In line 448 we do : `self.total_destroyed += validator_deposit * 24 / 25`
+
 line 336: *What happened to the bounty i.e 1/25th the deposit? (Are we assuming its not deposited again?)*
+
 In line 367:     
 
 	if ((start_dynasty <= current_dynasty) and (current_dynasty < end_dynasty)):
@@ -11,15 +12,13 @@ In line 367:
   	if ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty)):
         	self.total_prevdyn_deposits += reward
 
-2)
-*If that is the case why is reward getting added to the `self.total_curdyn_deposits` ?*
+2)*If that is the case why is reward getting added to the `self.total_curdyn_deposits` ?*
 
-3)
-In `deposit():`
+3)In `deposit():`
+
 *Can a validator not add more deposit to itself?*
 
-4)
-In `proc_reward():`
+4)In `proc_reward():`
 Why do we do the following? 
     
     if current_dynasty == end_dynasty - 1:
