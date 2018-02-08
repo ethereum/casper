@@ -1,13 +1,13 @@
 # Design Document
 ## Initialize the following: 
 	
-slashed_validators : [num]
+`slashed_validators : [num]`
 
-slash_total : bool 	
-	
-In `logout():`
+`slash_total : bool `	
 
-	#check if the validator acted in a malicious manner before and if the total slash condition has been invoked: line 322
+In `logout():` 
+
+	### check if the validator acted in a malicious manner before and if the total slash condition has been invoked: line 322
 	
 	
 	if slash_total && slashed_validators[validator_index]:
