@@ -45,8 +45,8 @@ In `slash:`
         self.total_destroyed += 0.835 * validator_deposit
         self.delete_validator(validator_index_1)
 	slash_total = true
-	
-In `slash:`
+
+
     else: 
 	(same as v1.5 condition)
 	slashed_validators[validator_index_1] = 1
