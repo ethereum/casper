@@ -1,6 +1,3 @@
-import random
-
-
 def test_deposits(casper, funded_privkeys, deposit_amount, new_epoch, induct_validators):
     induct_validators(funded_privkeys, [deposit_amount] * len(funded_privkeys))
     assert casper.get_total_curdyn_deposits() == deposit_amount * len(funded_privkeys)
@@ -77,6 +74,7 @@ def test_voters_make_more(casper, funded_privkeys, deposit_amount, new_epoch,
 def test_logout(casper, funded_privkeys, deposit_amount, new_epoch,
                 induct_validators, mk_suggested_vote, logout_validator):
     validator_indexes = induct_validators(funded_privkeys, [deposit_amount] * len(funded_privkeys))
+    num_validators = len(validator_indexes)
     assert casper.get_total_curdyn_deposits() == deposit_amount * len(funded_privkeys)
 
     for _ in range(3):
@@ -102,8 +100,8 @@ def test_logout(casper, funded_privkeys, deposit_amount, new_epoch,
     logging_out_deposit_size = casper.get_deposit_size(logged_out_index)
     total_deposit_size = logged_in_deposit_size + logging_out_deposit_size
 
-    assert abs(logged_in_deposit_size - casper.get_total_curdyn_deposits()) < len(validator_indexes)
-    assert abs(total_deposit_size - casper.get_total_prevdyn_deposits()) < len(validator_indexes)
+    assert abs(logged_in_deposit_size - casper.get_total_curdyn_deposits()) < num_validators
+    assert abs(total_deposit_size - casper.get_total_prevdyn_deposits()) < num_validators
 
     for i, validator_index in enumerate(logged_in_indexes):
         casper.vote(mk_suggested_vote(validator_index, logged_in_privkeys[i]))
@@ -111,8 +109,8 @@ def test_logout(casper, funded_privkeys, deposit_amount, new_epoch,
 
     logged_in_deposit_size = sum(map(casper.get_deposit_size, logged_in_indexes))
 
-    assert abs(logged_in_deposit_size - casper.get_total_curdyn_deposits()) < len(validator_indexes)
-    assert abs(logged_in_deposit_size - casper.get_total_prevdyn_deposits()) < len(validator_indexes)
+    assert abs(logged_in_deposit_size - casper.get_total_curdyn_deposits()) < num_validators
+    assert abs(logged_in_deposit_size - casper.get_total_prevdyn_deposits()) < num_validators
 
 
 def test_partial_online(casper, funded_privkeys, deposit_amount, new_epoch,
@@ -125,12 +123,15 @@ def test_partial_online(casper, funded_privkeys, deposit_amount, new_epoch,
     online_privkeys = funded_privkeys[0:half_index]
     offline_indexes = validator_indexes[half_index:-1]
 
-    prev_ovp = sum(map(casper.get_deposit_size, online_indexes)) / casper.get_total_curdyn_deposits()
+    total_online_deposits = sum(map(casper.get_deposit_size, online_indexes))
+    prev_ovp = total_online_deposits / casper.get_total_curdyn_deposits()
 
     for i in range(100):
         for i, validator_index in enumerate(online_indexes):
             casper.vote(mk_suggested_vote(validator_index, online_privkeys[i]))
-        ovp = sum(map(casper.get_deposit_size, online_indexes)) / casper.get_total_curdyn_deposits()
+
+        total_online_deposits = sum(map(casper.get_deposit_size, online_indexes))
+        ovp = total_online_deposits / casper.get_total_curdyn_deposits()
 
         # after two non-finalized epochs, offline voters should start losing more
         if i >= 2:
