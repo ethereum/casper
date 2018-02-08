@@ -1,9 +1,9 @@
 # Design Document
 ## Initialize the following: 
 
-
-```slashed_validators : [num]
-	slash_total : bool ```
+` javascript
+	slashed_validators : [num]
+	slash_total : bool `
 	
 	
 
