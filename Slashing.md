@@ -5,19 +5,15 @@
 
 `slash_total : bool `	
 
-In `logout():` 
+In `logout(): `
 
-	### check if the validator acted in a malicious manner before and if the total slash condition has been invoked: line 322
-	
-	
+### check if the validator acted in a malicious manner before and if the total slash condition has been invoked: line 322
+
 	if slash_total && slashed_validators[validator_index]:
-	
 	
 		delete_validator(validator_index)
 		
-		
 	else: 
-	
 	
 		proceed 
 
