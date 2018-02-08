@@ -46,7 +46,7 @@ In `slash:`
         self.delete_validator(validator_index_1)
 	slash_total = true
     else: 
-	…. (same as v1.5 condition)
+	(same as v1.5 condition)
 	slashed_validators[validator_index_1] = 1
 
 
