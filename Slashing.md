@@ -1,5 +1,5 @@
-#Design Document
-##Initialize the following: 
+# Design Document
+## Initialize the following: 
 
 `slashed_validators : [num]`
 `slash_total : bool`
