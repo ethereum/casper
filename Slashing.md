@@ -1,10 +1,39 @@
 # Design Document
-## Initialize the following: 
+
+## Questions:
+1)
+In line 448 we do : `self.total_destroyed += validator_deposit * 24 / 25`
+line 336: *What happened to the bounty i.e 1/25th the deposit? (Are we assuming its not deposited again?)*
+In line 367:     
+
+	if ((start_dynasty <= current_dynasty) and (current_dynasty < end_dynasty)):
+       		self.total_curdyn_deposits += reward
+  	if ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty)):
+        	self.total_prevdyn_deposits += reward
+
+2)
+*If that is the case why is reward getting added to the `self.total_curdyn_deposits` ?*
+
+3)
+In `deposit():`
+*Can a validator not add more deposit to itself?*
+
+4)
+In `proc_reward():`
+Why do we do the following? 
+    
+    if current_dynasty == end_dynasty - 1:
+        self.next_dynasty_wei_delta -= reward
+
+
+## Design:
+### Initialize the following: 
 	
 `slashed_validators : [num]`
 
 `slash_total : bool `	
 
+### Add the following
 In `logout(): `
 
 	#check if the validator acted in a malicious manner before and if the total slash condition has been invoked: line 322
