@@ -38,16 +38,13 @@ In `vote:` (line 390)
 	else: 
 		proceed 
 		
-In `slash:` 
+In `slash:` # Slash total condition invoked
 
-    # Slash total condition invoked
-    if self.total_destroyed >= (1/3) * get_total_curdyn_deposits():
-        self.total_destroyed += 0.835 * validator_deposit
-        self.delete_validator(validator_index_1)
-	slash_total = true
-
-
-    else: 
+   if self.total_destroyed >= (1/3) * get_total_curdyn_deposits():
+       self.total_destroyed += 0.835 * validator_deposit
+       self.delete_validator(validator_index_1)
+       slash_total = true
+   else: 
 	(same as v1.5 condition)
 	slashed_validators[validator_index_1] = 1
 
