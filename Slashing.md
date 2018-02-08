@@ -1,18 +1,15 @@
 # Design Document
 ## Initialize the following: 
-
-` javascript
-	slashed_validators : [num]
-	slash_total : bool `
 	
+slashed_validators : [num]
+slash_total : bool 
 	
-
 In `logout():`
 	#check if the validator acted in a malicious manner before and if the total slash condition has been invoked: line 322
-	`if slash_total && slashed_validators[validator_index]:`
-		`delete_validator(validator_index)`
-	`else: `
-		`proceed `
+	if slash_total && slashed_validators[validator_index]:
+		delete_validator(validator_index)
+	else: 
+		proceed 
 
 In `delete_validator:`
 	`slashed_validators[validator_index] = 0`
