@@ -7,44 +7,47 @@
 
 In `logout(): `
 
-### check if the validator acted in a malicious manner before and if the total slash condition has been invoked: line 322
-
+	#check if the validator acted in a malicious manner before and if the total slash condition has been invoked: line 322
 	if slash_total && slashed_validators[validator_index]:
-	
 		delete_validator(validator_index)
-		
-	else: 
-	
+	else:
 		proceed 
 
 In `delete_validator:`
-	`slashed_validators[validator_index] = 0`
+
+	slashed_validators[validator_index] = 0
 
 In `withdraw_validator:` line 349
-	`if slash_total && slashed_validators[validator_index]:`
-		`delete_validator(validator_index)`
-	`else: `
+
+	if slash_total && slashed_validators[validator_index]:
+		delete_validator(validator_index)
+	else: 
 		proceed 
 
-In proc_reward:
+In `proc_reward:`
+
 	if slash_total && slashed_validators[validator_index]:
 		delete_validator(validator_index)
 	else: 
 		proceed 
 		
-In vote: (line 390)
+In `vote:` (line 390)
+
 	if slash_total && slashed_validators[validator_index]:
 		delete_validator(validator_index)
 	else: 
 		proceed 
-In slash: 
+		
+In `slash:` 
 
     # Slash total condition invoked
     if self.total_destroyed >= (1/3) * get_total_curdyn_deposits():
         self.total_destroyed += 0.835 * validator_deposit
         self.delete_validator(validator_index_1)
 	slash_total = true
-else: 
+    else: 
 	…. (same as v1.5 condition)
 	slashed_validators[validator_index_1] = 1
+
+
 	
