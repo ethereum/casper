@@ -1,18 +1,27 @@
-# Copied from https://github.com/ethereum/pyethapp/blob/e7717367387e506d8bed096bba1e553d11f0ac8b/pyethapp/accounts.py
+# Copied from https://github.com/ethereum/pyethapp/blob/3307f03278c534063560cd0260a05d0b2dbda50d/pyethapp/accounts.py
 
+from builtins import hex
+from builtins import object
 import json
 import os
-import random
+from random import SystemRandom
 import shutil
 from uuid import UUID
 from devp2p.service import BaseService
-from ethereum import keys
+from ethereum.tools import keys
 from ethereum.slogging import get_logger
-from ethereum.utils import privtopub  # this is different  than the one used in devp2p.crypto
-from ethereum.utils import sha3, is_string, decode_hex, remove_0x_head
+# this is different  than the one used in devp2p.crypto
+from ethereum.utils import privtopub
+from ethereum.utils import sha3, is_string, encode_hex, remove_0x_head, to_string
+from rlp.utils import decode_hex
+
+from pyethapp.utils import MinType
+
 log = get_logger('accounts')
 
-DEFAULT_COINBASE = 'de0b295669a9fd93d5f28d9ec85e40f4cb697bae'.decode('hex')
+DEFAULT_COINBASE = decode_hex('de0b295669a9fd93d5f28d9ec85e40f4cb697bae')
+
+random = SystemRandom()
 
 
 def mk_privkey(seed):
@@ -22,12 +31,13 @@ def mk_privkey(seed):
 def mk_random_privkey():
     k = hex(random.getrandbits(256))[2:-1].zfill(64)
     assert len(k) == 64
-    return k.decode('hex')
+    return decode_hex(k)
 
 
 class Account(object):
 
     """Represents an account.
+
     :ivar keystore: the key store as a dictionary (as decoded from json)
     :ivar locked: `True` if the account is locked and neither private nor public keys can be
                   accessed, otherwise `False`
@@ -37,7 +47,7 @@ class Account(object):
     def __init__(self, keystore, password=None, path=None):
         self.keystore = keystore
         try:
-            self._address = self.keystore['address'].decode('hex')
+            self._address = decode_hex(self.keystore['address'])
         except KeyError:
             self._address = None
         self.locked = True
@@ -51,13 +61,22 @@ class Account(object):
     @classmethod
     def new(cls, password, key=None, uuid=None, path=None):
         """Create a new account.
+
         Note that this creates the account in memory and does not store it on disk.
+
         :param password: the password used to encrypt the private key
         :param key: the private key, or `None` to generate a random one
         :param uuid: an optional id
         """
         if key is None:
             key = mk_random_privkey()
+
+        # [NOTE]: key and password should be bytes
+        if not is_string(key):
+            key = to_string(key)
+        if not is_string(password):
+            password = to_string(password)
+
         keystore = keys.make_keystore_json(key, password)
         keystore['id'] = uuid
         return Account(keystore, password, path)
@@ -65,6 +84,7 @@ class Account(object):
     @classmethod
     def load(cls, path, password=None):
         """Load an account from a keystore file.
+
         :param path: full path to the keyfile
         :param password: the password to decrypt the key file or `None` to leave it encrypted
         """
@@ -76,10 +96,13 @@ class Account(object):
 
     def dump(self, include_address=True, include_id=True):
         """Dump the keystore for later disk storage.
+
         The result inherits the entries `'crypto'` and `'version`' from `account.keystore`, and
         adds `'address'` and `'id'` in accordance with the parameters `'include_address'` and
         `'include_id`'.
+
         If address or id are not known, they are not added, even if requested.
+
         :param include_address: flag denoting if the address should be included or not
         :param include_id: flag denoting if the id should be included or not
         """
@@ -87,14 +110,16 @@ class Account(object):
         d['crypto'] = self.keystore['crypto']
         d['version'] = self.keystore['version']
         if include_address and self.address is not None:
-            d['address'] = self.address.encode('hex')
+            d['address'] = encode_hex(self.address)
         if include_id and self.uuid is not None:
-            d['id'] = self.uuid
+            d['id'] = str(self.uuid)
         return json.dumps(d)
 
     def unlock(self, password):
         """Unlock the account with a password.
+
         If the account is already unlocked, nothing happens, even if the password is wrong.
+
         :raises: :exc:`ValueError` (originating in ethereum.keys) if the password is wrong (and the
                  account is locked)
         """
@@ -105,6 +130,7 @@ class Account(object):
 
     def lock(self):
         """Relock an unlocked account.
+
         This method sets `account.privkey` to `None` (unlike `account.address` which is preserved).
         After calling this method, both `account.privkey` and `account.pubkey` are `None.
         `account.address` stays unchanged, even if it has been derived from the private key.
@@ -136,7 +162,7 @@ class Account(object):
         if self._address:
             pass
         elif 'address' in self.keystore:
-            self._address = self.keystore['address'].decode('hex')
+            self._address = decode_hex(self.keystore['address'])
         elif not self.locked:
             self._address = keys.privtoaddr(self.privkey)
         else:
@@ -163,7 +189,9 @@ class Account(object):
 
     def sign_tx(self, tx):
         """Sign a Transaction with the private key of this account.
+
         If the account is unlocked, this is equivalent to ``tx.sign(account.privkey)``.
+
         :param tx: the :class:`ethereum.transactions.Transaction` to sign
         :raises: :exc:`ValueError` if the account is locked
         """
@@ -175,7 +203,7 @@ class Account(object):
 
     def __repr__(self):
         if self.address is not None:
-            address = self.address.encode('hex')
+            address = encode_hex(self.address)
         else:
             address = '?'
         return '<Account(address={address}, id={id})>'.format(address=address, id=self.uuid)
@@ -184,16 +212,20 @@ class Account(object):
 class AccountsService(BaseService):
 
     """Service that manages accounts.
+
     At initialization, this service collects the accounts stored as key files in the keystore
     directory (config option `accounts.keystore_dir`) and below.
+
     To add more accounts, use :method:`add_account`.
+
     :ivar accounts: the :class:`Account`s managed by this service, sorted by the paths to their
                     keystore files
     :ivar keystore_dir: absolute path to the keystore directory
     """
 
     name = 'accounts'
-    default_config = dict(accounts=dict(keystore_dir='keystore', must_include_coinbase=True))
+    default_config = dict(accounts=dict(
+        keystore_dir='keystore', must_include_coinbase=True))
 
     def __init__(self, app):
         super(AccountsService, self).__init__(app)
@@ -204,7 +236,8 @@ class AccountsService(BaseService):
         assert os.path.isabs(self.keystore_dir)
         self.accounts = []
         if not os.path.exists(self.keystore_dir):
-            log.warning('keystore directory does not exist', directory=self.keystore_dir)
+            log.warning('keystore directory does not exist',
+                        directory=self.keystore_dir)
         elif not os.path.isdir(self.keystore_dir):
             log.error('configured keystore directory is a file, not a directory',
                       directory=self.keystore_dir)
@@ -218,7 +251,8 @@ class AccountsService(BaseService):
                     except ValueError:
                         log.warning('invalid file skipped in keystore directory',
                                     path=filename)
-        self.accounts.sort(key=lambda account: account.path)  # sort accounts by path
+        # sort accounts by path
+        self.accounts.sort(key=lambda account: account.path)
         if not self.accounts:
             log.warn('no accounts found')
         else:
@@ -227,9 +261,11 @@ class AccountsService(BaseService):
     @property
     def coinbase(self):
         """Return the address that should be used as coinbase for new blocks.
+
         The coinbase address is given by the config field pow.coinbase_hex. If this does not exist
         or is `None`, the address of the first account is used instead. If there are no accounts,
         the coinbase is `DEFAULT_COINBASE`.
+
         :raises: :exc:`ValueError` if the coinbase is invalid (no string, wrong length) or there is
                  no account for it and the config flag `accounts.check_coinbase` is set (does not
                  apply to the default coinbase)
@@ -240,7 +276,9 @@ class AccountsService(BaseService):
                 return DEFAULT_COINBASE
             cb = self.accounts_with_address[0].address
         else:
-            if not is_string(cb_hex):
+            # [NOTE]: check it!
+            # if not is_string(cb_hex):
+            if not isinstance(cb_hex, str):
                 raise ValueError('coinbase must be string')
             try:
                 cb = decode_hex(remove_0x_head(cb_hex))
@@ -255,9 +293,11 @@ class AccountsService(BaseService):
 
     def add_account(self, account, store=True, include_address=True, include_id=True):
         """Add an account.
+
         If `store` is true the account will be stored as a key file at the location given by
         `account.path`. If this is `None` a :exc:`ValueError` is raised. `include_address` and
         `include_id` determine if address and id should be removed for storage or not.
+
         This method will raise a :exc:`ValueError` if the new account has the same UUID as an
         account already known to the service. Note that address collisions do not result in an
         exception as those may slip through anyway for locked accounts with hidden addresses.
@@ -265,7 +305,8 @@ class AccountsService(BaseService):
         log.info('adding account', account=account)
         if account.uuid is not None:
             if len([acct for acct in self.accounts if acct.uuid == account.uuid]) > 0:
-                log.error('could not add account (UUID collision)', uuid=account.uuid)
+                log.error('could not add account (UUID collision)',
+                          uuid=account.uuid)
                 raise ValueError('Could not add account (UUID collision)')
         if store:
             if account.path is None:
@@ -286,16 +327,22 @@ class AccountsService(BaseService):
                           errno=e.errno)
                 raise
         self.accounts.append(account)
-        self.accounts.sort(key=lambda account: account.path)
+        min_value = MinType()
+        self.accounts.sort(
+            key=lambda account: min_value if account.path is None else account.path)
 
     def update_account(self, account, new_password, include_address=True, include_id=True):
         """Replace the password of an account.
+
         The update is carried out in three steps:
+
         1) the old keystore file is renamed
         2) the new keystore file is created at the previous location of the old keystore file
         3) the old keystore file is removed
+
         In this way, at least one of the keystore files exists on disk at any time and can be
         recovered if the process is interrupted.
+
         :param account: the :class:`Account` which must be unlocked, stored on disk and included in
                         :attr:`AccountsService.accounts`.
         :param include_address: forwarded to :meth:`add_account` during step 2
@@ -313,7 +360,8 @@ class AccountsService(BaseService):
 
         # create new account
         log.debug('creating new account')
-        new_account = Account.new(new_password, key=account.privkey, uuid=account.uuid)
+        new_account = Account.new(
+            new_password, key=account.privkey, uuid=account.uuid)
         new_account.path = account.path
 
         # generate unique path and move old keystore file there
@@ -382,11 +430,14 @@ class AccountsService(BaseService):
 
     def find(self, identifier):
         """Find an account by either its address, its id or its index as string.
+
         Example identifiers:
+
         - '9c0e0240776cfbe6fa1eb37e57721e1a88a563d1' (address)
         - '0x9c0e0240776cfbe6fa1eb37e57721e1a88a563d1' (address with 0x prefix)
         - '01dd527b-f4a5-4b3c-9abb-6a8e7cd6722f' (UUID)
         - '3' (index)
+
         :param identifier: the accounts hex encoded, case insensitive address (with optional 0x
                            prefix), its UUID or its index (as string, >= 1) in
                            `account_service.accounts`
@@ -398,7 +449,7 @@ class AccountsService(BaseService):
         except ValueError:
             pass
         else:
-            return self.get_by_id(str(uuid))
+            return self.get_by_id(uuid.hex)
 
         try:
             index = int(identifier, 10)
@@ -415,7 +466,7 @@ class AccountsService(BaseService):
         if identifier[:2] == '0x':
             identifier = identifier[2:]
         try:
-            address = identifier.decode('hex')
+            address = decode_hex(identifier)
         except TypeError:
             success = False
         else:
@@ -429,7 +480,9 @@ class AccountsService(BaseService):
 
     def get_by_id(self, id):
         """Return the account with a given id.
+
         Note that accounts are not required to have an id.
+
         :raises: `KeyError` if no matching account can be found
         """
         accts = [acct for acct in self.accounts if UUID(acct.uuid) == UUID(id)]
@@ -442,24 +495,29 @@ class AccountsService(BaseService):
 
     def get_by_address(self, address):
         """Get an account by its address.
+
         Note that even if an account with the given address exists, it might not be found if it is
         locked. Also, multiple accounts with the same address may exist, in which case the first
         one is returned (and a warning is logged).
+
         :raises: `KeyError` if no matching account can be found
         """
         assert len(address) == 20
-        accounts = [account for account in self.accounts if account.address == address]
+        accounts = [
+            account for account in self.accounts if account.address == address]
         if len(accounts) == 0:
-            raise KeyError('account not found by address', address=address.encode('hex'))
+            raise KeyError(
+                'account with address {} not found'.format(encode_hex(address)))
         elif len(accounts) > 1:
-            log.warning('multiple accounts with same address found', address=address.encode('hex'))
+            log.warning('multiple accounts with same address found',
+                        address=encode_hex(address))
         return accounts[0]
 
     def sign_tx(self, address, tx):
         self.get_by_address(address).sign_tx(tx)
 
     def propose_path(self, address):
-        return os.path.join(self.keystore_dir, address.encode('hex'))
+        return os.path.join(self.keystore_dir, encode_hex(address))
 
     def __contains__(self, address):
         assert len(address) == 20
@@ -489,4 +547,6 @@ class AccountsService(BaseService):
 --unlock <password dialog>
 --password  passwordfile
 --newkey    <password dialog>
+
+
 """

@@ -35,7 +35,7 @@ class CasperService(WiredService):
         self.privkey = self.account.privkey
         if 'network_id' in self.db:
             db_network_id = self.db.get('network_id')
-            if db_network_id != str(cfg['network_id']):
+            if db_network_id != str(cfg['network_id']).encode():
                 raise RuntimeError(
                     "The database in '{}' was initialized with network id {} and can not be used "
                     "when connecting to network id {}. Please choose a different data directory.".format(

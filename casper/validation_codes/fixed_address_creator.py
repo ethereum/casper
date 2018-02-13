@@ -2,7 +2,7 @@
 import serpent
 import rlp
 from ethereum import utils
-from ethereum import tester
+from ethereum.tools import tester
 from ethereum import transactions
 
 sighash = serpent.compile('sighash.se.py')
