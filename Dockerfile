@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir setuptools==37.0.0 tinyrpc==0.6
 WORKDIR /ethereum
 RUN git clone https://github.com/ethereum/vyper.git &&\
     cd vyper &&\
-    git reset --hard 9be3ac1945ab98c932ec769274965e9bb0536bb2 &&\
+    git reset --hard a154d579062ae67cc3d79c942a30a384bcc1b24e &&\
     python setup.py develop
 RUN git clone https://github.com/karlfloersch/pyethereum.git &&\
     cd pyethereum &&\
