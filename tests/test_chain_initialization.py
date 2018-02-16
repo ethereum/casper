@@ -35,11 +35,11 @@ def test_sig_hasher_is_pure(
 
 # sanity check on casper contract basic functionality
 def test_init_first_epoch(casper, new_epoch):
-    assert casper.current_epoch() == 0
-    assert casper.nextValidatorIndex() == 1
+    assert casper.get_current_epoch() == 0
+    assert casper.get_nextValidatorIndex() == 1
 
     new_epoch()
 
-    assert casper.dynasty() == 0
-    assert casper.nextValidatorIndex() == 1
-    assert casper.current_epoch() == 1
+    assert casper.get_dynasty() == 0
+    assert casper.get_nextValidatorIndex() == 1
+    assert casper.get_current_epoch() == 1

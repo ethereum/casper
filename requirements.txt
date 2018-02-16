@@ -4,8 +4,8 @@ click
 wheel
 rlp>=0.4.4
 devp2p>=0.8.0
-git+https://github.com/ethereum/pyethereum.git@state_revamp
+git+https://github.com/ethereum/pyethereum.git@cba5954a43a2db4df7504d9ced70c63530247e77
 web3>=3.8.0
 pytest==3.4.0
-viper==0.0.3
+git+https://github.com/ethereum/vyper.git@a154d579062ae67cc3d79c942a30a384bcc1b24e
 ethereum-serpent==2.0.4

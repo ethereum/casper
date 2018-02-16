@@ -6,14 +6,14 @@ def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount, new_epoch,
     vote_1 = mk_vote(
         validator_index,
         casper.get_recommended_target_hash(),
-        casper.current_epoch(),
+        casper.get_current_epoch(),
         casper.get_recommended_source_epoch(),
         funded_privkey
     )
     vote_2 = mk_vote(
         validator_index,
         fake_hash,
-        casper.current_epoch(),
+        casper.get_current_epoch(),
         casper.get_recommended_source_epoch(),
         funded_privkey
     )
@@ -30,14 +30,14 @@ def test_slash_no_surround(casper, funded_privkey, deposit_amount, new_epoch,
     vote_1 = mk_vote(
         validator_index,
         casper.get_recommended_target_hash(),
-        casper.current_epoch(),
+        casper.get_current_epoch(),
         casper.get_recommended_source_epoch() - 1,
         funded_privkey
     )
     vote_2 = mk_vote(
         validator_index,
         fake_hash,
-        casper.current_epoch() - 1,
+        casper.get_current_epoch() - 1,
         casper.get_recommended_source_epoch(),
         funded_privkey
     )

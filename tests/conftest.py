@@ -245,8 +245,8 @@ def get_dirs(path):
 @pytest.fixture
 def new_epoch(casper_chain, casper):
     def new_epoch():
-        next_epoch = casper.current_epoch() + 1
-        epoch_length = casper.epoch_length()
+        next_epoch = casper.get_current_epoch() + 1
+        epoch_length = casper.get_epoch_length()
 
         casper_chain.mine(epoch_length * next_epoch - casper_chain.head_state.block_number)
         casper.initialize_epoch(next_epoch)
@@ -276,7 +276,7 @@ def mk_vote():
 def mk_suggested_vote(casper, mk_vote):
     def mk_suggested_vote(validator_index, privkey):
         target_hash = casper.get_recommended_target_hash()
-        target_epoch = casper.current_epoch()
+        target_epoch = casper.get_current_epoch()
         source_epoch = casper.get_recommended_source_epoch()
         return mk_vote(validator_index, target_hash, target_epoch, source_epoch, privkey)
     return mk_suggested_vote
@@ -295,7 +295,7 @@ def mk_logout():
 @pytest.fixture
 def logout_validator(casper, mk_logout):
     def logout_validator(validator_index, key):
-        logout_tx = mk_logout(validator_index, casper.current_epoch(), key)
+        logout_tx = mk_logout(validator_index, casper.get_current_epoch(), key)
         casper.logout(logout_tx)
     return logout_validator
 
@@ -322,8 +322,8 @@ def deposit_validator(casper_chain, casper, mk_validation_code):
 @pytest.fixture
 def induct_validator(casper_chain, casper, deposit_validator, new_epoch):
     def induct_validator(privkey, value):
-        validator_index = casper.nextValidatorIndex()
-        if casper.current_epoch() == 0:
+        validator_index = casper.get_nextValidatorIndex()
+        if casper.get_current_epoch() == 0:
             new_epoch()
         deposit_validator(privkey, value)
         new_epoch()
@@ -340,8 +340,8 @@ def induct_validator(casper_chain, casper, deposit_validator, new_epoch):
 @pytest.fixture
 def induct_validators(casper_chain, casper, deposit_validator, new_epoch):
     def induct_validators(privkeys, values):
-        start_index = casper.nextValidatorIndex()
-        if casper.current_epoch() == 0:
+        start_index = casper.get_nextValidatorIndex()
+        if casper.get_current_epoch() == 0:
             new_epoch()
         for privkey, value in zip(privkeys, values):
             deposit_validator(privkey, value)
