@@ -8,4 +8,3 @@ git+https://github.com/ethereum/pyethereum.git@cba5954a43a2db4df7504d9ced70c6353
 web3>=3.8.0
 pytest==3.4.0
 git+https://github.com/ethereum/vyper.git@a154d579062ae67cc3d79c942a30a384bcc1b24e
-ethereum-serpent==2.0.4
