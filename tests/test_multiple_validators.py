@@ -27,8 +27,6 @@ def test_deposits_on_staggered_dynasties(casper, funded_privkeys, deposit_amount
     new_epoch()
     assert casper.get_deposit_size(initial_validator) == casper.get_total_prevdyn_deposits()
 
-    assert casper.get_deposit_size(initial_validator) == casper.get_total_prevdyn_deposits()
-
 
 def test_justification_and_finalization(casper, funded_privkeys, deposit_amount, new_epoch,
                                         induct_validators, mk_suggested_vote):
