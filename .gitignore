@@ -1,9 +1,14 @@
-.idea
+.cache/
 .env
+.idea
+.pytest_cache
+.python-version
+
 *.pyc
 *.egg-info
 data*
-.cache/
-.python-version
+notes.txt
+
 build/
 dist/
+venv/
