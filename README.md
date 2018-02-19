@@ -3,7 +3,7 @@
 This repository contains the stage 1 Casper contract & JSON-RPC daemon.
 
 ## Casper Contract
-Implements the Casper [slashing conditions](https://medium.com/@VitalikButerin/minimal-slashing-conditions-20f0b500fc6c) and [dynamic validator sets](https://medium.com/@VitalikButerin/safety-under-dynamic-validator-sets-ef0c3bbdf9f6), written in [Viper](https://github.com/ethereum/viper).
+Implements the Casper [slashing conditions](https://medium.com/@VitalikButerin/minimal-slashing-conditions-20f0b500fc6c) and [dynamic validator sets](https://medium.com/@VitalikButerin/safety-under-dynamic-validator-sets-ef0c3bbdf9f6), written in [Vyper](https://github.com/ethereum/viper).
 
 ## Casper Daemon
 Implements the logic needed to be a Casper validator, communicating via the JSON-RPC interface.
