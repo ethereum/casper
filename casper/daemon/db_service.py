@@ -3,7 +3,7 @@
 from devp2p.service import BaseService
 from ethereum.db import BaseDB
 from ethereum.slogging import get_logger
-from leveldb_service import LevelDBService
+from casper.daemon.leveldb_service import LevelDBService
 
 log = get_logger('db')
 

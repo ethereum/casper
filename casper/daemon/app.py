@@ -10,10 +10,10 @@ import gevent
 from gevent.event import Event
 
 import ethereum.slogging as slogging
-from casper_service import CasperService
-from chain_service import ChainService
-from accounts import AccountsService, Account
-from db_service import DBService
+from casper.daemon.casper_service import CasperService
+from casper.daemon.chain_service import ChainService
+from casper.daemon.accounts import AccountsService, Account
+from casper.daemon.db_service import DBService
 from devp2p.app import BaseApp
 from devp2p.discovery import NodeDiscovery
 from devp2p.peermanager import PeerManager
@@ -185,7 +185,7 @@ def new_account(ctx, uuid):
         password = click.prompt('Password to encrypt private key', default='', hide_input=True,
                                 confirmation_prompt=True, show_default=False)
     account = Account.new(password, uuid=id_)
-    account.path = os.path.join(app.services.accounts.keystore_dir, account.address.encode('hex'))
+    account.path = os.path.join(app.services.accounts.keystore_dir, encode_hex(account.address))
     try:
         app.services.accounts.add_account(account)
     except IOError:
@@ -194,7 +194,7 @@ def new_account(ctx, uuid):
         sys.exit(1)
     else:
         click.echo('Account creation successful')
-        click.echo('  Address: ' + account.address.encode('hex'))
+        click.echo('  Address: ' + encode_hex(account.address))
         click.echo('       Id: ' + str(account.uuid))
 
 
@@ -218,7 +218,7 @@ def list_accounts(ctx):
                                                                  locked='Locked'))
         for i, account in enumerate(accounts):
             click.echo(fmt.format(i='#' + str(i + 1),
-                                  address=(account.address or '').encode('hex'),
+                                  address=encode_hex(account.address or ''),
                                   id=account.uuid or '',
                                   locked='yes' if account.locked else 'no'))
 
@@ -244,7 +244,7 @@ def import_account(ctx, f, uuid):
         id_ = None
     privkey_hex = f.read()
     try:
-        privkey = privkey_hex.strip().decode('hex')
+        privkey = decode_hex(privkey_hex.strip())
     except TypeError:
         click.echo('Could not decode private key from file (should be hex encoded)')
         sys.exit(1)
@@ -253,7 +253,7 @@ def import_account(ctx, f, uuid):
         password = click.prompt('Password to encrypt private key', default='', hide_input=True,
                                 confirmation_prompt=True, show_default=False)
     account = Account.new(password, privkey, uuid=id_)
-    account.path = os.path.join(app.services.accounts.keystore_dir, account.address.encode('hex'))
+    account.path = os.path.join(app.services.accounts.keystore_dir, encode_hex(account.address))
     try:
         app.services.accounts.add_account(account)
     except IOError:
@@ -262,7 +262,7 @@ def import_account(ctx, f, uuid):
         sys.exit(1)
     else:
         click.echo('Account creation successful')
-        click.echo('  Address: ' + account.address.encode('hex'))
+        click.echo('  Address: ' + encode_hex(account.address))
         click.echo('       Id: ' + str(account.uuid))
 
 
@@ -301,7 +301,7 @@ def update_account(ctx, account):
         sys.exit(1)
 
     click.echo('Updating account')
-    click.echo('Address: {}'.format(old_account.address.encode('hex')))
+    click.echo('Address: {}'.format(encode_hex(old_account.address)))
     click.echo('     Id: {}'.format(old_account.uuid))
 
     new_password = click.prompt('New password', default='', hide_input=True,
