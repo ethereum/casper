@@ -92,6 +92,12 @@ owner: address
 # Total deposits destroyed
 total_destroyed: wei_value
 
+# Array of partially destroyed validators, 1 if validator got partially slashed, 0 else
+slashed_validators : public(bool[num])
+
+# Keeps track of if Total_destroyed >= 1/3 curr_deposit
+slash_total : public(bool)
+
 # Sighash calculator library address
 sighasher: address
 
@@ -167,6 +173,13 @@ def get_deposit_size(validator_index: num) -> num(wei):
 @constant
 def get_total_curdyn_deposits() -> wei_value:
     return floor(self.total_curdyn_deposits * self.deposit_scale_factor[self.current_epoch])
+
+
+@public
+@constant
+def get_total_destroyed() -> wei_value:
+    return self.total_destroyed
+
 
 @public
 @constant
@@ -297,6 +310,7 @@ def deposit(validation_addr: address, withdrawal_addr: address):
         withdrawal_addr: withdrawal_addr
     }
     self.validator_indexes[withdrawal_addr] = self.nextValidatorIndex
+    self.slashed_validators[self.nextValidatorIndex] = False
     self.nextValidatorIndex += 1
     self.second_next_dynasty_wei_delta += msg.value / self.deposit_scale_factor[self.current_epoch]
 
@@ -472,11 +486,28 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
         # NO SURROUND VOTE
         slashing_condition_detected = True
     assert slashing_condition_detected
-    # Delete the offending validator, and give a 4% "finder's fee"
+
+    # Slash partial (1/8th deposit of offending validator's deposit, give a 4% "finder's fee"
     validator_deposit: num(wei) = self.get_deposit_size(validator_index_1)
     slashing_bounty: num(wei) = validator_deposit / 25
-    self.total_destroyed += validator_deposit * 24 / 25
-    self.delete_validator(validator_index_1)
+    self.total_destroyed += validator_deposit / 8
+
+    # This is for version 2 to record the malicious validators
+    self.slashed_validators[validator_index_1] = True
+
+    # Slash Total detected, Delete the current offending validator (v1.5)
+    if self.total_destroyed >= floor(self.get_total_curdyn_deposits() * 0.333):
+        self.total_destroyed += floor(0.835 * validator_deposit)
+        self.delete_validator(validator_index_1)
+        self.slash_total = True
+
+    else:
+        # TODO: unsure if I should be removing from the current dynasty.
+        # self.total_curdyn_deposits -= validator_deposit * (partial_frac + bounty_frac)
+        if self.validators[validator_index_1].end_dynasty > self.dynasty + 2:
+            self.next_dynasty_wei_delta -= self.validators[validator_index_1].deposit * (1/8 + 1/25)
+            # self.second_next_dynasty_wei_delta -= validator_deposit * (partial_frac + bounty_frac) 
+        self.validators[validator_index_1].deposit = 0.835 * self.validators[validator_index_1].deposit
     send(msg.sender, slashing_bounty)
 
 # Temporary backdoor for testing purposes (to allow recovering destroyed deposits)
