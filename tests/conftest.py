@@ -108,12 +108,8 @@ def casper_config():
 
 
 @pytest.fixture
-def test_chain(alloc={}, genesis_gas_limit=9999999, min_gas_limit=5000, startgas=3141592):
-    # alloc
-    alloc[tester.a0] = {'balance': 100000 * utils.denoms.ether}
-
-    for i in range(9):
-        alloc[utils.int_to_addr(i)] = {'balance': 1}
+def test_chain(alloc=tester.base_alloc, genesis_gas_limit=9999999,
+               min_gas_limit=5000, startgas=3141592):
     # genesis
     header = {
         "number": 0, "gas_limit": genesis_gas_limit,
