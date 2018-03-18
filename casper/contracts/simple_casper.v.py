@@ -74,6 +74,9 @@ epoch_length: public(num)
 # Withdrawal delay in blocks
 withdrawal_delay: public(num)
 
+# Logout delay in dynasties
+dynasty_logout_delay: public(num)
+
 # Current epoch
 current_epoch: public(num)
 
@@ -114,42 +117,33 @@ vote_log_topic: bytes32
 min_deposit_size: wei_value
 
 @public
-def __init__(  # Epoch length, delay in epochs for withdrawing
-        _epoch_length: num, _withdrawal_delay: num,
-        # Owner (backdoor), sig hash calculator, purity checker
+def __init__(
+        _epoch_length: num, _withdrawal_delay: num, _dynasty_logout_delay: num,
         _owner: address, _sighasher: address, _purity_checker: address,
-        # Base interest and base penalty factors
         _base_interest_factor: decimal, _base_penalty_factor: decimal,
-        # Min deposit size
         _min_deposit_size: wei_value):
-    # Epoch length
+
     self.epoch_length = _epoch_length
-    # Delay in epochs for withdrawing
-    self.withdrawal_delay = _withdrawal_delay
-    # Start validator index counter at 1 because validator_indexes[] requires non-zero values
-    self.nextValidatorIndex = 1
-    # Temporary backdoor for testing purposes (to allow recovering destroyed deposits)
-    self.owner = _owner
-    # Set deposit scale factor
-    self.deposit_scale_factor[0] = 10000000000.0
-    # Start dynasty counter at 0
-    self.dynasty = 0
-    # Initialize the epoch counter
-    self.current_epoch = block.number / self.epoch_length
-    # Set the sighash calculator address
-    self.sighasher = _sighasher
-    # Set the purity checker address
-    self.purity_checker = _purity_checker
-    # self.votes[0].committed = True
-    # Set initial total deposit counter
-    self.total_curdyn_deposits = 0
-    self.total_prevdyn_deposits = 0
-    # Constants that affect interest rates and penalties
+    self.withdrawal_delay = _withdrawal_delay  # delay in epochs
+    self.dynasty_logout_delay = _dynasty_logout_delay  # delay in dynasties
+    self.owner = _owner  # temporary backdoor for testing
     self.base_interest_factor = _base_interest_factor
     self.base_penalty_factor = _base_penalty_factor
-    self.vote_log_topic = sha3("vote()")
-    # Constants that affect the min deposit size
     self.min_deposit_size = _min_deposit_size
+
+    # helper contracts
+    self.sighasher = _sighasher
+    self.purity_checker = _purity_checker
+
+    # Start validator index counter at 1 because validator_indexes[] requires non-zero values
+    self.nextValidatorIndex = 1
+
+    self.deposit_scale_factor[0] = 10000000000.0
+    self.dynasty = 0
+    self.current_epoch = block.number / self.epoch_length
+    self.total_curdyn_deposits = 0
+    self.total_prevdyn_deposits = 0
+    self.vote_log_topic = sha3("vote()")
 
 # ***** Constants *****
 @public
@@ -318,14 +312,15 @@ def logout(logout_msg: bytes <= 1024):
     # Signature check
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=500000, outsize=32), 0) == as_bytes32(1)
     # Check that we haven't already withdrawn
-    assert self.validators[validator_index].end_dynasty > self.dynasty + 2
+    assert self.validators[validator_index].end_dynasty > self.dynasty + self.dynasty_logout_delay
     # Set the end dynasty
-    self.validators[validator_index].end_dynasty = self.dynasty + 2
+    self.validators[validator_index].end_dynasty = self.dynasty + self.dynasty_logout_delay
     self.second_next_dynasty_wei_delta -= self.validators[validator_index].deposit
 
 # Removes a validator from the validator pool
 @private
 def delete_validator(validator_index: num):
+    # this conditional looks like a bug
     if self.validators[validator_index].end_dynasty > self.dynasty + 2:
         self.next_dynasty_wei_delta -= self.validators[validator_index].deposit
     self.validator_indexes[self.validators[validator_index].withdrawal_addr] = 0
