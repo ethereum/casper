@@ -1,3 +1,12 @@
+#  List of events the contract logs
+# Withdrawal address used always in _from and _to as it's unique and validator index is removed after some events
+Deposit: __log__({_from: indexed(address), _validator: address, _validator_index: num, _start_dyn: num, _amount: num(wei)})
+Vote: __log__({_from: indexed(address), _validator_index: num, _target_hash: bytes32, _target_epoch: num, _source_epoch: num})
+Logout: __log__({_from: indexed(address), _validator_index: num, _end_dyn: num})
+Withdraw: __log__({_to: indexed(address), _validator_index: num, _amount: num(wei)})
+Slash: __log__({_from: indexed(address), _offender: address, _amount: num(wei)})
+Epoch: __log__({_number: num, _checkpoint_hash: bytes32, _is_justified: bool, _is_finalized: bool})
+
 # Information about validators
 validators: public({
     # Used to determine the amount of wei the validator holds. To get the actual
@@ -107,9 +116,6 @@ base_interest_factor: public(decimal)
 # Base penalty factor
 base_penalty_factor: public(decimal)
 
-# Log topic for vote
-vote_log_topic: bytes32
-
 # Minimum deposit size if no one else is validating
 min_deposit_size: wei_value
 
@@ -147,7 +153,6 @@ def __init__(  # Epoch length, delay in epochs for withdrawing
     # Constants that affect interest rates and penalties
     self.base_interest_factor = _base_interest_factor
     self.base_penalty_factor = _base_penalty_factor
-    self.vote_log_topic = sha3("vote()")
     # Constants that affect the min deposit size
     self.min_deposit_size = _min_deposit_size
 
@@ -236,6 +241,8 @@ def insta_finalize():
     self.votes[epoch - 1].is_finalized = True
     self.last_justified_epoch = epoch - 1
     self.last_finalized_epoch = epoch - 1
+    # Log previous Epoch status update
+    log.Epoch(epoch - 1, self.checkpoint_hashes[epoch - 1], True, True)
 
 # Compute square root factor
 @private
@@ -280,6 +287,8 @@ def initialize_epoch(epoch: num):
 
     # Store checkpoint hash for easy access
     self.checkpoint_hashes[epoch] = self.get_recommended_target_hash()
+    # Log new epoch creation
+    log.Epoch(epoch, self.checkpoint_hashes[epoch], False, False)
 
 # Send a deposit to join the validator set
 @public
@@ -299,6 +308,8 @@ def deposit(validation_addr: address, withdrawal_addr: address):
     self.validator_indexes[withdrawal_addr] = self.nextValidatorIndex
     self.nextValidatorIndex += 1
     self.second_next_dynasty_wei_delta += msg.value / self.deposit_scale_factor[self.current_epoch]
+    # Log deposit event
+    log.Deposit(withdrawal_addr, validation_addr, self.validator_indexes[withdrawal_addr], self.validators[self.validator_indexes[withdrawal_addr]].start_dynasty, msg.value)
 
 # Log in or log out from the validator set. A logged out validator can log
 # back in later, if they do not log in for an entire withdrawal period,
@@ -322,6 +333,8 @@ def logout(logout_msg: bytes <= 1024):
     # Set the end dynasty
     self.validators[validator_index].end_dynasty = self.dynasty + 2
     self.second_next_dynasty_wei_delta -= self.validators[validator_index].deposit
+    # Log logout event
+    log.Logout(self.validators[validator_index].withdrawal_addr, validator_index, self.validators[validator_index].end_dynasty)
 
 # Removes a validator from the validator pool
 @private
@@ -347,6 +360,8 @@ def withdraw(validator_index: num):
     # Withdraw
     withdraw_amount: num(wei) = floor(self.validators[validator_index].deposit * self.deposit_scale_factor[end_epoch])
     send(self.validators[validator_index].withdrawal_addr, withdraw_amount)
+    # Log withdraw event
+    log.Withdraw(self.validators[validator_index].withdrawal_addr, validator_index, withdraw_amount)
     self.delete_validator(validator_index)
 
 # Reward the given validator & miner, and reflect this in total deposit figured
@@ -428,6 +443,9 @@ def vote(vote_msg: bytes <= 1024):
             not self.votes[target_epoch].is_justified:
         self.votes[target_epoch].is_justified = True
         self.last_justified_epoch = target_epoch
+        # Log target epoch status update
+        log.Epoch(target_epoch, self.checkpoint_hashes[target_epoch], True, False)
+
         if target_epoch == self.current_epoch:
             self.main_hash_justified = True
         # If two epochs are justified consecutively,
@@ -435,7 +453,10 @@ def vote(vote_msg: bytes <= 1024):
         if target_epoch == source_epoch + 1:
             self.votes[source_epoch].is_finalized = True
             self.last_finalized_epoch = source_epoch
-    raw_log([self.vote_log_topic], vote_msg)
+            # Log source epoch status update
+            log.Epoch(source_epoch, self.checkpoint_hashes[source_epoch], True, True)
+    # Log vote event
+    log.Vote(self.validators[validator_index].withdrawal_addr, validator_index, target_hash, target_epoch, source_epoch)
 
 # Cannot make two prepares in the same epoch; no surrond vote.
 @public
@@ -476,6 +497,8 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     validator_deposit: num(wei) = self.get_deposit_size(validator_index_1)
     slashing_bounty: num(wei) = validator_deposit / 25
     self.total_destroyed += validator_deposit * 24 / 25
+    # Log slashing
+    log.Slash(msg.sender, self.validators[validator_index_1].withdrawal_addr, slashing_bounty)
     self.delete_validator(validator_index_1)
     send(msg.sender, slashing_bounty)
 

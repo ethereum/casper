@@ -1,5 +1,7 @@
-def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount, new_epoch,
-                              induct_validator, mk_vote, fake_hash, assert_tx_failed):
+from ethereum import utils
+
+def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount, get_last_log,
+                              induct_validator, mk_vote, fake_hash, casper_chain):
     validator_index = induct_validator(funded_privkey, deposit_amount)
     assert casper.get_total_curdyn_deposits() == deposit_amount
 
@@ -19,6 +21,12 @@ def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount, new_epoch,
     )
 
     casper.slash(vote_1, vote_2)
+    # Slash log
+    log = get_last_log(casper_chain, casper)
+    assert set(('_from', '_offender', '_amount', '_event_type')) == log.keys()
+    assert log['_event_type'] == b'Slash'
+    assert log['_offender'] == '0x' + utils.encode_hex(utils.privtoaddr(funded_privkey))
+
     assert casper.get_deposit_size(validator_index) == 0
 
 
