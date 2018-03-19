@@ -317,30 +317,6 @@ def logout_validator(casper, mk_logout):
 
 
 @pytest.fixture
-def mk_withdraw(casper_ct, casper_address):
-    def mk_withdraw(validator_index, casper_chain, key):
-        print('key: ' + utils.encode_hex(key))
-        withdraw_func = casper_ct.encode('withdraw', [validator_index])
-        withdraw_tx = Transaction(
-            casper_chain.head_state.get_nonce(utils.privtoaddr(key)),
-            GAS_PRICE,
-            500000,
-            casper_address,
-            0,
-            withdraw_func
-        ).sign(key)
-        return withdraw_tx
-    return mk_withdraw
-
-@pytest.fixture
-def withdraw_validator(mk_withdraw):
-    def withdraw_validator(validator_index, casper_chain, key):
-        withdraw_tx = mk_withdraw(validator_index, casper_chain, key)
-        casper_chain.direct_tx(withdraw_tx)
-    return withdraw_validator
-
-
-@pytest.fixture
 def deposit_validator(casper_chain, casper, mk_validation_code):
     def deposit_validator(privkey, value):
         addr = utils.privtoaddr(privkey)
@@ -429,6 +405,5 @@ def get_last_log(get_logs):
     def get_last_log(casper_chain, contract, event_name=None):
         receipt = casper_chain.head_state.receipts[-1] # Only the receipts for the last block
         # Get last log event with correct name and return the decoded event
-        print(get_logs(receipt, contract, event_name=event_name))
         return get_logs(receipt, contract, event_name=event_name)[-1]
     return get_last_log

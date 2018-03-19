@@ -1,10 +1,10 @@
 #  List of events the contract logs
 # Withdrawal address used always in _from and _to as it's unique and validator index is removed after some events
-Deposit: __log__({_from: indexed(address), _validator: address, _validator_index: num, _start_dyn: num, _amount: num(wei)})
-Vote: __log__({_from: indexed(address), _validator_index: num, _target_hash: bytes32, _target_epoch: num, _source_epoch: num})
-Logout: __log__({_from: indexed(address), _validator_index: num, _end_dyn: num})
-Withdraw: __log__({_to: indexed(address), _validator_index: num, _amount: num(wei)})
-Slash: __log__({_from: indexed(address), _offender: address, _amount: num(wei)})
+Deposit: __log__({_from: indexed(address), _validator_index: indexed(num), _validation_address: address, _start_dyn: num, _amount: num(wei)})
+Vote: __log__({_from: indexed(address), _validator_index: indexed(num), _target_hash: bytes32, _target_epoch: num, _source_epoch: num})
+Logout: __log__({_from: indexed(address), _validator_index: indexed(num), _end_dyn: num})
+Withdraw: __log__({_to: indexed(address), _validator_index: indexed(num), _amount: num(wei)})
+Slash: __log__({_from: indexed(address), _offender: indexed(address), _offender_index: indexed(num), _bounty: num(wei), _destroyed: num(wei)})
 Epoch: __log__({_number: num, _checkpoint_hash: bytes32, _is_justified: bool, _is_finalized: bool})
 
 # Information about validators
@@ -309,7 +309,7 @@ def deposit(validation_addr: address, withdrawal_addr: address):
     self.nextValidatorIndex += 1
     self.second_next_dynasty_wei_delta += msg.value / self.deposit_scale_factor[self.current_epoch]
     # Log deposit event
-    log.Deposit(withdrawal_addr, validation_addr, self.validator_indexes[withdrawal_addr], self.validators[self.validator_indexes[withdrawal_addr]].start_dynasty, msg.value)
+    log.Deposit(withdrawal_addr, self.validator_indexes[withdrawal_addr], validation_addr, self.validators[self.validator_indexes[withdrawal_addr]].start_dynasty, msg.value)
 
 # Log in or log out from the validator set. A logged out validator can log
 # back in later, if they do not log in for an entire withdrawal period,
@@ -496,9 +496,10 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     # Delete the offending validator, and give a 4% "finder's fee"
     validator_deposit: num(wei) = self.get_deposit_size(validator_index_1)
     slashing_bounty: num(wei) = validator_deposit / 25
-    self.total_destroyed += validator_deposit * 24 / 25
+    deposit_destroyed: num(wei) = validator_deposit * 24 / 25
+    self.total_destroyed += deposit_destroyed
     # Log slashing
-    log.Slash(msg.sender, self.validators[validator_index_1].withdrawal_addr, slashing_bounty)
+    log.Slash(msg.sender, self.validators[validator_index_1].withdrawal_addr, validator_index_1, slashing_bounty, deposit_destroyed)
     self.delete_validator(validator_index_1)
     send(msg.sender, slashing_bounty)
 

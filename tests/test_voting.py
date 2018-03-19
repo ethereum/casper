@@ -113,14 +113,12 @@ def test_consensus_after_non_finalization_streak(casper, funded_privkey, deposit
 
 
 def test_logs(casper, funded_privkey, new_epoch, get_logs, deposit_validator,
-              mk_suggested_vote, get_last_log, casper_chain, logout_validator, withdraw_validator):
+              mk_suggested_vote, get_last_log, casper_chain, logout_validator):
     validator_index = casper.get_nextValidatorIndex()
-    print('balance: %d' % casper_chain.head_state.get_balance(utils.privtoaddr(funded_privkey)))
     deposit_validator(funded_privkey, 1900 * 10 ** 18)
-    print('balance: %d' % casper_chain.head_state.get_balance(utils.privtoaddr(funded_privkey)))
     # Deposit log
     log1 = get_last_log(casper_chain, casper)
-    assert set(('_from', '_validator', '_validator_index', '_start_dyn', '_amount', '_event_type')) == log1.keys()
+    assert set(('_from', '_validation_address', '_validator_index', '_start_dyn', '_amount', '_event_type')) == log1.keys()
     assert log1['_event_type'] == b'Deposit'
     assert log1['_from'] == '0x' + utils.encode_hex(utils.privtoaddr(funded_privkey))
     assert log1['_validator_index'] == validator_index
@@ -146,7 +144,6 @@ def test_logs(casper, funded_privkey, new_epoch, get_logs, deposit_validator,
 
     new_epoch()
     new_epoch()
-    print('balance: %d' % casper_chain.head_state.get_balance(utils.privtoaddr(funded_privkey)))
 
     casper.vote(mk_suggested_vote(validator_index, funded_privkey))
     # vote log
@@ -180,7 +177,7 @@ def test_logs(casper, funded_privkey, new_epoch, get_logs, deposit_validator,
     end_epoch = casper.get_dynasty_start_epoch(casper.get_validators__end_dynasty(validator_index) + 1)
     assert cur_epoch == end_epoch + casper.get_withdrawal_delay()  # so we are allowed to withdraw
 
-    withdraw_validator(validator_index, casper_chain, funded_privkey)
+    casper.withdraw(validator_index)
 
     # Withdrawal log, finally
     log5 = get_last_log(casper_chain, casper)

@@ -23,7 +23,7 @@ def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount, get_last_l
     casper.slash(vote_1, vote_2)
     # Slash log
     log = get_last_log(casper_chain, casper)
-    assert set(('_from', '_offender', '_amount', '_event_type')) == log.keys()
+    assert set(('_from', '_offender', '_offender_index', '_bounty', '_destroyed', '_event_type')) == log.keys()
     assert log['_event_type'] == b'Slash'
     assert log['_offender'] == '0x' + utils.encode_hex(utils.privtoaddr(funded_privkey))
 
