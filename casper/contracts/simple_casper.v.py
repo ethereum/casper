@@ -1,11 +1,11 @@
 #  List of events the contract logs
 # Withdrawal address used always in _from and _to as it's unique and validator index is removed after some events
 Deposit: __log__({_from: indexed(address), _validator_index: indexed(num), _validation_address: address, _start_dyn: num, _amount: num(wei)})
-Vote: __log__({_from: indexed(address), _validator_index: indexed(num), _target_hash: bytes32, _target_epoch: num, _source_epoch: num})
+Vote: __log__({_from: indexed(address), _validator_index: indexed(num), _target_hash: indexed(bytes32), _target_epoch: num, _source_epoch: num})
 Logout: __log__({_from: indexed(address), _validator_index: indexed(num), _end_dyn: num})
 Withdraw: __log__({_to: indexed(address), _validator_index: indexed(num), _amount: num(wei)})
 Slash: __log__({_from: indexed(address), _offender: indexed(address), _offender_index: indexed(num), _bounty: num(wei), _destroyed: num(wei)})
-Epoch: __log__({_number: num, _checkpoint_hash: bytes32, _is_justified: bool, _is_finalized: bool})
+Epoch: __log__({_number: indexed(num), _checkpoint_hash: indexed(bytes32), _is_justified: bool, _is_finalized: bool})
 
 # Information about validators
 validators: public({
