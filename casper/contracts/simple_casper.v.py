@@ -1,5 +1,8 @@
-#  List of events the contract logs
-# Withdrawal address used always in _from and _to as it's unique and validator index is removed after some events
+#
+# List of events the contract logs
+# Withdrawal address used always in _from and _to as it's unique
+# and validator index is removed after some events
+#
 Deposit: __log__({_from: indexed(address), _validator_index: indexed(num), _validation_address: address, _start_dyn: num, _amount: num(wei)})
 Vote: __log__({_from: indexed(address), _validator_index: indexed(num), _target_hash: indexed(bytes32), _target_epoch: num, _source_epoch: num})
 Logout: __log__({_from: indexed(address), _validator_index: indexed(num), _end_dyn: num})
@@ -119,6 +122,9 @@ base_penalty_factor: public(decimal)
 # Minimum deposit size if no one else is validating
 min_deposit_size: wei_value
 
+# Huge integer to be used for default end_dynasty for new validator
+default_end_dynasty: num
+
 @public
 def __init__(
         _epoch_length: num, _withdrawal_delay: num, _dynasty_logout_delay: num,
@@ -146,7 +152,7 @@ def __init__(
     self.current_epoch = block.number / self.epoch_length
     self.total_curdyn_deposits = 0
     self.total_prevdyn_deposits = 0
-
+    self.default_end_dynasty = 1000000000000000000000000000000
 
 # ***** Constants *****
 @public
@@ -292,7 +298,7 @@ def deposit(validation_addr: address, withdrawal_addr: address):
     self.validators[self.nextValidatorIndex] = {
         deposit: msg.value / self.deposit_scale_factor[self.current_epoch],
         start_dynasty: start_dynasty,
-        end_dynasty: 1000000000000000000000000000000,
+        end_dynasty: self.default_end_dynasty,
         addr: validation_addr,
         withdrawal_addr: withdrawal_addr
     }
@@ -372,7 +378,7 @@ def proc_reward(validator_index: num, reward: num(wei/m)):
         self.total_curdyn_deposits += reward
     if ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty)):
         self.total_prevdyn_deposits += reward
-    if end_dynasty < 1000000000000000000000000000000:
+    if end_dynasty < self.default_end_dynasty:
         self.dynasty_wei_delta[end_dynasty] -= reward
     send(block.coinbase, floor(reward * self.deposit_scale_factor[self.current_epoch] / 8))
 
