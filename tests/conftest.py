@@ -20,7 +20,7 @@ PURITY_CHECKER_TX_HEX = "0xf90467808506fc23ac00830583c88080b904546104428061000e6
 PURITY_CHECKER_ABI = [{'name': 'check(address)', 'type': 'function', 'constant': True, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}, {'name': 'submit(address)', 'type': 'function', 'constant': False, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}]  # NOQA
 
 EPOCH_LENGTH = 10
-WITHDRAWAL_DELAY = 100
+WITHDRAWAL_DELAY = 5
 OWNER = utils.checksum_encode(tester.a0)
 BASE_INTEREST_FACTOR = 0.02
 BASE_PENALTY_FACTOR = 0.002
@@ -219,6 +219,19 @@ def casper_chain(
         deploy_code
     ).sign(base_sender_privkey)
     test_chain.direct_tx(casper_tx)
+    nonce += 1
+
+    # Casper contract needs money for its activity
+    casper_fund_tx = Transaction(
+        nonce,
+        GAS_PRICE,
+        5000000,
+        casper_tx.creates,
+        10**21,
+        b''
+    ).sign(base_sender_privkey)
+    test_chain.direct_tx(casper_fund_tx)
+
     test_chain.mine(1)
     return test_chain
 
@@ -370,3 +383,27 @@ def assert_tx_failed(casper_chain):
             function_to_test()
         casper_chain.revert(initial_state)
     return assert_tx_failed
+
+@pytest.fixture
+def get_logs():
+    def get_logs(receipt, contract, event_name=None):
+        contract_log_ids = contract.translator.event_data.keys() # All the log ids contract has
+        # All logs originating from contract, and matching event_name (if specified)
+        logs = [log for log in receipt.logs \
+                if log.topics[0] in contract_log_ids and \
+                log.address == contract.address and \
+                (not event_name or \
+                 contract.translator.event_data[log.topics[0]]['name'] == event_name)]
+        assert len(logs) > 0, "No logs in last receipt"
+
+        # Return all events decoded in the receipt
+        return [contract.translator.decode_event(log.topics, log.data) for log in logs]
+    return get_logs
+
+@pytest.fixture
+def get_last_log(get_logs):
+    def get_last_log(casper_chain, contract, event_name=None):
+        receipt = casper_chain.head_state.receipts[-1] # Only the receipts for the last block
+        # Get last log event with correct name and return the decoded event
+        return get_logs(receipt, contract, event_name=event_name)[-1]
+    return get_last_log
