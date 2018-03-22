@@ -71,3 +71,19 @@ def test_logout_with_multiple_validators(casper, funded_privkeys,
 
     assert abs(logged_in_deposit_size - casper.get_total_curdyn_deposits()) < num_validators
     assert abs(logged_in_deposit_size - casper.get_total_prevdyn_deposits()) < num_validators
+
+    # validator can withdraw after delay
+    for i in range(casper.get_withdrawal_delay()):
+        for i, validator_index in enumerate(logged_in_indexes):
+            casper.vote(mk_suggested_vote(validator_index, logged_in_privkeys[i]))
+        new_epoch()
+
+    withdrawal_amount = casper.get_deposit_size(logged_out_index)
+    assert withdrawal_amount > 0
+
+    casper.withdraw(logged_out_index)
+    assert casper.get_deposit_size(logged_out_index) == 0
+    assert casper.get_validators__deposit(logged_out_index) == 0
+    assert casper.get_validators__start_dynasty(logged_out_index) == 0
+
+

@@ -295,8 +295,9 @@ def deposit(validation_addr: address, withdrawal_addr: address):
     assert not self.validator_indexes[withdrawal_addr]
     assert msg.value >= self.min_deposit_size
     start_dynasty: num = self.dynasty + 2
+    scaled_deposit: decimal(wei/m) = msg.value / self.deposit_scale_factor[self.current_epoch]
     self.validators[self.nextValidatorIndex] = {
-        deposit: msg.value / self.deposit_scale_factor[self.current_epoch],
+        deposit: scaled_deposit,
         start_dynasty: start_dynasty,
         end_dynasty: self.default_end_dynasty,
         addr: validation_addr,
@@ -304,7 +305,7 @@ def deposit(validation_addr: address, withdrawal_addr: address):
     }
     self.validator_indexes[withdrawal_addr] = self.nextValidatorIndex
     self.nextValidatorIndex += 1
-    self.dynasty_wei_delta[start_dynasty] += msg.value / self.deposit_scale_factor[self.current_epoch]
+    self.dynasty_wei_delta[start_dynasty] += scaled_deposit
     # Log deposit event
     log.Deposit(withdrawal_addr, self.validator_indexes[withdrawal_addr], validation_addr, self.validators[self.validator_indexes[withdrawal_addr]].start_dynasty, msg.value)
 
@@ -338,10 +339,6 @@ def logout(logout_msg: bytes <= 1024):
 # Removes a validator from the validator pool
 @private
 def delete_validator(validator_index: num):
-    # this conditional looks like a bug
-    if self.validators[validator_index].end_dynasty > self.dynasty + 2:
-        self.dynasty_wei_delta[self.dynasty + 1] -= self.validators[validator_index].deposit
-        # self.next_dynasty_wei_delta -= self.validators[validator_index].deposit
     self.validator_indexes[self.validators[validator_index].withdrawal_addr] = 0
     self.validators[validator_index] = {
         deposit: 0,
@@ -499,6 +496,15 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     self.total_destroyed += deposit_destroyed
     # Log slashing
     log.Slash(msg.sender, self.validators[validator_index_1].withdrawal_addr, validator_index_1, slashing_bounty, deposit_destroyed)
+
+    deposit: decimal(wei/m) = self.validators[validator_index_1].deposit
+    self.dynasty_wei_delta[self.dynasty + 1] -= deposit
+
+    # if validator had already initialized logout remove his deposit
+    # from next dynasty rather than from his end_dynasty
+    if self.validators[validator_index_1].end_dynasty < self.default_end_dynasty:
+        self.dynasty_wei_delta[self.validators[validator_index_1].end_dynasty] += deposit
+
     self.delete_validator(validator_index_1)
     send(msg.sender, slashing_bounty)
 

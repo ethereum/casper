@@ -1,5 +1,6 @@
 from ethereum import utils
 
+
 def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount, get_last_log,
                               induct_validator, mk_vote, fake_hash, casper_chain):
     validator_index = induct_validator(funded_privkey, deposit_amount)
@@ -20,14 +21,21 @@ def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount, get_last_l
         funded_privkey
     )
 
+    next_dynasty = casper.get_dynasty() + 1
+    assert casper.get_dynasty_wei_delta(casper.get_dynasty() + 1) == 0
+
     casper.slash(vote_1, vote_2)
-    # Slash log
-    log = get_last_log(casper_chain, casper)
-    assert set(('_from', '_offender', '_offender_index', '_bounty', '_destroyed', '_event_type')) == log.keys()
-    assert log['_event_type'] == b'Slash'
-    assert log['_offender'] == '0x' + utils.encode_hex(utils.privtoaddr(funded_privkey))
 
     assert casper.get_deposit_size(validator_index) == 0
+    assert casper.get_dynasty_wei_delta(next_dynasty) == \
+        (-deposit_amount / casper.get_deposit_scale_factor())
+
+    # Slash log
+    log = get_last_log(casper_chain, casper)
+    assert set(('_from', '_offender', '_offender_index',
+                '_bounty', '_destroyed', '_event_type')) == log.keys()
+    assert log['_event_type'] == b'Slash'
+    assert log['_offender'] == '0x' + utils.encode_hex(utils.privtoaddr(funded_privkey))
 
 
 def test_slash_no_surround(casper, funded_privkey, deposit_amount, new_epoch,
@@ -50,5 +58,10 @@ def test_slash_no_surround(casper, funded_privkey, deposit_amount, new_epoch,
         funded_privkey
     )
 
+    next_dynasty = casper.get_dynasty() + 1
+    assert casper.get_dynasty_wei_delta(casper.get_dynasty() + 1) == 0
+
     casper.slash(vote_1, vote_2)
     assert casper.get_deposit_size(validator_index) == 0
+    assert casper.get_dynasty_wei_delta(next_dynasty) == \
+        (-deposit_amount / casper.get_deposit_scale_factor())
