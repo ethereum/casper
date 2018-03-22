@@ -54,7 +54,7 @@ def base_sender_privkey():
     return tester.k0
 
 
-@pytest.fixture(params=FUNDED_PRIVKEYS[0:3])
+@pytest.fixture(params=FUNDED_PRIVKEYS[0:1])
 def funded_privkey(request):
     return request.param
 
@@ -316,16 +316,25 @@ def logout_validator(casper, mk_logout):
 
 
 @pytest.fixture
-def deposit_validator(casper_chain, casper, mk_validation_code):
-    def deposit_validator(privkey, value):
+def validation_addr(casper_chain, casper, mk_validation_code):
+    def validation_addr(privkey):
         addr = utils.privtoaddr(privkey)
-        valcode_addr = casper_chain.tx(
+        return casper_chain.tx(
             privkey,
             "",
             0,
             mk_validation_code(addr)
         )
+    return validation_addr
+
+
+@pytest.fixture
+def deposit_validator(casper_chain, casper, validation_addr):
+    def deposit_validator(privkey, value):
+        addr = utils.privtoaddr(privkey)
+        valcode_addr = validation_addr(privkey)
         casper.deposit(valcode_addr, addr, value=value)
+        return casper.get_validator_indexes(addr)
     return deposit_validator
 
 
@@ -337,10 +346,9 @@ def deposit_validator(casper_chain, casper, mk_validation_code):
 @pytest.fixture
 def induct_validator(casper_chain, casper, deposit_validator, new_epoch):
     def induct_validator(privkey, value):
-        validator_index = casper.get_nextValidatorIndex()
         if casper.get_current_epoch() == 0:
             new_epoch()
-        deposit_validator(privkey, value)
+        validator_index = deposit_validator(privkey, value)
         new_epoch()
         new_epoch()
         return validator_index

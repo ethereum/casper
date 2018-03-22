@@ -25,11 +25,8 @@ validator_indexes: public(num[address])
 # The current dynasty (validator set changes between dynasties)
 dynasty: public(num)
 
-# Amount of wei added to the total deposits in the next dynasty
-next_dynasty_wei_delta: public(decimal(wei / m))
-
-# Amount of wei added to the total deposits in the dynasty after that
-second_next_dynasty_wei_delta: public(decimal(wei / m))
+# Map of the change to total deposits for specific dynasty
+dynasty_wei_delta: public(decimal(wei / m)[num])
 
 # Total deposits in the current dynasty
 total_curdyn_deposits: decimal(wei / m)
@@ -194,9 +191,7 @@ def increment_dynasty():
     if self.votes[epoch-2].is_finalized:
         self.dynasty += 1
         self.total_prevdyn_deposits = self.total_curdyn_deposits
-        self.total_curdyn_deposits += self.next_dynasty_wei_delta
-        self.next_dynasty_wei_delta = self.second_next_dynasty_wei_delta
-        self.second_next_dynasty_wei_delta = 0
+        self.total_curdyn_deposits += self.dynasty_wei_delta[self.dynasty]
         self.dynasty_start_epoch[self.dynasty] = epoch
     self.dynasty_in_epoch[epoch] = self.dynasty
     if self.main_hash_justified:
@@ -283,16 +278,17 @@ def deposit(validation_addr: address, withdrawal_addr: address):
     assert extract32(raw_call(self.purity_checker, concat('\xa1\x90>\xab', as_bytes32(validation_addr)), gas=500000, outsize=32), 0) != as_bytes32(0)
     assert not self.validator_indexes[withdrawal_addr]
     assert msg.value >= self.min_deposit_size
+    start_dynasty: num = self.dynasty + 2
     self.validators[self.nextValidatorIndex] = {
         deposit: msg.value / self.deposit_scale_factor[self.current_epoch],
-        start_dynasty: self.dynasty + 2,
+        start_dynasty: start_dynasty,
         end_dynasty: 1000000000000000000000000000000,
         addr: validation_addr,
         withdrawal_addr: withdrawal_addr
     }
     self.validator_indexes[withdrawal_addr] = self.nextValidatorIndex
     self.nextValidatorIndex += 1
-    self.second_next_dynasty_wei_delta += msg.value / self.deposit_scale_factor[self.current_epoch]
+    self.dynasty_wei_delta[start_dynasty] += msg.value / self.deposit_scale_factor[self.current_epoch]
 
 # Log in or log out from the validator set. A logged out validator can log
 # back in later, if they do not log in for an entire withdrawal period,
@@ -311,18 +307,21 @@ def logout(logout_msg: bytes <= 1024):
     assert self.current_epoch >= epoch
     # Signature check
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=500000, outsize=32), 0) == as_bytes32(1)
+
     # Check that we haven't already withdrawn
-    assert self.validators[validator_index].end_dynasty > self.dynasty + self.dynasty_logout_delay
+    end_dynasty: num = self.dynasty + self.dynasty_logout_delay
+    assert self.validators[validator_index].end_dynasty > end_dynasty
     # Set the end dynasty
-    self.validators[validator_index].end_dynasty = self.dynasty + self.dynasty_logout_delay
-    self.second_next_dynasty_wei_delta -= self.validators[validator_index].deposit
+    self.validators[validator_index].end_dynasty = end_dynasty
+    self.dynasty_wei_delta[end_dynasty] -= self.validators[validator_index].deposit
 
 # Removes a validator from the validator pool
 @private
 def delete_validator(validator_index: num):
     # this conditional looks like a bug
     if self.validators[validator_index].end_dynasty > self.dynasty + 2:
-        self.next_dynasty_wei_delta -= self.validators[validator_index].deposit
+        self.dynasty_wei_delta[self.dynasty + 1] -= self.validators[validator_index].deposit
+        # self.next_dynasty_wei_delta -= self.validators[validator_index].deposit
     self.validator_indexes[self.validators[validator_index].withdrawal_addr] = 0
     self.validators[validator_index] = {
         deposit: 0,
@@ -357,10 +356,8 @@ def proc_reward(validator_index: num, reward: num(wei/m)):
         self.total_curdyn_deposits += reward
     if ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty)):
         self.total_prevdyn_deposits += reward
-    if current_dynasty == end_dynasty - 1:
-        self.next_dynasty_wei_delta -= reward
-    if current_dynasty == end_dynasty - 2:
-        self.second_next_dynasty_wei_delta -= reward
+    if end_dynasty < 1000000000000000000000000000000:
+        self.dynasty_wei_delta[end_dynasty] -= reward
     send(block.coinbase, floor(reward * self.deposit_scale_factor[self.current_epoch] / 8))
 
 # Process a vote message

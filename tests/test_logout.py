@@ -1,5 +1,30 @@
 
 
+def test_logout_sets_end_dynasty(casper, funded_privkey, deposit_amount,
+                                 induct_validator, logout_validator):
+    validator_index = induct_validator(funded_privkey, deposit_amount)
+
+    expected_end_dynasty = casper.get_dynasty() + casper.get_dynasty_logout_delay()
+    assert casper.get_validators__end_dynasty(validator_index) == 1000000000000000000000000000000
+
+    logout_validator(validator_index, funded_privkey)
+
+    assert casper.get_validators__end_dynasty(validator_index) == expected_end_dynasty
+
+
+def test_logout_updates_dynasty_wei_delta(casper, funded_privkey, deposit_amount,
+                                          induct_validator, logout_validator):
+    validator_index = induct_validator(funded_privkey, deposit_amount)
+    scaled_deposit_size = casper.get_validators__deposit(validator_index)
+
+    expected_end_dynasty = casper.get_dynasty() + casper.get_dynasty_logout_delay()
+    assert casper.get_dynasty_wei_delta(expected_end_dynasty) == 0
+
+    logout_validator(validator_index, funded_privkey)
+
+    assert casper.get_dynasty_wei_delta(expected_end_dynasty) == -scaled_deposit_size
+
+
 def test_logout_with_multiple_validators(casper, funded_privkeys,
                                          deposit_amount, new_epoch, induct_validators,
                                          mk_suggested_vote, logout_validator):
@@ -22,16 +47,13 @@ def test_logout_with_multiple_validators(casper, funded_privkeys,
 
     logout_validator(logged_out_index, logged_out_privkey)
 
-    print(casper.get_dynasty_logout_delay())
-    # mine logout transaction
-    for i, validator_index in enumerate(validator_indexes):
-        casper.vote(mk_suggested_vote(validator_index, funded_privkeys[i]))
-    new_epoch()
-
-    # enter first logout delay dynasty
-    for i, validator_index in enumerate(validator_indexes):
-        casper.vote(mk_suggested_vote(validator_index, funded_privkeys[i]))
-    new_epoch()
+    # enter validator's end_dynasty (validator in prevdyn)
+    dynasty_logout_delay = casper.get_dynasty_logout_delay()
+    for _ in range(dynasty_logout_delay):
+        for i, validator_index in enumerate(validator_indexes):
+            casper.vote(mk_suggested_vote(validator_index, funded_privkeys[i]))
+        new_epoch()
+    assert casper.get_validators__end_dynasty(logged_out_index) == casper.get_dynasty()
 
     logged_in_deposit_size = sum(map(casper.get_deposit_size, logged_in_indexes))
     logging_out_deposit_size = casper.get_deposit_size(logged_out_index)
@@ -40,12 +62,10 @@ def test_logout_with_multiple_validators(casper, funded_privkeys,
     assert abs(logged_in_deposit_size - casper.get_total_curdyn_deposits()) < num_validators
     assert abs(total_deposit_size - casper.get_total_prevdyn_deposits()) < num_validators
 
-    dynasties_to_logout = casper.get_dynasty_logout_delay()
-    # finalized the rest of the epochs required to logout
-    for _ in range(dynasties_to_logout-1):
-        for i, validator_index in enumerate(logged_in_indexes):
-            casper.vote(mk_suggested_vote(validator_index, logged_in_privkeys[i]))
-        new_epoch()
+    # validator no longer in prev or cur dyn
+    for i, validator_index in enumerate(logged_in_indexes):
+        casper.vote(mk_suggested_vote(validator_index, logged_in_privkeys[i]))
+    new_epoch()
 
     logged_in_deposit_size = sum(map(casper.get_deposit_size, logged_in_indexes))
 
