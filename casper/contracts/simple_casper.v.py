@@ -441,11 +441,11 @@ def vote(vote_msg: bytes <= 1024):
             not self.votes[target_epoch].is_justified:
         self.votes[target_epoch].is_justified = True
         self.last_justified_epoch = target_epoch
+        self.main_hash_justified = True
+
         # Log target epoch status update
         log.Epoch(target_epoch, self.checkpoint_hashes[target_epoch], True, False)
 
-        if target_epoch == self.current_epoch:
-            self.main_hash_justified = True
         # If two epochs are justified consecutively,
         # then the source_epoch finalized
         if target_epoch == source_epoch + 1:
