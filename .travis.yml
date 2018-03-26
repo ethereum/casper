@@ -3,11 +3,7 @@ sudo: required
 language: python
 python: "3.6"
 
-services:
-  - docker
-
 before_install:
-  - docker build -t ethereum/casper:test .
   - pip install -r requirements.txt
 
 script:
