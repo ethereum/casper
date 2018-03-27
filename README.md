@@ -1,5 +1,7 @@
 # Casper
 
+[![Build Status](https://travis-ci.org/ethereum/casper.svg?branch=master)](https://travis-ci.org/ethereum/casper)
+
 This repository contains the stage 1 Casper contract & JSON-RPC daemon.
 
 ## Casper Contract
