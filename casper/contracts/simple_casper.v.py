@@ -400,12 +400,11 @@ def vote(vote_msg: bytes <= 1024):
     # Check that this vote has not yet been made
     assert not bitwise_and(self.votes[target_epoch].vote_bitmap[target_hash][floor(validator_index / 256)],
                            shift(convert(1, 'uint256'), validator_index % 256))
-    # Check that the vote's target hash is correct
+    # Check that the vote's target epoch and hash are correct
     assert target_hash == self.get_recommended_target_hash()
+    assert target_epoch == self.current_epoch
     # Check that the vote source points to a justified epoch
     assert self.votes[source_epoch].is_justified
-    # Check that we are at least (epoch length / 4) blocks into the epoch
-    # assert block.number % self.epoch_length >= self.epoch_length / 4
     # Original starting dynasty of the validator; fail if before
     start_dynasty: int128 = self.validators[validator_index].start_dynasty
     # Ending dynasty of the current login period
@@ -430,9 +429,8 @@ def vote(vote_msg: bytes <= 1024):
         previous_dynasty_votes += self.validators[validator_index].deposit
         self.votes[target_epoch].prev_dyn_votes[source_epoch] = previous_dynasty_votes
     # Process rewards.
-    # Check that we have not yet voted for this target_epoch
     # Pay the reward if the vote was submitted in time and the vote is voting the correct data
-    if self.current_epoch == target_epoch and self.expected_source_epoch == source_epoch:
+    if self.expected_source_epoch == source_epoch:
         reward: int128(wei/m) = floor(self.validators[validator_index].deposit * self.reward_factor)
         self.proc_reward(validator_index, reward)
     # If enough votes with the same source_epoch and hash are made,
@@ -442,11 +440,11 @@ def vote(vote_msg: bytes <= 1024):
             not self.votes[target_epoch].is_justified:
         self.votes[target_epoch].is_justified = True
         self.last_justified_epoch = target_epoch
+        self.main_hash_justified = True
+
         # Log target epoch status update
         log.Epoch(target_epoch, self.checkpoint_hashes[target_epoch], True, False)
 
-        if target_epoch == self.current_epoch:
-            self.main_hash_justified = True
         # If two epochs are justified consecutively,
         # then the source_epoch finalized
         if target_epoch == source_epoch + 1:

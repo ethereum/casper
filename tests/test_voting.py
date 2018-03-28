@@ -83,6 +83,30 @@ def test_non_finalization_loss(casper, funded_privkey, deposit_amount, new_epoch
         ds_prev_non_finalized = ds_cur_non_finalized
 
 
+def test_mismatched_epoch_and_hash(casper, funded_privkey, deposit_amount,
+                                   induct_validator, mk_vote, new_epoch, assert_tx_failed):
+    validator_index = induct_validator(funded_privkey, deposit_amount)
+    assert casper.get_total_curdyn_deposits() == deposit_amount
+
+    # step forward one epoch to ensure that validator is allowed
+    # to vote on (current_epoch - 1)
+    new_epoch()
+
+    target_hash = casper.get_recommended_target_hash()
+    mismatched_target_epoch = casper.get_current_epoch() - 1
+    source_epoch = casper.get_recommended_source_epoch()
+
+    mismatched_vote = mk_vote(
+        validator_index,
+        target_hash,
+        mismatched_target_epoch,
+        source_epoch,
+        funded_privkey
+    )
+
+    assert_tx_failed(lambda: casper.vote(mismatched_vote))
+
+
 def test_consensus_after_non_finalization_streak(casper, funded_privkey, deposit_amount, new_epoch,
                                                  induct_validator, mk_suggested_vote,
                                                  assert_tx_failed):
