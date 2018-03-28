@@ -93,7 +93,7 @@ def test_mismatched_epoch_and_hash(casper, funded_privkey, deposit_amount,
     new_epoch()
 
     target_hash = casper.get_recommended_target_hash()
-    mismatched_target_epoch = casper.get_current_epoch() - 1
+    mismatched_target_epoch = casper.current_epoch() - 1
     source_epoch = casper.get_recommended_source_epoch()
 
     mismatched_vote = mk_vote(
