@@ -52,7 +52,7 @@ def base_sender_privkey():
     return tester.k0
 
 
-@pytest.fixture(params=FUNDED_PRIVKEYS[0:3])
+@pytest.fixture(params=FUNDED_PRIVKEYS[0:1])
 def funded_privkey(request):
     return request.param
 
