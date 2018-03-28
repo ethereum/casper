@@ -375,7 +375,7 @@ def proc_reward(validator_index: num, reward: num(wei/m)):
         self.total_curdyn_deposits += reward
     if ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty)):
         self.total_prevdyn_deposits += reward
-    if end_dynasty < self.default_end_dynasty:
+    if end_dynasty < self.default_end_dynasty:  # validator has submit `logout`
         self.dynasty_wei_delta[end_dynasty] -= reward
     send(block.coinbase, floor(reward * self.deposit_scale_factor[self.current_epoch] / 8))
 
