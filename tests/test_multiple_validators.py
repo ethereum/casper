@@ -33,14 +33,14 @@ def test_justification_and_finalization(casper, funded_privkeys, deposit_amount,
     validator_indexes = induct_validators(funded_privkeys, [deposit_amount] * len(funded_privkeys))
     assert casper.get_total_curdyn_deposits() == deposit_amount * len(funded_privkeys)
 
-    prev_dynasty = casper.get_dynasty()
+    prev_dynasty = casper.dynasty()
     for _ in range(10):
         for i, validator_index in enumerate(validator_indexes):
             casper.vote(mk_suggested_vote(validator_index, funded_privkeys[i]))
-        assert casper.get_main_hash_justified()
-        assert casper.get_votes__is_finalized(casper.get_recommended_source_epoch())
+        assert casper.main_hash_justified()
+        assert casper.votes__is_finalized(casper.get_recommended_source_epoch())
         new_epoch()
-        assert casper.get_dynasty() == prev_dynasty + 1
+        assert casper.dynasty() == prev_dynasty + 1
         prev_dynasty += 1
 
 
@@ -53,14 +53,14 @@ def test_voters_make_more(casper, funded_privkeys, deposit_amount, new_epoch,
     voting_indexes = validator_indexes[1:]
     voting_privkeys = funded_privkeys[1:]
 
-    prev_dynasty = casper.get_dynasty()
+    prev_dynasty = casper.dynasty()
     for _ in range(10):
         for i, validator_index in enumerate(voting_indexes):
             casper.vote(mk_suggested_vote(validator_index, voting_privkeys[i]))
-        assert casper.get_main_hash_justified()
-        assert casper.get_votes__is_finalized(casper.get_recommended_source_epoch())
+        assert casper.main_hash_justified()
+        assert casper.votes__is_finalized(casper.get_recommended_source_epoch())
         new_epoch()
-        assert casper.get_dynasty() == prev_dynasty + 1
+        assert casper.dynasty() == prev_dynasty + 1
         prev_dynasty += 1
 
     voting_deposits = list(map(casper.get_deposit_size, voting_indexes))
@@ -136,8 +136,8 @@ def test_partial_online(casper, funded_privkeys, deposit_amount, new_epoch,
             assert ovp > prev_ovp
 
         if ovp >= 0.75:
-            assert casper.get_main_hash_justified()
-            assert casper.get_votes__is_finalized(casper.get_recommended_source_epoch())
+            assert casper.main_hash_justified()
+            assert casper.votes__is_finalized(casper.get_recommended_source_epoch())
             break
 
         new_epoch()
