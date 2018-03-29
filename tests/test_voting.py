@@ -30,7 +30,7 @@ def test_deposit(casper_chain, casper, privkey, amount,
 
     assert casper.nextValidatorIndex() == 2
     assert casper.validator_indexes(utils.privtoaddr(privkey)) == 1
-    assert casper.get_deposit_size(1) == amount
+    assert casper.deposit_size(1) == amount
 
     for i in range(2):
         new_epoch()
@@ -49,7 +49,7 @@ def test_vote_single_validator(casper, funded_privkey, deposit_amount,
     for i in range(10):
         casper.vote(mk_suggested_vote(validator_index, funded_privkey))
         assert casper.main_hash_justified()
-        assert casper.votes__is_finalized(casper.get_recommended_source_epoch())
+        assert casper.votes__is_finalized(casper.recommended_source_epoch())
         new_epoch()
         assert casper.dynasty() == prev_dynasty + 1
         prev_dynasty += 1
@@ -75,10 +75,10 @@ def test_non_finalization_loss(casper, funded_privkey, deposit_amount, new_epoch
     casper.vote(mk_suggested_vote(validator_index, funded_privkey))
     new_epoch()
 
-    ds_prev_non_finalized = casper.get_deposit_size(validator_index)
+    ds_prev_non_finalized = casper.deposit_size(validator_index)
     for i in range(5):
         new_epoch()
-        ds_cur_non_finalized = casper.get_deposit_size(validator_index)
+        ds_cur_non_finalized = casper.deposit_size(validator_index)
         assert ds_cur_non_finalized < ds_prev_non_finalized
         ds_prev_non_finalized = ds_cur_non_finalized
 
@@ -92,9 +92,9 @@ def test_mismatched_epoch_and_hash(casper, funded_privkey, deposit_amount,
     # to vote on (current_epoch - 1)
     new_epoch()
 
-    target_hash = casper.get_recommended_target_hash()
+    target_hash = casper.recommended_target_hash()
     mismatched_target_epoch = casper.current_epoch() - 1
-    source_epoch = casper.get_recommended_source_epoch()
+    source_epoch = casper.recommended_source_epoch()
 
     mismatched_vote = mk_vote(
         validator_index,
@@ -124,16 +124,16 @@ def test_consensus_after_non_finalization_streak(casper, funded_privkey, deposit
         new_epoch()
 
     assert not casper.main_hash_justified()
-    assert not casper.votes__is_finalized(casper.get_recommended_source_epoch())
+    assert not casper.votes__is_finalized(casper.recommended_source_epoch())
 
     casper.vote(mk_suggested_vote(validator_index, funded_privkey))
     assert casper.main_hash_justified()
-    assert not casper.votes__is_finalized(casper.get_recommended_source_epoch())
+    assert not casper.votes__is_finalized(casper.recommended_source_epoch())
 
     new_epoch()
     casper.vote(mk_suggested_vote(validator_index, funded_privkey))
     assert casper.main_hash_justified()
-    assert casper.votes__is_finalized(casper.get_recommended_source_epoch())
+    assert casper.votes__is_finalized(casper.recommended_source_epoch())
 
 
 def test_logs(casper, funded_privkey, new_epoch, get_logs, deposit_validator,

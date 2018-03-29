@@ -291,9 +291,9 @@ def mk_vote():
 @pytest.fixture
 def mk_suggested_vote(casper, mk_vote):
     def mk_suggested_vote(validator_index, privkey):
-        target_hash = casper.get_recommended_target_hash()
+        target_hash = casper.recommended_target_hash()
         target_epoch = casper.current_epoch()
-        source_epoch = casper.get_recommended_source_epoch()
+        source_epoch = casper.recommended_source_epoch()
         return mk_vote(validator_index, target_hash, target_epoch, source_epoch, privkey)
     return mk_suggested_vote
 

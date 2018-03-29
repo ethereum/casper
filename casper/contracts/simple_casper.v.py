@@ -159,13 +159,13 @@ def __init__(  # Epoch length, delay in epochs for withdrawing
 # ***** Constants *****
 @public
 @constant
-def get_main_hash_voted_frac() -> decimal:
+def main_hash_voted_frac() -> decimal:
     return min(self.votes[self.current_epoch].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits,
                self.votes[self.current_epoch].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits)
 
 @public
 @constant
-def get_deposit_size(validator_index: int128) -> int128(wei):
+def deposit_size(validator_index: int128) -> int128(wei):
     return floor(self.validators[validator_index].deposit * self.deposit_scale_factor[self.current_epoch])
 
 @public
@@ -181,12 +181,12 @@ def get_total_prevdyn_deposits() -> wei_value:
 # Helper functions that clients can call to know what to vote
 @public
 @constant
-def get_recommended_source_epoch() -> int128:
+def recommended_source_epoch() -> int128:
     return self.expected_source_epoch
 
 @public
 @constant
-def get_recommended_target_hash() -> bytes32:
+def recommended_target_hash() -> bytes32:
     return blockhash(self.current_epoch*self.epoch_length-1)
 
 @private
@@ -216,14 +216,14 @@ def increment_dynasty():
 
 # Returns number of epochs since finalization.
 @private
-def get_esf() -> int128:
+def esf() -> int128:
     return self.current_epoch - self.last_finalized_epoch
 
 # Returns the current collective reward factor, which rewards the dynasty for high-voting levels.
 @private
-def get_collective_reward() -> decimal:
+def collective_reward() -> decimal:
     epoch: int128 = self.current_epoch
-    live: bool = self.get_esf() <= 2
+    live: bool = self.esf() <= 2
     if not self.deposit_exists() or not live:
         return 0.0
     # Fraction that voted
@@ -245,7 +245,7 @@ def insta_finalize():
 
 # Compute square root factor
 @private
-def get_sqrt_of_total_deposits() -> decimal:
+def sqrt_of_total_deposits() -> decimal:
     epoch: int128 = self.current_epoch
     ether_deposited_as_number: int128 = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) *
                                       self.deposit_scale_factor[epoch - 1] / as_wei_value(1, "ether")) + 1
@@ -267,14 +267,14 @@ def initialize_epoch(epoch: int128):
     self.current_epoch = epoch
 
     # Reward if finalized at least in the last two epochs
-    self.last_nonvoter_rescale = (1 + self.get_collective_reward() - self.reward_factor)
+    self.last_nonvoter_rescale = (1 + self.collective_reward() - self.reward_factor)
     self.last_voter_rescale = self.last_nonvoter_rescale * (1 + self.reward_factor)
     self.deposit_scale_factor[epoch] = self.deposit_scale_factor[epoch - 1] * self.last_nonvoter_rescale
 
     if self.deposit_exists():
         # Set the reward factor for the next epoch.
-        adj_interest_base: decimal = self.base_interest_factor / self.get_sqrt_of_total_deposits()  # TODO: sqrt is based on previous epoch starting deposit
-        self.reward_factor = adj_interest_base + self.base_penalty_factor * self.get_esf()  # TODO: might not be bpf. clarify is positive?
+        adj_interest_base: decimal = self.base_interest_factor / self.sqrt_of_total_deposits()  # TODO: sqrt is based on previous epoch starting deposit
+        self.reward_factor = adj_interest_base + self.base_penalty_factor * self.esf()  # TODO: might not be bpf. clarify is positive?
         # ESF is only thing that is changing and reward_factor is being used above.
         assert self.reward_factor > 0
     else:
@@ -285,7 +285,7 @@ def initialize_epoch(epoch: int128):
     self.increment_dynasty()
 
     # Store checkpoint hash for easy access
-    self.checkpoint_hashes[epoch] = self.get_recommended_target_hash()
+    self.checkpoint_hashes[epoch] = self.recommended_target_hash()
     # Log new epoch creation
     log.Epoch(epoch, self.checkpoint_hashes[epoch], False, False)
 
@@ -401,7 +401,7 @@ def vote(vote_msg: bytes <= 1024):
     assert not bitwise_and(self.votes[target_epoch].vote_bitmap[target_hash][floor(validator_index / 256)],
                            shift(convert(1, 'uint256'), validator_index % 256))
     # Check that the vote's target epoch and hash are correct
-    assert target_hash == self.get_recommended_target_hash()
+    assert target_hash == self.recommended_target_hash()
     assert target_epoch == self.current_epoch
     # Check that the vote source points to a justified epoch
     assert self.votes[source_epoch].is_justified
@@ -491,7 +491,7 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
         slashing_condition_detected = True
     assert slashing_condition_detected
     # Delete the offending validator, and give a 4% "finder's fee"
-    validator_deposit: int128(wei) = self.get_deposit_size(validator_index_1)
+    validator_deposit: int128(wei) = self.deposit_size(validator_index_1)
     slashing_bounty: int128(wei) = floor(validator_deposit / 25)
     deposit_destroyed: int128(wei) = validator_deposit - slashing_bounty
     self.total_destroyed += deposit_destroyed
