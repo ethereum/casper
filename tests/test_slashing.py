@@ -8,27 +8,27 @@ def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount, get_last_l
 
     vote_1 = mk_vote(
         validator_index,
-        casper.get_recommended_target_hash(),
-        casper.get_current_epoch(),
-        casper.get_recommended_source_epoch(),
+        casper.recommended_target_hash(),
+        casper.current_epoch(),
+        casper.recommended_source_epoch(),
         funded_privkey
     )
     vote_2 = mk_vote(
         validator_index,
         fake_hash,
-        casper.get_current_epoch(),
-        casper.get_recommended_source_epoch(),
+        casper.current_epoch(),
+        casper.recommended_source_epoch(),
         funded_privkey
     )
 
-    next_dynasty = casper.get_dynasty() + 1
-    assert casper.get_dynasty_wei_delta(casper.get_dynasty() + 1) == 0
+    next_dynasty = casper.dynasty() + 1
+    assert casper.dynasty_wei_delta(casper.dynasty() + 1) == 0
 
     casper.slash(vote_1, vote_2)
 
-    assert casper.get_deposit_size(validator_index) == 0
-    assert casper.get_dynasty_wei_delta(next_dynasty) == \
-        (-deposit_amount / casper.get_deposit_scale_factor())
+    assert casper.deposit_size(validator_index) == 0
+    assert casper.dynasty_wei_delta(next_dynasty) == \
+        (-deposit_amount / casper.deposit_scale_factor())
 
     # Slash log
     log = get_last_log(casper_chain, casper)
@@ -45,23 +45,24 @@ def test_slash_no_surround(casper, funded_privkey, deposit_amount, new_epoch,
 
     vote_1 = mk_vote(
         validator_index,
-        casper.get_recommended_target_hash(),
-        casper.get_current_epoch(),
-        casper.get_recommended_source_epoch() - 1,
+        casper.recommended_target_hash(),
+        casper.current_epoch(),
+        casper.recommended_source_epoch() - 1,
         funded_privkey
     )
     vote_2 = mk_vote(
         validator_index,
         fake_hash,
-        casper.get_current_epoch() - 1,
-        casper.get_recommended_source_epoch(),
+        casper.current_epoch() - 1,
+        casper.recommended_source_epoch(),
         funded_privkey
     )
 
-    next_dynasty = casper.get_dynasty() + 1
-    assert casper.get_dynasty_wei_delta(casper.get_dynasty() + 1) == 0
+    next_dynasty = casper.dynasty() + 1
+    assert casper.dynasty_wei_delta(casper.dynasty() + 1) == 0
 
     casper.slash(vote_1, vote_2)
-    assert casper.get_deposit_size(validator_index) == 0
-    assert casper.get_dynasty_wei_delta(next_dynasty) == \
-        (-deposit_amount / casper.get_deposit_scale_factor())
+
+    assert casper.deposit_size(validator_index) == 0
+    assert casper.dynasty_wei_delta(next_dynasty) == \
+        (-deposit_amount / casper.deposit_scale_factor())

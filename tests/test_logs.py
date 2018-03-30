@@ -3,12 +3,16 @@ from ethereum import utils
 
 def test_logs(casper, funded_privkey, new_epoch, get_logs, deposit_validator,
               mk_suggested_vote, get_last_log, casper_chain, logout_validator):
-    validator_index = casper.get_nextValidatorIndex()
-    deposit_validator(funded_privkey, 1900 * 10 ** 18)
+    new_epoch()
+    assert casper.current_epoch() == 1
+    assert casper.nextValidatorIndex() == 1
+
+    validator_index = casper.nextValidatorIndex()
+    deposit_validator(funded_privkey, 1900 * 10**18)
     # Deposit log
     log1 = get_last_log(casper_chain, casper)
-    assert set(('_from', '_validation_address', '_validator_index',
-                '_start_dyn', '_amount', '_event_type')) == log1.keys()
+    assert set(('_from', '_validation_address', '_validator_index', '_start_dyn',
+                '_amount', '_event_type')) == log1.keys()
     assert log1['_event_type'] == b'Deposit'
     assert log1['_from'] == '0x' + utils.encode_hex(utils.privtoaddr(funded_privkey))
     assert log1['_validator_index'] == validator_index
@@ -24,12 +28,12 @@ def test_logs(casper, funded_privkey, new_epoch, get_logs, deposit_validator,
                 '_is_finalized', '_event_type')) == log_old.keys()
     # New epoch log
     assert log_new['_event_type'] == b'Epoch'
-    assert log_new['_number'] == 1
+    assert log_new['_number'] == 2
     assert log_new['_is_justified'] is False
     assert log_new['_is_finalized'] is False
     # Insta finalized previous
     assert log_old['_event_type'] == b'Epoch'
-    assert log_old['_number'] == 0
+    assert log_old['_number'] == 1
     assert log_old['_is_justified'] is True
     assert log_old['_is_finalized'] is True
 
@@ -57,18 +61,18 @@ def test_logs(casper, funded_privkey, new_epoch, get_logs, deposit_validator,
     assert log4['_from'] == '0x' + utils.encode_hex(utils.privtoaddr(funded_privkey))
 
     # Need to vote 'dynasty_logout_delay'  epochs before logout is active
-    for _ in range(casper.get_dynasty_logout_delay()):
+    for _ in range(casper.dynasty_logout_delay()):
         new_epoch()
         casper.vote(mk_suggested_vote(validator_index, funded_privkey))
 
-    for i in range(casper.get_withdrawal_delay() + 1):
+    for i in range(casper.withdrawal_delay() + 1):
         new_epoch()
 
-    cur_epoch = casper.get_current_epoch()
-    end_epoch = casper.get_dynasty_start_epoch(
-        casper.get_validators__end_dynasty(validator_index) + 1
+    cur_epoch = casper.current_epoch()
+    end_epoch = casper.dynasty_start_epoch(
+        casper.validators__end_dynasty(validator_index) + 1
     )
-    assert cur_epoch == end_epoch + casper.get_withdrawal_delay()  # so we are allowed to withdraw
+    assert cur_epoch == end_epoch + casper.withdrawal_delay()  # so we are allowed to withdraw
 
     casper.withdraw(validator_index)
 
