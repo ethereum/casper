@@ -69,48 +69,6 @@ def test_voters_make_more(casper, funded_privkeys, deposit_amount, new_epoch,
     assert voting_deposits[0] > nonvoting_deposit
 
 
-def test_logout(casper, funded_privkeys, deposit_amount, new_epoch,
-                induct_validators, mk_suggested_vote, logout_validator):
-    validator_indexes = induct_validators(funded_privkeys, [deposit_amount] * len(funded_privkeys))
-    num_validators = len(validator_indexes)
-    assert casper.get_total_curdyn_deposits() == deposit_amount * len(funded_privkeys)
-
-    for _ in range(3):
-        for i, validator_index in enumerate(validator_indexes):
-            casper.vote(mk_suggested_vote(validator_index, funded_privkeys[i]))
-        new_epoch()
-
-    logged_out_index = validator_indexes[0]
-    logged_out_privkey = funded_privkeys[0]
-    logged_in_indexes = validator_indexes[1:]
-    logged_in_privkeys = funded_privkeys[1:]
-
-    logout_validator(logged_out_index, logged_out_privkey)
-    for i, validator_index in enumerate(validator_indexes):
-        casper.vote(mk_suggested_vote(validator_index, funded_privkeys[i]))
-    new_epoch()
-
-    for i, validator_index in enumerate(validator_indexes):
-        casper.vote(mk_suggested_vote(validator_index, funded_privkeys[i]))
-    new_epoch()
-
-    logged_in_deposit_size = sum(map(casper.deposit_size, logged_in_indexes))
-    logging_out_deposit_size = casper.deposit_size(logged_out_index)
-    total_deposit_size = logged_in_deposit_size + logging_out_deposit_size
-
-    assert abs(logged_in_deposit_size - casper.get_total_curdyn_deposits()) < num_validators
-    assert abs(total_deposit_size - casper.get_total_prevdyn_deposits()) < num_validators
-
-    for i, validator_index in enumerate(logged_in_indexes):
-        casper.vote(mk_suggested_vote(validator_index, logged_in_privkeys[i]))
-    new_epoch()
-
-    logged_in_deposit_size = sum(map(casper.deposit_size, logged_in_indexes))
-
-    assert abs(logged_in_deposit_size - casper.get_total_curdyn_deposits()) < num_validators
-    assert abs(logged_in_deposit_size - casper.get_total_prevdyn_deposits()) < num_validators
-
-
 def test_partial_online(casper, funded_privkeys, deposit_amount, new_epoch,
                         induct_validators, mk_suggested_vote):
     validator_indexes = induct_validators(funded_privkeys, [deposit_amount] * len(funded_privkeys))

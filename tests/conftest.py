@@ -20,6 +20,7 @@ PURITY_CHECKER_TX_HEX = "0xf90467808506fc23ac00830583c88080b904546104428061000e6
 PURITY_CHECKER_ABI = [{'name': 'check(address)', 'type': 'function', 'constant': True, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}, {'name': 'submit(address)', 'type': 'function', 'constant': False, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}]  # NOQA
 
 EPOCH_LENGTH = 10
+DYNASTY_LOGOUT_DELAY = 5
 WITHDRAWAL_DELAY = 5
 OWNER = utils.checksum_encode(tester.a0)
 BASE_INTEREST_FACTOR = 0.02
@@ -29,6 +30,7 @@ MIN_DEPOSIT_SIZE = 1000 * 10**18  # 1000 ether
 CASPER_CONFIG = {
     "epoch_length": EPOCH_LENGTH,  # in blocks
     "withdrawal_delay": WITHDRAWAL_DELAY,  # in epochs
+    "dynasty_logout_delay": DYNASTY_LOGOUT_DELAY,  # in dynasties
     "owner": OWNER,  # Backdoor address
     "base_interest_factor": BASE_INTEREST_FACTOR,
     "base_penalty_factor": BASE_PENALTY_FACTOR,
@@ -108,6 +110,16 @@ def casper_config():
 
 
 @pytest.fixture
+def casper_args(casper_config, sig_hasher_address, purity_checker_address):
+    return [
+        casper_config["epoch_length"], casper_config["withdrawal_delay"],
+        casper_config["dynasty_logout_delay"], casper_config["owner"],
+        sig_hasher_address, purity_checker_address, casper_config["base_interest_factor"],
+        casper_config["base_penalty_factor"], casper_config["min_deposit_size"]
+    ]
+
+
+@pytest.fixture
 def test_chain(alloc=tester.base_alloc, genesis_gas_limit=9999999,
                min_gas_limit=5000, startgas=3141592):
     # genesis
@@ -168,7 +180,7 @@ def casper(casper_chain, casper_abi, casper_address):
 @pytest.fixture
 def casper_chain(
         test_chain,
-        casper_config,
+        casper_args,
         casper_code,
         casper_ct,
         dependency_transactions,
@@ -203,11 +215,7 @@ def casper_chain(
     # otherwise, vyper compiler cannot properly embed RLP decoder address
     casper_bytecode = compiler.compile(casper_code)
 
-    init_args = casper_ct.encode_constructor_arguments([
-        casper_config["epoch_length"], casper_config["withdrawal_delay"], casper_config["owner"],
-        sig_hasher_address, purity_checker_address, casper_config["base_interest_factor"],
-        casper_config["base_penalty_factor"], casper_config["min_deposit_size"]
-    ])
+    init_args = casper_ct.encode_constructor_arguments(casper_args)
 
     deploy_code = casper_bytecode + (init_args)
     casper_tx = Transaction(
@@ -317,16 +325,25 @@ def logout_validator(casper, mk_logout):
 
 
 @pytest.fixture
-def deposit_validator(casper_chain, casper, mk_validation_code):
-    def deposit_validator(privkey, value):
+def validation_addr(casper_chain, casper, mk_validation_code):
+    def validation_addr(privkey):
         addr = utils.privtoaddr(privkey)
-        valcode_addr = casper_chain.tx(
+        return casper_chain.tx(
             privkey,
             "",
             0,
             mk_validation_code(addr)
         )
+    return validation_addr
+
+
+@pytest.fixture
+def deposit_validator(casper_chain, casper, validation_addr):
+    def deposit_validator(privkey, value):
+        addr = utils.privtoaddr(privkey)
+        valcode_addr = validation_addr(privkey)
         casper.deposit(valcode_addr, addr, value=value)
+        return casper.validator_indexes(addr)
     return deposit_validator
 
 
@@ -338,10 +355,9 @@ def deposit_validator(casper_chain, casper, mk_validation_code):
 @pytest.fixture
 def induct_validator(casper_chain, casper, deposit_validator, new_epoch):
     def induct_validator(privkey, value):
-        validator_index = casper.nextValidatorIndex()
         if casper.current_epoch() == 0:
             new_epoch()
-        deposit_validator(privkey, value)
+        validator_index = deposit_validator(privkey, value)
         new_epoch()
         new_epoch()
         return validator_index

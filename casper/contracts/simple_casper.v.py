@@ -1,5 +1,8 @@
-#  List of events the contract logs
-# Withdrawal address used always in _from and _to as it's unique and validator index is removed after some events
+#
+# List of events the contract logs
+# Withdrawal address used always in _from and _to as it's unique
+# and validator index is removed after some events
+#
 Deposit: event({_from: indexed(address), _validator_index: indexed(int128), _validation_address: address, _start_dyn: int128, _amount: int128(wei)})
 Vote: event({_from: indexed(address), _validator_index: indexed(int128), _target_hash: indexed(bytes32), _target_epoch: int128, _source_epoch: int128})
 Logout: event({_from: indexed(address), _validator_index: indexed(int128), _end_dyn: int128})
@@ -34,11 +37,8 @@ validator_indexes: public(int128[address])
 # The current dynasty (validator set changes between dynasties)
 dynasty: public(int128)
 
-# Amount of wei added to the total deposits in the next dynasty
-next_dynasty_wei_delta: public(decimal(wei / m))
-
-# Amount of wei added to the total deposits in the dynasty after that
-second_next_dynasty_wei_delta: public(decimal(wei / m))
+# Map of the change to total deposits for specific dynasty
+dynasty_wei_delta: public(decimal(wei / m)[int128])
 
 # Total deposits in the current dynasty
 total_curdyn_deposits: decimal(wei / m)
@@ -83,6 +83,9 @@ epoch_length: public(int128)
 # Withdrawal delay in blocks
 withdrawal_delay: public(int128)
 
+# Logout delay in dynasties
+dynasty_logout_delay: public(int128)
+
 # Current epoch
 current_epoch: public(int128)
 
@@ -119,42 +122,37 @@ base_penalty_factor: public(decimal)
 # Minimum deposit size if no one else is validating
 min_deposit_size: wei_value
 
+# Huge integer to be used for default end_dynasty for new validator
+default_end_dynasty: int128
+
 @public
-def __init__(  # Epoch length, delay in epochs for withdrawing
-        _epoch_length: int128, _withdrawal_delay: int128,
-        # Owner (backdoor), sig hash calculator, purity checker
+def __init__(
+        _epoch_length: int128, _withdrawal_delay: int128, _dynasty_logout_delay: int128,
         _owner: address, _sighasher: address, _purity_checker: address,
-        # Base interest and base penalty factors
         _base_interest_factor: decimal, _base_penalty_factor: decimal,
-        # Min deposit size
         _min_deposit_size: wei_value):
-    # Epoch length
+
     self.epoch_length = _epoch_length
-    # Delay in epochs for withdrawing
-    self.withdrawal_delay = _withdrawal_delay
-    # Start validator index counter at 1 because validator_indexes[] requires non-zero values
-    self.nextValidatorIndex = 1
-    # Temporary backdoor for testing purposes (to allow recovering destroyed deposits)
-    self.owner = _owner
-    # Set deposit scale factor
-    self.deposit_scale_factor[0] = 10000000000.0
-    # Start dynasty counter at 0
-    self.dynasty = 0
-    # Initialize the epoch counter
-    self.current_epoch = floor(block.number / self.epoch_length)
-    # Set the sighash calculator address
-    self.sighasher = _sighasher
-    # Set the purity checker address
-    self.purity_checker = _purity_checker
-    # self.votes[0].committed = True
-    # Set initial total deposit counter
-    self.total_curdyn_deposits = 0
-    self.total_prevdyn_deposits = 0
-    # Constants that affect interest rates and penalties
+    self.withdrawal_delay = _withdrawal_delay  # delay in epochs
+    self.dynasty_logout_delay = _dynasty_logout_delay  # delay in dynasties
+    self.owner = _owner  # temporary backdoor for testing
     self.base_interest_factor = _base_interest_factor
     self.base_penalty_factor = _base_penalty_factor
-    # Constants that affect the min deposit size
     self.min_deposit_size = _min_deposit_size
+
+    # helper contracts
+    self.sighasher = _sighasher
+    self.purity_checker = _purity_checker
+
+    # Start validator index counter at 1 because validator_indexes[] requires non-zero values
+    self.nextValidatorIndex = 1
+
+    self.deposit_scale_factor[0] = 10000000000.0
+    self.dynasty = 0
+    self.current_epoch = floor(block.number / self.epoch_length)
+    self.total_curdyn_deposits = 0
+    self.total_prevdyn_deposits = 0
+    self.default_end_dynasty = 1000000000000000000000000000000
 
 # ***** Constants *****
 @public
@@ -205,9 +203,7 @@ def increment_dynasty():
     if self.votes[epoch-2].is_finalized:
         self.dynasty += 1
         self.total_prevdyn_deposits = self.total_curdyn_deposits
-        self.total_curdyn_deposits += self.next_dynasty_wei_delta
-        self.next_dynasty_wei_delta = self.second_next_dynasty_wei_delta
-        self.second_next_dynasty_wei_delta = 0
+        self.total_curdyn_deposits += self.dynasty_wei_delta[self.dynasty]
         self.dynasty_start_epoch[self.dynasty] = epoch
     self.dynasty_in_epoch[epoch] = self.dynasty
     if self.main_hash_justified:
@@ -293,20 +289,22 @@ def initialize_epoch(epoch: int128):
 @public
 @payable
 def deposit(validation_addr: address, withdrawal_addr: address):
-    assert self.current_epoch == block.number / self.epoch_length
+    assert self.current_epoch == floor(block.number / self.epoch_length)
     assert extract32(raw_call(self.purity_checker, concat('\xa1\x90>\xab', convert(validation_addr, 'bytes32')), gas=500000, outsize=32), 0) != convert(0, 'bytes32')
     assert not self.validator_indexes[withdrawal_addr]
     assert msg.value >= self.min_deposit_size
+    start_dynasty: int128 = self.dynasty + 2
+    scaled_deposit: decimal(wei/m) = msg.value / self.deposit_scale_factor[self.current_epoch]
     self.validators[self.nextValidatorIndex] = {
-        deposit: msg.value / self.deposit_scale_factor[self.current_epoch],
-        start_dynasty: self.dynasty + 2,
-        end_dynasty: 1000000000000000000000000000000,
+        deposit: scaled_deposit,
+        start_dynasty: start_dynasty,
+        end_dynasty: self.default_end_dynasty,
         addr: validation_addr,
         withdrawal_addr: withdrawal_addr
     }
     self.validator_indexes[withdrawal_addr] = self.nextValidatorIndex
     self.nextValidatorIndex += 1
-    self.second_next_dynasty_wei_delta += msg.value / self.deposit_scale_factor[self.current_epoch]
+    self.dynasty_wei_delta[start_dynasty] += scaled_deposit
     # Log deposit event
     log.Deposit(withdrawal_addr, self.validator_indexes[withdrawal_addr], validation_addr, self.validators[self.validator_indexes[withdrawal_addr]].start_dynasty, msg.value)
 
@@ -315,7 +313,7 @@ def deposit(validation_addr: address, withdrawal_addr: address):
 # they can get their money out
 @public
 def logout(logout_msg: bytes <= 1024):
-    assert self.current_epoch == block.number / self.epoch_length
+    assert self.current_epoch == floor(block.number / self.epoch_length)
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
     sighash: bytes32 = extract32(raw_call(self.sighasher, logout_msg, gas=200000, outsize=32), 0)
@@ -328,18 +326,17 @@ def logout(logout_msg: bytes <= 1024):
     # Signature check
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=500000, outsize=32), 0) == convert(1, 'bytes32')
     # Check that we haven't already withdrawn
-    assert self.validators[validator_index].end_dynasty > self.dynasty + 2
+    end_dynasty: int128 = self.dynasty + self.dynasty_logout_delay
+    assert self.validators[validator_index].end_dynasty > end_dynasty
     # Set the end dynasty
-    self.validators[validator_index].end_dynasty = self.dynasty + 2
-    self.second_next_dynasty_wei_delta -= self.validators[validator_index].deposit
+    self.validators[validator_index].end_dynasty = end_dynasty
+    self.dynasty_wei_delta[end_dynasty] -= self.validators[validator_index].deposit
     # Log logout event
     log.Logout(self.validators[validator_index].withdrawal_addr, validator_index, self.validators[validator_index].end_dynasty)
 
 # Removes a validator from the validator pool
 @private
 def delete_validator(validator_index: int128):
-    if self.validators[validator_index].end_dynasty > self.dynasty + 2:
-        self.next_dynasty_wei_delta -= self.validators[validator_index].deposit
     self.validator_indexes[self.validators[validator_index].withdrawal_addr] = 0
     self.validators[validator_index] = {
         deposit: 0,
@@ -376,10 +373,8 @@ def proc_reward(validator_index: int128, reward: int128(wei/m)):
         self.total_curdyn_deposits += reward
     if ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty)):
         self.total_prevdyn_deposits += reward
-    if current_dynasty == end_dynasty - 1:
-        self.next_dynasty_wei_delta -= reward
-    if current_dynasty == end_dynasty - 2:
-        self.second_next_dynasty_wei_delta -= reward
+    if end_dynasty < self.default_end_dynasty:  # validator has submit `logout`
+        self.dynasty_wei_delta[end_dynasty] -= reward
     send(block.coinbase, floor(reward * self.deposit_scale_factor[self.current_epoch] / 8))
 
 # Process a vote message
@@ -497,6 +492,15 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     self.total_destroyed += deposit_destroyed
     # Log slashing
     log.Slash(msg.sender, self.validators[validator_index_1].withdrawal_addr, validator_index_1, slashing_bounty, deposit_destroyed)
+
+    deposit: decimal(wei/m) = self.validators[validator_index_1].deposit
+    self.dynasty_wei_delta[self.dynasty + 1] -= deposit
+
+    # if validator had already initialized logout remove his deposit
+    # from next dynasty rather than from his end_dynasty
+    if self.validators[validator_index_1].end_dynasty < self.default_end_dynasty:
+        self.dynasty_wei_delta[self.validators[validator_index_1].end_dynasty] += deposit
+
     self.delete_validator(validator_index_1)
     send(msg.sender, slashing_bounty)
 
