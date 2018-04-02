@@ -66,8 +66,8 @@ The validation code contract is currently being deployed as a part of the `induc
 ```
 def induct_validator(chain, casper, key, value):
     sender = utils.privtoaddr(key)
-    valcode_addr = chain.tx(key, &#34;&#34;, 0, mk_validation_code(sender))  # Create a new validation code contract based on the validator&#39;s Ethereum address
-    assert utils.big_endian_to_int(chain.tx(key, purity_checker_address, 0, purity_translator.encode(&#39;submit&#39;, [valcode_addr]))) == 1
+    valcode_addr = chain.tx(key, "", 0, mk_validation_code(sender))  # Create a new validation code contract based on the validator's Ethereum address
+    assert utils.big_endian_to_int(chain.tx(key, purity_checker_address, 0, purity_translator.encode('submit', [valcode_addr]))) == 1
     casper.deposit(valcode_addr, sender, value=value)  # Submit deposit specifying the validation code contract address
 ```
 
@@ -162,7 +162,7 @@ The fork choice is roughly implemented with the following ([pyethereum implement
 
 ```python
 def add_block(self, candidate_block):
-    if (self.get_score(self.head) &lt; self.get_score(candidate_block) and
+    if (self.get_score(self.head) < self.get_score(candidate_block) and
             not self.switch_reverts_finalized_block(self.head, candidate_block)):
         self.set_head(candidate_block)
 
@@ -171,16 +171,16 @@ def get_score(self, prestate, block):
     return casper.last_justified_epoch() * 10**40 + self.get_pow_difficulty(block)
 
 def switch_reverts_finalized_block(self, old_head, new_head):
-    while old_head.number &gt; new_head.number:
-        if b&#39;finalized:&#39;+old_head.hash in self.db:
-            log.info(&#39;[WARNING] Attempt to revert failed: checkpoint {} is finalized&#39;.format(encode_hex(old_head.hash)))
+    while old_head.number > new_head.number:
+        if b'finalized:'+old_head.hash in self.db:
+            log.info('[WARNING] Attempt to revert failed: checkpoint {} is finalized'.format(encode_hex(old_head.hash)))
             return True
         old_head = self.get_parent(old_head)
-    while new_head.number &gt; old_head.number:
+    while new_head.number > old_head.number:
         new_head = self.get_parent(new_head)
     while new_head.hash != old_head.hash:
-        if b&#39;finalized:&#39;+old_head.hash in self.db:
-            log.info(&#39;[WARNING] Attempt to revert failed; checkpoint {} is finalized&#39;.format(encode_hex(old_head.hash)))
+        if b'finalized:'+old_head.hash in self.db:
+            log.info('[WARNING] Attempt to revert failed; checkpoint {} is finalized'.format(encode_hex(old_head.hash)))
             return True
         old_head = self.get_parent(old_head)
         new_head = self.get_parent(new_head)
@@ -191,11 +191,11 @@ def switch_reverts_finalized_block(self, old_head, new_head):
 At the beginning of each new epoch, the function `initialize_epoch(epoch)` must be called. This function _utilizes no gas_ and is called automatically by the `NULL_SENDER`. The code as [implemented in Pyethereum](https://github.com/karlfloersch/pyethereum/blob/develop/ethereum/hybrid_casper/consensus.py#L20-L26) as follows:
 ```python
 # Initalize the next epoch in the Casper contract
-if state.block_number % state.config[&#39;EPOCH_LENGTH&#39;] == 0 and state.block_number != 0:
-    key, account = state.config[&#39;SENDER&#39;], privtoaddr(state.config[&#39;SENDER&#39;])
-    data = casper_utils.casper_translator.encode(&#39;initialize_epoch&#39;, [state.block_number // state.config[&#39;EPOCH_LENGTH&#39;]])
+if state.block_number % state.config['EPOCH_LENGTH'] == 0 and state.block_number != 0:
+    key, account = state.config['SENDER'], privtoaddr(state.config['SENDER'])
+    data = casper_utils.casper_translator.encode('initialize_epoch', [state.block_number // state.config['EPOCH_LENGTH']])
     transaction = transactions.Transaction(state.get_nonce(account), 0, 3141592,
-                                           state.config[&#39;CASPER_ADDRESS&#39;], 0, data).sign(key)
+                                           state.config['CASPER_ADDRESS'], 0, data).sign(key)
     apply_casper_no_gas_transaction(state, transaction)
 ```
 
@@ -203,14 +203,14 @@ if state.block_number % state.config[&#39;EPOCH_LENGTH&#39;] == 0 and state.bloc
 Casper votes do not pay gas if successful, and should be considered invalid transactions and not be included in the block if failed. This avoids a large gas burden on validators. The code as [implemented in Pyethereum](https://github.com/karlfloersch/pyethereum/blob/a66ab671e0bb19327bb8cd11d69664146451c250/ethereum/messages.py#L184-L256) is as follows:
 ```python
 def apply_transaction(state, tx):
-    casper_contract = tx.to == state.env.config[&#39;CASPER_ADDRESS&#39;]
-    vote = tx.data[0:4] == b&#39;\xe9\xdc\x06\x14&#39;
-    null_sender = tx.sender == b&#39;\xff&#39; * 20
+    casper_contract = tx.to == state.env.config['CASPER_ADDRESS']
+    vote = tx.data[0:4] == b'\xe9\xdc\x06\x14';
+    null_sender = tx.sender == b'\xff' * 20
     if casper_contract and vote and null_sender:
-        log_tx.debug(&#34;Applying CASPER no gas transaction: {}&#34;.format(tx))
+        log_tx.debug('Applying CASPER no gas transaction: {}'.format(tx))
         return apply_casper_no_gas_transaction(state, tx)
     else:
-        log_tx.debug(&#34;Applying transaction (non-CASPER VOTE): {}&#34;.format(tx))
+        log_tx.debug('Applying transaction (non-CASPER VOTE): {}'.format(tx))
         return apply_regular_transaction(state, tx)
     ...
 ```
@@ -225,13 +225,13 @@ This is [implemented in Pyethereum](https://github.com/karlfloersch/pyethereum/b
 def validate_casper_vote_transaction_ordering(state, block):
     reached_casper_vote_transactions = False
     for tx in block.transactions:
-        casper_contract = tx.to == state.env.config[&#39;CASPER_ADDRESS&#39;]
-        vote = tx.data[0:4] == b&#39;\xe9\xdc\x06\x14&#39;
-        null_sender = tx.sender == b&#39;\xff&#39; * 20
+        casper_contract = tx.to == state.env.config['CASPER_ADDRESS']
+        vote = tx.data[0:4] == b'\xe9\xdc\x06\x14';
+        null_sender = tx.sender == b'\xff' * 20
         if casper_contract and vote and null_sender:
             reached_casper_vote_transactions = True
         elif reached_casper_vote_transactions:
-            raise InvalidTransaction(&#34;Please put all Casper transactions last&#34;)
+            raise InvalidTransaction('Please put all Casper transactions last')
     return True
 ```
 
@@ -246,7 +246,7 @@ Once a validator is logged in, they can use the following logic to determine whe
 
 NOTE: To check if a validator is logged in, one can use:
 ``` python
-return casper.validators__start_dynasty(validator_index) &gt;= casper.dynasty()
+return casper.validators__start_dynasty(validator_index) >= casper.dynasty()
 ```
 
 #### [[See the current validator implementation for more information.]](https://github.com/karlfloersch/pyethapp/blob/dev_env/pyethapp/validator_service.py)
