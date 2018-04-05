@@ -263,7 +263,7 @@ def initialize_epoch(epoch: int128):
     self.current_epoch = epoch
 
     # Reward if finalized at least in the last two epochs
-    self.last_nonvoter_rescale = (1 + self.collective_reward() - self.reward_factor)
+    self.last_nonvoter_rescale = (1 + self.collective_reward()) /(1 + self.reward_factor)
     self.last_voter_rescale = self.last_nonvoter_rescale * (1 + self.reward_factor)
     self.deposit_scale_factor[epoch] = self.deposit_scale_factor[epoch - 1] * self.last_nonvoter_rescale
 
