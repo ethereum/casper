@@ -168,12 +168,12 @@ def deposit_size(validator_index: int128) -> int128(wei):
 
 @public
 @constant
-def get_total_curdyn_deposits() -> wei_value:
+def total_curdyn_deposits_scaled() -> wei_value:
     return floor(self.total_curdyn_deposits * self.deposit_scale_factor[self.current_epoch])
 
 @public
 @constant
-def get_total_prevdyn_deposits() -> wei_value:
+def total_prevdyn_deposits_scaled() -> wei_value:
     return floor(self.total_prevdyn_deposits * self.deposit_scale_factor[self.current_epoch])
 
 # Helper functions that clients can call to know what to vote
