@@ -363,7 +363,6 @@ def withdraw(validator_index: int128):
 # Reward the given validator & miner, and reflect this in total deposit figured
 @private
 def proc_reward(validator_index: int128, reward: int128(wei/m)):
-    start_epoch: int128 = self.dynasty_start_epoch[self.validators[validator_index].start_dynasty]
     self.validators[validator_index].deposit += reward
     start_dynasty: int128 = self.validators[validator_index].start_dynasty
     end_dynasty: int128 = self.validators[validator_index].end_dynasty
