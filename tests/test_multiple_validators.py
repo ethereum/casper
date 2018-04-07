@@ -1,7 +1,7 @@
 def test_deposits(casper, funded_privkeys, deposit_amount, new_epoch, induct_validators):
     induct_validators(funded_privkeys, [deposit_amount] * len(funded_privkeys))
-    assert casper.get_total_curdyn_deposits() == deposit_amount * len(funded_privkeys)
-    assert casper.get_total_prevdyn_deposits() == 0
+    assert casper.total_curdyn_deposits_scaled() == deposit_amount * len(funded_privkeys)
+    assert casper.total_prevdyn_deposits_scaled() == 0
 
 
 def test_deposits_on_staggered_dynasties(casper, funded_privkeys, deposit_amount, new_epoch,
@@ -17,21 +17,21 @@ def test_deposits_on_staggered_dynasties(casper, funded_privkeys, deposit_amount
     for privkey in funded_privkeys[1:]:
         deposit_validator(privkey, deposit_amount)
 
-    assert casper.deposit_size(initial_validator) == casper.get_total_curdyn_deposits()
+    assert casper.deposit_size(initial_validator) == casper.total_curdyn_deposits_scaled()
 
     casper.vote(mk_suggested_vote(initial_validator, funded_privkeys[0]))
     new_epoch()
-    assert casper.deposit_size(initial_validator) == casper.get_total_curdyn_deposits()
+    assert casper.deposit_size(initial_validator) == casper.total_curdyn_deposits_scaled()
 
     casper.vote(mk_suggested_vote(initial_validator, funded_privkeys[0]))
     new_epoch()
-    assert casper.deposit_size(initial_validator) == casper.get_total_prevdyn_deposits()
+    assert casper.deposit_size(initial_validator) == casper.total_prevdyn_deposits_scaled()
 
 
 def test_justification_and_finalization(casper, funded_privkeys, deposit_amount, new_epoch,
                                         induct_validators, mk_suggested_vote):
     validator_indexes = induct_validators(funded_privkeys, [deposit_amount] * len(funded_privkeys))
-    assert casper.get_total_curdyn_deposits() == deposit_amount * len(funded_privkeys)
+    assert casper.total_curdyn_deposits_scaled() == deposit_amount * len(funded_privkeys)
 
     prev_dynasty = casper.dynasty()
     for _ in range(10):
@@ -47,7 +47,7 @@ def test_justification_and_finalization(casper, funded_privkeys, deposit_amount,
 def test_voters_make_more(casper, funded_privkeys, deposit_amount, new_epoch,
                           induct_validators, mk_suggested_vote):
     validator_indexes = induct_validators(funded_privkeys, [deposit_amount] * len(funded_privkeys))
-    assert casper.get_total_curdyn_deposits() == deposit_amount * len(funded_privkeys)
+    assert casper.total_curdyn_deposits_scaled() == deposit_amount * len(funded_privkeys)
 
     nonvoting_index = validator_indexes[0]
     voting_indexes = validator_indexes[1:]
@@ -72,7 +72,7 @@ def test_voters_make_more(casper, funded_privkeys, deposit_amount, new_epoch,
 def test_partial_online(casper, funded_privkeys, deposit_amount, new_epoch,
                         induct_validators, mk_suggested_vote):
     validator_indexes = induct_validators(funded_privkeys, [deposit_amount] * len(funded_privkeys))
-    assert casper.get_total_curdyn_deposits() == deposit_amount * len(funded_privkeys)
+    assert casper.total_curdyn_deposits_scaled() == deposit_amount * len(funded_privkeys)
 
     half_index = int(len(validator_indexes) / 2)
     online_indexes = validator_indexes[0:half_index]
@@ -80,14 +80,14 @@ def test_partial_online(casper, funded_privkeys, deposit_amount, new_epoch,
     offline_indexes = validator_indexes[half_index:-1]
 
     total_online_deposits = sum(map(casper.deposit_size, online_indexes))
-    prev_ovp = total_online_deposits / casper.get_total_curdyn_deposits()
+    prev_ovp = total_online_deposits / casper.total_curdyn_deposits_scaled()
 
     for i in range(100):
         for i, validator_index in enumerate(online_indexes):
             casper.vote(mk_suggested_vote(validator_index, online_privkeys[i]))
 
         total_online_deposits = sum(map(casper.deposit_size, online_indexes))
-        ovp = total_online_deposits / casper.get_total_curdyn_deposits()
+        ovp = total_online_deposits / casper.total_curdyn_deposits_scaled()
 
         # after two non-finalized epochs, offline voters should start losing more
         if i >= 2:

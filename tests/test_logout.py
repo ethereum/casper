@@ -30,7 +30,7 @@ def test_logout_with_multiple_validators(casper, funded_privkeys,
                                          mk_suggested_vote, logout_validator):
     validator_indexes = induct_validators(funded_privkeys, [deposit_amount] * len(funded_privkeys))
     num_validators = len(validator_indexes)
-    assert casper.get_total_curdyn_deposits() == deposit_amount * len(funded_privkeys)
+    assert casper.total_curdyn_deposits_scaled() == deposit_amount * len(funded_privkeys)
 
     # finalize 3 epochs to get to a stable state
     for _ in range(3):
@@ -59,8 +59,8 @@ def test_logout_with_multiple_validators(casper, funded_privkeys,
     logging_out_deposit_size = casper.deposit_size(logged_out_index)
     total_deposit_size = logged_in_deposit_size + logging_out_deposit_size
 
-    assert abs(logged_in_deposit_size - casper.get_total_curdyn_deposits()) < num_validators
-    assert abs(total_deposit_size - casper.get_total_prevdyn_deposits()) < num_validators
+    assert abs(logged_in_deposit_size - casper.total_curdyn_deposits_scaled()) < num_validators
+    assert abs(total_deposit_size - casper.total_prevdyn_deposits_scaled()) < num_validators
 
     # validator no longer in prev or cur dyn
     for i, validator_index in enumerate(logged_in_indexes):
@@ -69,8 +69,8 @@ def test_logout_with_multiple_validators(casper, funded_privkeys,
 
     logged_in_deposit_size = sum(map(casper.deposit_size, logged_in_indexes))
 
-    assert abs(logged_in_deposit_size - casper.get_total_curdyn_deposits()) < num_validators
-    assert abs(logged_in_deposit_size - casper.get_total_prevdyn_deposits()) < num_validators
+    assert abs(logged_in_deposit_size - casper.total_curdyn_deposits_scaled()) < num_validators
+    assert abs(logged_in_deposit_size - casper.total_prevdyn_deposits_scaled()) < num_validators
 
     # validator can withdraw after delay
     for i in range(casper.withdrawal_delay()):
