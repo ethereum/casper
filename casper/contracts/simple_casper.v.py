@@ -28,7 +28,7 @@ validators: public({
 checkpoint_hashes: public(bytes32[int128])
 
 # Number of validators
-nextValidatorIndex: public(int128)
+next_validator_index: public(int128)
 
 # Mapping of validator's signature address to their index number
 validator_indexes: public(int128[address])
@@ -136,7 +136,7 @@ def __init__(
     self.purity_checker = _purity_checker
 
     # Start validator index counter at 1 because validator_indexes[] requires non-zero values
-    self.nextValidatorIndex = 1
+    self.next_validator_index = 1
 
     self.deposit_scale_factor[0] = 10000000000.0
     self.dynasty = 0
@@ -285,15 +285,15 @@ def deposit(validation_addr: address, withdrawal_addr: address):
     assert msg.value >= self.min_deposit_size
     start_dynasty: int128 = self.dynasty + 2
     scaled_deposit: decimal(wei/m) = msg.value / self.deposit_scale_factor[self.current_epoch]
-    self.validators[self.nextValidatorIndex] = {
+    self.validators[self.next_validator_index] = {
         deposit: scaled_deposit,
         start_dynasty: start_dynasty,
         end_dynasty: self.default_end_dynasty,
         addr: validation_addr,
         withdrawal_addr: withdrawal_addr
     }
-    self.validator_indexes[withdrawal_addr] = self.nextValidatorIndex
-    self.nextValidatorIndex += 1
+    self.validator_indexes[withdrawal_addr] = self.next_validator_index
+    self.next_validator_index += 1
     self.dynasty_wei_delta[start_dynasty] += scaled_deposit
     # Log deposit event
     log.Deposit(withdrawal_addr, self.validator_indexes[withdrawal_addr], validation_addr, self.validators[self.validator_indexes[withdrawal_addr]].start_dynasty, msg.value)

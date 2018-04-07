@@ -20,7 +20,7 @@ def test_deposit(casper_chain, casper, privkey, amount,
                  success, deposit_validator, new_epoch, assert_tx_failed):
     new_epoch()
     assert casper.current_epoch() == 1
-    assert casper.nextValidatorIndex() == 1
+    assert casper.next_validator_index() == 1
 
     if not success:
         assert_tx_failed(lambda: deposit_validator(privkey, amount))
@@ -28,7 +28,7 @@ def test_deposit(casper_chain, casper, privkey, amount,
 
     deposit_validator(privkey, amount)
 
-    assert casper.nextValidatorIndex() == 2
+    assert casper.next_validator_index() == 2
     assert casper.validator_indexes(utils.privtoaddr(privkey)) == 1
     assert casper.deposit_size(1) == amount
 
