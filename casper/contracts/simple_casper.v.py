@@ -10,7 +10,6 @@ Withdraw: event({_to: indexed(address), _validator_index: indexed(int128), _amou
 Slash: event({_from: indexed(address), _offender: indexed(address), _offender_index: indexed(int128), _bounty: int128(wei), _destroyed: int128(wei)})
 Epoch: event({_number: indexed(int128), _checkpoint_hash: indexed(bytes32), _is_justified: bool, _is_finalized: bool})
 
-# Information about validators
 validators: public({
     # Used to determine the amount of wei the validator holds. To get the actual
     # amount of wei, multiply this by the deposit_scale_factor.
@@ -21,11 +20,11 @@ validators: public({
     end_dynasty: int128,
     # The address which the validator's signatures must verify to (to be later replaced with validation code)
     addr: address,
-    # Addess to withdraw to
+    # The address to withdraw to
     withdrawal_addr: address
 }[int128])
 
-# Historical checkoint hashes
+# Historical checkpoint hashes
 checkpoint_hashes: public(bytes32[int128])
 
 # Number of validators
@@ -52,7 +51,6 @@ dynasty_start_epoch: public(int128[int128])
 # Mapping of epoch to what dynasty it is
 dynasty_in_epoch: public(int128[int128])
 
-# Information for use in processing cryptoeconomic commitments
 votes: public({
     # How many votes are there for this source epoch from the current dynasty
     cur_dyn_votes: decimal(wei / m)[int128],
@@ -72,10 +70,21 @@ main_hash_justified: public(bool)
 # Value used to calculate the per-epoch fee that validators should be charged
 deposit_scale_factor: public(decimal(m)[int128])
 
-# For debug purposes
-# TODO: Remove this when ready.
 last_nonvoter_rescale: public(decimal)
 last_voter_rescale: public(decimal)
+
+current_epoch: public(int128)
+last_finalized_epoch: public(int128)
+last_justified_epoch: public(int128)
+
+# Expected source epoch for a vote
+expected_source_epoch: public(int128)
+
+# Total deposits destroyed
+total_destroyed: wei_value
+
+
+# ***** Parameters *****
 
 # Length of an epoch in blocks
 epoch_length: public(int128)
@@ -86,23 +95,8 @@ withdrawal_delay: public(int128)
 # Logout delay in dynasties
 dynasty_logout_delay: public(int128)
 
-# Current epoch
-current_epoch: public(int128)
-
-# Last finalized epoch
-last_finalized_epoch: public(int128)
-
-# Last justified epoch
-last_justified_epoch: public(int128)
-
-# Expected source epoch for a vote
-expected_source_epoch: public(int128)
-
-# Can withdraw destroyed deposits
+# [backdoor] Can withdraw destroyed deposits
 owner: address
-
-# Total deposits destroyed
-total_destroyed: wei_value
 
 # Sighash calculator library address
 sighasher: address
@@ -113,10 +107,7 @@ purity_checker: address
 # Reward for voting as fraction of deposit size
 reward_factor: public(decimal)
 
-# Base interest factor
 base_interest_factor: public(decimal)
-
-# Base penalty factor
 base_penalty_factor: public(decimal)
 
 # Minimum deposit size if no one else is validating
@@ -133,9 +124,9 @@ def __init__(
         _min_deposit_size: wei_value):
 
     self.epoch_length = _epoch_length
-    self.withdrawal_delay = _withdrawal_delay  # delay in epochs
-    self.dynasty_logout_delay = _dynasty_logout_delay  # delay in dynasties
-    self.owner = _owner  # temporary backdoor for testing
+    self.withdrawal_delay = _withdrawal_delay
+    self.dynasty_logout_delay = _dynasty_logout_delay
+    self.owner = _owner
     self.base_interest_factor = _base_interest_factor
     self.base_penalty_factor = _base_penalty_factor
     self.min_deposit_size = _min_deposit_size
@@ -273,7 +264,8 @@ def initialize_epoch(epoch: int128):
         # ESF is only thing that is changing and reward_factor is being used above.
         assert self.reward_factor > 0
     else:
-        self.insta_finalize()  # TODO: comment on why.
+        # Before the first validator deposits, new epochs are finalized instantly.
+        self.insta_finalize()
         self.reward_factor = 0
 
     # Increment the dynasty if finalized
@@ -284,7 +276,6 @@ def initialize_epoch(epoch: int128):
     # Log new epoch creation
     log.Epoch(epoch, self.checkpoint_hashes[epoch], False, False)
 
-# Send a deposit to join the validator set
 @public
 @payable
 def deposit(validation_addr: address, withdrawal_addr: address):
@@ -307,9 +298,6 @@ def deposit(validation_addr: address, withdrawal_addr: address):
     # Log deposit event
     log.Deposit(withdrawal_addr, self.validator_indexes[withdrawal_addr], validation_addr, self.validators[self.validator_indexes[withdrawal_addr]].start_dynasty, msg.value)
 
-# Log in or log out from the validator set. A logged out validator can log
-# back in later, if they do not log in for an entire withdrawal period,
-# they can get their money out
 @public
 def logout(logout_msg: bytes <= 1024):
     assert self.current_epoch == floor(block.number / self.epoch_length)
@@ -362,6 +350,7 @@ def withdraw(validator_index: int128):
 # Reward the given validator & miner, and reflect this in total deposit figured
 @private
 def proc_reward(validator_index: int128, reward: int128(wei/m)):
+    # Reward validator
     self.validators[validator_index].deposit += reward
     start_dynasty: int128 = self.validators[validator_index].start_dynasty
     end_dynasty: int128 = self.validators[validator_index].end_dynasty
@@ -373,6 +362,7 @@ def proc_reward(validator_index: int128, reward: int128(wei/m)):
         self.total_prevdyn_deposits += reward
     if end_dynasty < self.default_end_dynasty:  # validator has submit `logout`
         self.dynasty_wei_delta[end_dynasty] -= reward
+    # Reward miner
     send(block.coinbase, floor(reward * self.deposit_scale_factor[self.current_epoch] / 8))
 
 # Process a vote message
