@@ -21,10 +21,10 @@ def test_deposit_sets_validator_deposit(casper, funded_privkey, deposit_amount,
 
 def test_deposit_updates_next_val_index(casper, funded_privkey, deposit_amount,
                                         deposit_validator):
-    next_validator_index = casper.nextValidatorIndex()
+    next_validator_index = casper.next_validator_index()
     validator_index = deposit_validator(funded_privkey, deposit_amount)
     assert validator_index == next_validator_index
-    assert casper.nextValidatorIndex() == next_validator_index + 1
+    assert casper.next_validator_index() == next_validator_index + 1
 
 
 def test_deposit_sets_start_dynasty(casper, funded_privkey, deposit_amount,
@@ -56,20 +56,20 @@ def test_deposit_updates_dynasty_wei_delta(casper, funded_privkey, deposit_amoun
 
 def test_deposit_updates_total_deposits(casper, funded_privkey, deposit_amount,
                                         induct_validator, mk_suggested_vote, new_epoch):
-    assert casper.get_total_curdyn_deposits() == 0
-    assert casper.get_total_prevdyn_deposits() == 0
+    assert casper.total_curdyn_deposits_scaled() == 0
+    assert casper.total_prevdyn_deposits_scaled() == 0
 
     # note, full induction
     validator_index = induct_validator(funded_privkey, deposit_amount)
 
-    assert casper.get_total_curdyn_deposits() == deposit_amount
-    assert casper.get_total_prevdyn_deposits() == 0
+    assert casper.total_curdyn_deposits_scaled() == deposit_amount
+    assert casper.total_prevdyn_deposits_scaled() == 0
 
     casper.vote(mk_suggested_vote(validator_index, funded_privkey))
     new_epoch()
 
-    assert casper.get_total_curdyn_deposits() == deposit_amount
-    assert casper.get_total_prevdyn_deposits() == deposit_amount
+    assert casper.total_curdyn_deposits_scaled() == deposit_amount
+    assert casper.total_prevdyn_deposits_scaled() == deposit_amount
 
 
 

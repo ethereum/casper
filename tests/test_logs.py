@@ -5,9 +5,9 @@ def test_logs(casper, funded_privkey, new_epoch, get_logs, deposit_validator,
               mk_suggested_vote, get_last_log, casper_chain, logout_validator):
     new_epoch()
     assert casper.current_epoch() == 1
-    assert casper.nextValidatorIndex() == 1
+    assert casper.next_validator_index() == 1
 
-    validator_index = casper.nextValidatorIndex()
+    validator_index = casper.next_validator_index()
     deposit_validator(funded_privkey, 1900 * 10**18)
     # Deposit log
     log1 = get_last_log(casper_chain, casper)

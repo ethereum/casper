@@ -4,7 +4,7 @@ from ethereum import utils
 def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount, get_last_log,
                               induct_validator, mk_vote, fake_hash, casper_chain):
     validator_index = induct_validator(funded_privkey, deposit_amount)
-    assert casper.get_total_curdyn_deposits() == deposit_amount
+    assert casper.total_curdyn_deposits_scaled() == deposit_amount
 
     vote_1 = mk_vote(
         validator_index,
@@ -41,7 +41,7 @@ def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount, get_last_l
 def test_slash_no_surround(casper, funded_privkey, deposit_amount, new_epoch,
                            induct_validator, mk_vote, fake_hash, assert_tx_failed):
     validator_index = induct_validator(funded_privkey, deposit_amount)
-    assert casper.get_total_curdyn_deposits() == deposit_amount
+    assert casper.total_curdyn_deposits_scaled() == deposit_amount
 
     vote_1 = mk_vote(
         validator_index,

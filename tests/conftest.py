@@ -372,7 +372,7 @@ def induct_validator(casper_chain, casper, deposit_validator, new_epoch):
 @pytest.fixture
 def induct_validators(casper_chain, casper, deposit_validator, new_epoch):
     def induct_validators(privkeys, values):
-        start_index = casper.nextValidatorIndex()
+        start_index = casper.next_validator_index()
         if casper.current_epoch() == 0:
             new_epoch()
         for privkey, value in zip(privkeys, values):
