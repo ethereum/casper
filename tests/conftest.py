@@ -307,6 +307,27 @@ def mk_suggested_vote(casper, mk_vote):
 
 
 @pytest.fixture
+def mk_slash_votes(casper, mk_vote, fake_hash):
+    def mk_slash_votes(validator_index, privkey):
+        vote_1 = mk_vote(
+            validator_index,
+            casper.recommended_target_hash(),
+            casper.current_epoch(),
+            casper.recommended_source_epoch(),
+            privkey
+        )
+        vote_2 = mk_vote(
+            validator_index,
+            fake_hash,
+            casper.current_epoch(),
+            casper.recommended_source_epoch(),
+            privkey
+        )
+        return vote_1, vote_2
+    return mk_slash_votes
+
+
+@pytest.fixture
 def mk_logout():
     def mk_logout(validator_index, epoch, key):
         sighash = utils.sha3(rlp.encode([validator_index, epoch]))
