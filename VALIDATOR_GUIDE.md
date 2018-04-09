@@ -12,16 +12,16 @@ This document outlines the components of implementing an FFG Validator. These in
 - Simple validator voting logic.
 
 ## Validator Workflow Overview
-1. [Create valcode:](http://notes.ethresear.ch/GwTgLAZghgRgHGAtABmARgKaLFNzEIwjZgDsAxsBAMzIwbJpA===?both#validation-code)
+1. Create valcode:
     - Deploy a new contract which is used to validate a validator's signature.
 2. Submit Deposit:
     - Call `casper.deposit(validation_addr, withdrawal_addr)` passing in the validation code contract address from step (1) and your withdrawal address.
-3. **[Once each Epoch]** [Submit new vote message:](http://notes.ethresear.ch/GwTgLAZghgRgHGAtABmARgKaLFNzEIwjZgDsAxsBAMzIwbJpA===?both#casper-vote-generation)
+3. **[Once each Epoch]** Submit new vote message:
     - Wait to vote until the checkpoint is at least `EPOCH_LENGTH/4` blocks deep in the main chain. This ensures all validators vote on the same block.
     - Generate unsigned vote message based on your chain's current head.
     - Broadcast the unsigned vote transaction to the network.
 4. Logout:
-    - [Submit logout message.](http://notes.ethresear.ch/GwTgLAZghgRgHGAtABmARgKaLFNzEIwjZgDsAxsBAMzIwbJpA===?both#logout-message-generation)
+    - Submit logout message.
     - Call `casper.logout(logout_msg)` passing in your newly generated logout message.
 5. Withdraw:
     - Call `casper.withdraw(validator_index)` and your funds will be sent to your validator's withdrawal address specified in step (2).
@@ -121,7 +121,7 @@ These settings cannot be changed after deployment.
 #### `def initialize_epoch(epoch)`
 Calculates the interest rate &amp; penalty factor for this epoch based on the time since finality.
 
-Once a new epoch begins, this function is immediately called as the first transaction applied to the state. See [Epoch initialization](http://notes.eth.sg/GwTgLAZghgRgHGAtABmARgKaLFNzEIwjZgDsAxsBAMzIwbJpA===?both#epoch-initialization) for more details.
+Once a new epoch begins, this function is immediately called as the first transaction applied to the state. See Epoch initialization for more details.
 
 #### `def deposit(validation_addr, withdrawal_addr)`
 Accepts deposits from prospective validators &amp; adds them to the next validator set.
@@ -133,7 +133,7 @@ Initiates validator logout. The validator must continue to validate for `dynasty
 If the validator has waited for a period greater than `withdrawal_delay` epochs past their `end_dynasty`, then send them ETH equivalent to their deposit.
 
 #### `def vote(vote_msg)`
-Called once by each validator each epoch. The vote message contains the fields presented in [Casper Vote Format](http://notes.eth.sg/GwTgLAZghgRgHGAtABmARgKaLFNzEIwjZgDsAxsBAMzIwbJpA===?both#casper-vote-format).
+Called once by each validator each epoch. The vote message contains the fields presented in Casper Vote Format.
 
 #### `def slash(vote_msg_1, vote_msg_2)`
 Can be called by anyone who detects a slashing condition violation. Sends 4% of slashed validator's funds to the caller as a finder's fee and burns the remaining 96%.
