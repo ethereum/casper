@@ -57,7 +57,7 @@ votes: public({
     # From the previous dynasty
     prev_dyn_votes: decimal(wei / m)[int128],
     # Bitmap of which validator IDs have already voted
-    vote_bitmap: uint256[int128][bytes32],
+    vote_bitmap: uint256[int128],
     # Is a vote referencing the given epoch justified?
     is_justified: bool,
     # Is a vote referencing the given epoch finalized?
@@ -381,7 +381,7 @@ def vote(vote_msg: bytes <= 1024):
     # Check the signature
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=500000, outsize=32), 0) == convert(1, 'bytes32')
     # Check that this vote has not yet been made
-    assert not bitwise_and(self.votes[target_epoch].vote_bitmap[target_hash][floor(validator_index / 256)],
+    assert not bitwise_and(self.votes[target_epoch].vote_bitmap[floor(validator_index / 256)],
                            shift(convert(1, 'uint256'), validator_index % 256))
     # Check that the vote's target epoch and hash are correct
     assert target_hash == self.recommended_target_hash()
@@ -399,8 +399,8 @@ def vote(vote_msg: bytes <= 1024):
     in_prev_dynasty: bool = ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty))
     assert in_current_dynasty or in_prev_dynasty
     # Record that the validator voted for this target epoch so they can't again
-    self.votes[target_epoch].vote_bitmap[target_hash][floor(validator_index / 256)] = \
-        bitwise_or(self.votes[target_epoch].vote_bitmap[target_hash][floor(validator_index / 256)],
+    self.votes[target_epoch].vote_bitmap[floor(validator_index / 256)] = \
+        bitwise_or(self.votes[target_epoch].vote_bitmap[floor(validator_index / 256)],
                    shift(convert(1, 'uint256'), validator_index % 256))
     # Record that this vote took place
     current_dynasty_votes: decimal(wei/m) = self.votes[target_epoch].cur_dyn_votes[source_epoch]
