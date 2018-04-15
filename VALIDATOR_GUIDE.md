@@ -103,7 +103,7 @@ def mk_logout(validator_index, epoch, key):
 ```
 
 ## Simple Casper Contract High Level Overview
-The Casper smart contract contains Casper's core logic. It is written in Viper &amp; can be deployed to the blockchain like any other contract to `CASPER_ADDR`. Casper messages are then sent to the contract by calling `vote(vote_msg)` where `vote_msg` is a Casper vote messaged as outlined above.
+The Casper smart contract contains Casper's core logic. It is written in Vyper &amp; can be deployed to the blockchain like any other contract to `CASPER_ADDR`. Casper messages are then sent to the contract by calling `vote(vote_msg)` where `vote_msg` is a Casper vote messaged as outlined above.
 
 ### [[Contract Source]](https://github.com/ethereum/casper/blob/master/casper/contracts/simple_casper.v.py)
 
