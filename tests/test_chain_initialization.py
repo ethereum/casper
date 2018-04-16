@@ -43,3 +43,15 @@ def test_init_first_epoch(casper, new_epoch):
     assert casper.dynasty() == 0
     assert casper.next_validator_index() == 1
     assert casper.current_epoch() == 1
+
+
+@pytest.mark.parametrize(
+    'epoch_length, success',
+    [
+        (10, True),
+        (250, True),
+        (256, False),
+        (500, False),
+    ]
+)
+def test_epoch_length(epoch_length, success, casper_config)
