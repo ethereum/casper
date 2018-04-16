@@ -259,8 +259,8 @@ def initialize_epoch(epoch: int128):
 
     if self.deposit_exists():
         # Set the reward factor for the next epoch.
-        adj_interest_base: decimal = self.base_interest_factor / self.sqrt_of_total_deposits()  # TODO: sqrt is based on previous epoch starting deposit
-        self.reward_factor = adj_interest_base + self.base_penalty_factor * self.esf()  # TODO: might not be bpf. clarify is positive?
+        adj_interest_base: decimal = self.base_interest_factor / self.sqrt_of_total_deposits()
+        self.reward_factor = adj_interest_base + self.base_penalty_factor * (self.esf() - 2)
         # ESF is only thing that is changing and reward_factor is being used above.
         assert self.reward_factor > 0
     else:
