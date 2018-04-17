@@ -528,4 +528,4 @@ def owner_withdraw():
 @public
 def change_owner(new_owner: address):
     if self.OWNER == msg.sender:
-        self.OWNER = new_OWNER
+        self.OWNER = new_owner
