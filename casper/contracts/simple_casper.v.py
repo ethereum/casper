@@ -77,6 +77,9 @@ current_epoch: public(int128)
 last_finalized_epoch: public(int128)
 last_justified_epoch: public(int128)
 
+# Reward for voting as fraction of deposit size
+reward_factor: public(decimal)
+
 # Expected source epoch for a vote
 expected_source_epoch: public(int128)
 
@@ -87,63 +90,60 @@ total_destroyed: wei_value
 # ***** Parameters *****
 
 # Length of an epoch in blocks
-epoch_length: public(int128)
+EPOCH_LENGTH: public(int128)
 
 # Withdrawal delay in blocks
-withdrawal_delay: public(int128)
+WITHDRAWAL_DELAY: public(int128)
 
 # Logout delay in dynasties
-dynasty_logout_delay: public(int128)
+DYNASTY_LOGOUT_DELAY: public(int128)
 
 # [backdoor] Can withdraw destroyed deposits
-owner: address
+OWNER: address
 
 # Sighash calculator library address
-sighasher: address
+SIGHASHER: address
 
 # Purity checker library address
-purity_checker: address
+PURITY_CHECKER: address
 
-# Reward for voting as fraction of deposit size
-reward_factor: public(decimal)
-
-base_interest_factor: public(decimal)
-base_penalty_factor: public(decimal)
+BASE_INTEREST_FACTOR: public(decimal)
+BASE_PENALTY_FACTOR: public(decimal)
 
 # Minimum deposit size if no one else is validating
-min_deposit_size: wei_value
+MIN_DEPOSIT_SIZE: wei_value
 
 # Huge integer to be used for default end_dynasty for new validator
-default_end_dynasty: int128
+DEFAULT_END_DYNASTY: int128
 
 @public
 def __init__(
-        _epoch_length: int128, _withdrawal_delay: int128, _dynasty_logout_delay: int128,
-        _owner: address, _sighasher: address, _purity_checker: address,
-        _base_interest_factor: decimal, _base_penalty_factor: decimal,
-        _min_deposit_size: wei_value):
+        _EPOCH_LENGTH: int128, _WITHDRAWAL_DELAY: int128, _DYNASTY_LOGOUT_DELAY: int128,
+        _OWNER: address, _SIGHASHER: address, _PURITY_CHECKER: address,
+        _BASE_INTEREST_FACTOR: decimal, _BASE_PENALTY_FACTOR: decimal,
+        _MIN_DEPOSIT_SIZE: wei_value):
 
-    self.epoch_length = _epoch_length
-    self.withdrawal_delay = _withdrawal_delay
-    self.dynasty_logout_delay = _dynasty_logout_delay
-    self.owner = _owner
-    self.base_interest_factor = _base_interest_factor
-    self.base_penalty_factor = _base_penalty_factor
-    self.min_deposit_size = _min_deposit_size
+    self.EPOCH_LENGTH = _EPOCH_LENGTH
+    self.WITHDRAWAL_DELAY = _WITHDRAWAL_DELAY
+    self.DYNASTY_LOGOUT_DELAY = _DYNASTY_LOGOUT_DELAY
+    self.OWNER = _OWNER
+    self.BASE_INTEREST_FACTOR = _BASE_INTEREST_FACTOR
+    self.BASE_PENALTY_FACTOR = _BASE_PENALTY_FACTOR
+    self.MIN_DEPOSIT_SIZE = _MIN_DEPOSIT_SIZE
 
     # helper contracts
-    self.sighasher = _sighasher
-    self.purity_checker = _purity_checker
+    self.SIGHASHER = _SIGHASHER
+    self.PURITY_CHECKER = _PURITY_CHECKER
 
     # Start validator index counter at 1 because validator_indexes[] requires non-zero values
     self.next_validator_index = 1
 
     self.deposit_scale_factor[0] = 10000000000.0
     self.dynasty = 0
-    self.current_epoch = floor(block.number / self.epoch_length)
+    self.current_epoch = floor(block.number / self.EPOCH_LENGTH)
     self.total_curdyn_deposits = 0
     self.total_prevdyn_deposits = 0
-    self.default_end_dynasty = 1000000000000000000000000000000
+    self.DEFAULT_END_DYNASTY = 1000000000000000000000000000000
 
 # ***** Constants *****
 @public
@@ -176,7 +176,7 @@ def recommended_source_epoch() -> int128:
 @public
 @constant
 def recommended_target_hash() -> bytes32:
-    return blockhash(self.current_epoch*self.epoch_length-1)
+    return blockhash(self.current_epoch*self.EPOCH_LENGTH - 1)
 
 @private
 @constant
@@ -191,7 +191,7 @@ def deposit_exists() -> bool:
 def increment_dynasty():
     epoch: int128 = self.current_epoch
     # Increment the dynasty if finalized
-    if self.votes[epoch-2].is_finalized:
+    if self.votes[epoch - 2].is_finalized:
         self.dynasty += 1
         self.total_prevdyn_deposits = self.total_curdyn_deposits
         self.total_curdyn_deposits += self.dynasty_wei_delta[self.dynasty]
@@ -247,7 +247,7 @@ def sqrt_of_total_deposits() -> decimal:
 @public
 def initialize_epoch(epoch: int128):
     # Check that the epoch actually has started
-    computed_current_epoch: int128 = floor(block.number / self.epoch_length)
+    computed_current_epoch: int128 = floor(block.number / self.EPOCH_LENGTH)
     assert epoch <= computed_current_epoch and epoch == self.current_epoch + 1
 
     # Setup
@@ -259,8 +259,8 @@ def initialize_epoch(epoch: int128):
 
     if self.deposit_exists():
         # Set the reward factor for the next epoch.
-        adj_interest_base: decimal = self.base_interest_factor / self.sqrt_of_total_deposits()
-        self.reward_factor = adj_interest_base + self.base_penalty_factor * (self.esf() - 2)
+        adj_interest_base: decimal = self.BASE_INTEREST_FACTOR / self.sqrt_of_total_deposits()
+        self.reward_factor = adj_interest_base + self.BASE_PENALTY_FACTOR * (self.esf() - 2)
         # ESF is only thing that is changing and reward_factor is being used above.
         assert self.reward_factor > 0
     else:
@@ -279,16 +279,16 @@ def initialize_epoch(epoch: int128):
 @public
 @payable
 def deposit(validation_addr: address, withdrawal_addr: address):
-    assert self.current_epoch == floor(block.number / self.epoch_length)
-    assert extract32(raw_call(self.purity_checker, concat('\xa1\x90>\xab', convert(validation_addr, 'bytes32')), gas=500000, outsize=32), 0) != convert(0, 'bytes32')
+    assert self.current_epoch == floor(block.number / self.EPOCH_LENGTH)
+    assert extract32(raw_call(self.PURITY_CHECKER, concat('\xa1\x90>\xab', convert(validation_addr, 'bytes32')), gas=500000, outsize=32), 0) != convert(0, 'bytes32')
     assert not self.validator_indexes[withdrawal_addr]
-    assert msg.value >= self.min_deposit_size
+    assert msg.value >= self.MIN_DEPOSIT_SIZE
     start_dynasty: int128 = self.dynasty + 2
     scaled_deposit: decimal(wei/m) = msg.value / self.deposit_scale_factor[self.current_epoch]
     self.validators[self.next_validator_index] = {
         deposit: scaled_deposit,
         start_dynasty: start_dynasty,
-        end_dynasty: self.default_end_dynasty,
+        end_dynasty: self.DEFAULT_END_DYNASTY,
         addr: validation_addr,
         withdrawal_addr: withdrawal_addr
     }
@@ -300,10 +300,10 @@ def deposit(validation_addr: address, withdrawal_addr: address):
 
 @public
 def logout(logout_msg: bytes <= 1024):
-    assert self.current_epoch == floor(block.number / self.epoch_length)
+    assert self.current_epoch == floor(block.number / self.EPOCH_LENGTH)
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
-    sighash: bytes32 = extract32(raw_call(self.sighasher, logout_msg, gas=200000, outsize=32), 0)
+    sighash: bytes32 = extract32(raw_call(self.SIGHASHER, logout_msg, gas=200000, outsize=32), 0)
     # Extract parameters
     values = RLPList(logout_msg, [int128, int128, bytes])
     validator_index: int128 = values[0]
@@ -313,7 +313,7 @@ def logout(logout_msg: bytes <= 1024):
     # Signature check
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=500000, outsize=32), 0) == convert(1, 'bytes32')
     # Check that we haven't already withdrawn
-    end_dynasty: int128 = self.dynasty + self.dynasty_logout_delay
+    end_dynasty: int128 = self.dynasty + self.DYNASTY_LOGOUT_DELAY
     assert self.validators[validator_index].end_dynasty > end_dynasty
     # Set the end dynasty
     self.validators[validator_index].end_dynasty = end_dynasty
@@ -339,7 +339,7 @@ def withdraw(validator_index: int128):
     # Check that we can withdraw
     assert self.dynasty >= self.validators[validator_index].end_dynasty + 1
     end_epoch: int128 = self.dynasty_start_epoch[self.validators[validator_index].end_dynasty + 1]
-    assert self.current_epoch >= end_epoch + self.withdrawal_delay
+    assert self.current_epoch >= end_epoch + self.WITHDRAWAL_DELAY
     # Withdraw
     withdraw_amount: int128(wei) = floor(self.validators[validator_index].deposit * self.deposit_scale_factor[end_epoch])
     send(self.validators[validator_index].withdrawal_addr, withdraw_amount)
@@ -360,7 +360,7 @@ def proc_reward(validator_index: int128, reward: int128(wei/m)):
         self.total_curdyn_deposits += reward
     if ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty)):
         self.total_prevdyn_deposits += reward
-    if end_dynasty < self.default_end_dynasty:  # validator has submit `logout`
+    if end_dynasty < self.DEFAULT_END_DYNASTY:  # validator has submit `logout`
         self.dynasty_wei_delta[end_dynasty] -= reward
     # Reward miner
     send(block.coinbase, floor(reward * self.deposit_scale_factor[self.current_epoch] / 8))
@@ -370,7 +370,7 @@ def proc_reward(validator_index: int128, reward: int128(wei/m)):
 def vote(vote_msg: bytes <= 1024):
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
-    sighash: bytes32 = extract32(raw_call(self.sighasher, vote_msg, gas=200000, outsize=32), 0)
+    sighash: bytes32 = extract32(raw_call(self.SIGHASHER, vote_msg, gas=200000, outsize=32), 0)
     # Extract parameters
     values = RLPList(vote_msg, [int128, bytes32, int128, int128, bytes])
     validator_index: int128 = values[0]
@@ -442,7 +442,7 @@ def vote(vote_msg: bytes <= 1024):
 @public
 def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     # Message 1: Extract parameters
-    sighash_1: bytes32 = extract32(raw_call(self.sighasher, vote_msg_1, gas=200000, outsize=32), 0)
+    sighash_1: bytes32 = extract32(raw_call(self.SIGHASHER, vote_msg_1, gas=200000, outsize=32), 0)
     values_1 = RLPList(vote_msg_1, [int128, bytes32, int128, int128, bytes])
     validator_index_1: int128 = values_1[0]
     target_epoch_1: int128 = values_1[2]
@@ -451,7 +451,7 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     # Check the signature for vote message 1
     assert extract32(raw_call(self.validators[validator_index_1].addr, concat(sighash_1, sig_1), gas=500000, outsize=32), 0) == convert(1, 'bytes32')
     # Message 2: Extract parameters
-    sighash_2: bytes32 = extract32(raw_call(self.sighasher, vote_msg_2, gas=200000, outsize=32), 0)
+    sighash_2: bytes32 = extract32(raw_call(self.SIGHASHER, vote_msg_2, gas=200000, outsize=32), 0)
     values_2 = RLPList(vote_msg_2, [int128, bytes32, int128, int128, bytes])
     validator_index_2: int128 = values_2[0]
     target_epoch_2: int128 = values_2[2]
@@ -489,7 +489,7 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
 
         # if validator was already staged for logout at end_dynasty,
         # ensure that we don't doubly remove from total
-        if end_dynasty < self.default_end_dynasty:
+        if end_dynasty < self.DEFAULT_END_DYNASTY:
             self.dynasty_wei_delta[end_dynasty] += deposit
 
     self.delete_validator(validator_index_1)
@@ -498,11 +498,11 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
 # Temporary backdoor for testing purposes (to allow recovering destroyed deposits)
 @public
 def owner_withdraw():
-    send(self.owner, self.total_destroyed)
+    send(self.OWNER, self.total_destroyed)
     self.total_destroyed = 0
 
 # Change backdoor address (set to zero to remove entirely)
 @public
 def change_owner(new_owner: address):
-    if self.owner == msg.sender:
-        self.owner = new_owner
+    if self.OWNER == msg.sender:
+        self.OWNER = new_OWNER
