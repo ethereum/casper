@@ -119,22 +119,22 @@ DEFAULT_END_DYNASTY: int128
 
 @public
 def __init__(
-        _EPOCH_LENGTH: int128, _WITHDRAWAL_DELAY: int128, _DYNASTY_LOGOUT_DELAY: int128,
-        _OWNER: address, _SIGHASHER: address, _PURITY_CHECKER: address,
-        _BASE_INTEREST_FACTOR: decimal, _BASE_PENALTY_FACTOR: decimal,
-        _MIN_DEPOSIT_SIZE: wei_value):
+        epoch_length: int128, withdrawal_delay: int128, dynasty_logout_delay: int128,
+        owner: address, sighasher: address, purity_checker: address,
+        base_interest_factor: decimal, base_penalty_factor: decimal,
+        min_deposit_size: wei_value):
 
-    self.EPOCH_LENGTH = _EPOCH_LENGTH
-    self.WITHDRAWAL_DELAY = _WITHDRAWAL_DELAY
-    self.DYNASTY_LOGOUT_DELAY = _DYNASTY_LOGOUT_DELAY
-    self.OWNER = _OWNER
-    self.BASE_INTEREST_FACTOR = _BASE_INTEREST_FACTOR
-    self.BASE_PENALTY_FACTOR = _BASE_PENALTY_FACTOR
-    self.MIN_DEPOSIT_SIZE = _MIN_DEPOSIT_SIZE
+    self.EPOCH_LENGTH = epoch_length
+    self.WITHDRAWAL_DELAY = withdrawal_delay
+    self.DYNASTY_LOGOUT_DELAY = dynasty_logout_delay
+    self.OWNER = owner
+    self.BASE_INTEREST_FACTOR = base_interest_factor
+    self.BASE_PENALTY_FACTOR = base_penalty_factor
+    self.MIN_DEPOSIT_SIZE = min_deposit_size
 
     # helper contracts
-    self.SIGHASHER = _SIGHASHER
-    self.PURITY_CHECKER = _PURITY_CHECKER
+    self.SIGHASHER = sighasher
+    self.PURITY_CHECKER = purity_checker
 
     # Start validator index counter at 1 because validator_indexes[] requires non-zero values
     self.next_validator_index = 1
