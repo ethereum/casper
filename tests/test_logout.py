@@ -4,7 +4,7 @@ def test_logout_sets_end_dynasty(casper, funded_privkey, deposit_amount,
                                  induct_validator, logout_validator):
     validator_index = induct_validator(funded_privkey, deposit_amount)
 
-    expected_end_dynasty = casper.dynasty() + casper.dynasty_logout_delay()
+    expected_end_dynasty = casper.dynasty() + casper.DYNASTY_LOGOUT_DELAY()
     assert casper.validators__end_dynasty(validator_index) == 1000000000000000000000000000000
 
     logout_validator(validator_index, funded_privkey)
@@ -17,7 +17,7 @@ def test_logout_updates_dynasty_wei_delta(casper, funded_privkey, deposit_amount
     validator_index = induct_validator(funded_privkey, deposit_amount)
     scaled_deposit_size = casper.validators__deposit(validator_index)
 
-    expected_end_dynasty = casper.dynasty() + casper.dynasty_logout_delay()
+    expected_end_dynasty = casper.dynasty() + casper.DYNASTY_LOGOUT_DELAY()
     assert casper.dynasty_wei_delta(expected_end_dynasty) == 0
 
     logout_validator(validator_index, funded_privkey)
@@ -48,7 +48,7 @@ def test_logout_with_multiple_validators(casper, funded_privkeys,
     logout_validator(logged_out_index, logged_out_privkey)
 
     # enter validator's end_dynasty (validator in prevdyn)
-    dynasty_logout_delay = casper.dynasty_logout_delay()
+    dynasty_logout_delay = casper.DYNASTY_LOGOUT_DELAY()
     for _ in range(dynasty_logout_delay):
         for i, validator_index in enumerate(validator_indexes):
             casper.vote(mk_suggested_vote(validator_index, funded_privkeys[i]))
@@ -73,7 +73,7 @@ def test_logout_with_multiple_validators(casper, funded_privkeys,
     assert abs(logged_in_deposit_size - casper.total_prevdyn_deposits_scaled()) < num_validators
 
     # validator can withdraw after delay
-    for i in range(casper.withdrawal_delay()):
+    for i in range(casper.WITHDRAWAL_DELAY()):
         for i, validator_index in enumerate(logged_in_indexes):
             casper.vote(mk_suggested_vote(validator_index, logged_in_privkeys[i]))
         new_epoch()

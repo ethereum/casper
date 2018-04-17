@@ -60,19 +60,19 @@ def test_logs(casper, funded_privkey, new_epoch, get_logs, deposit_validator,
     assert log4['_event_type'] == b'Logout'
     assert log4['_from'] == '0x' + utils.encode_hex(utils.privtoaddr(funded_privkey))
 
-    # Need to vote 'dynasty_logout_delay'  epochs before logout is active
-    for _ in range(casper.dynasty_logout_delay()):
+    # Need to vote 'DYNASTY_LOGOUT_DELAY' epochs before logout is active
+    for _ in range(casper.DYNASTY_LOGOUT_DELAY()):
         new_epoch()
         casper.vote(mk_suggested_vote(validator_index, funded_privkey))
 
-    for i in range(casper.withdrawal_delay() + 1):
+    for i in range(casper.WITHDRAWAL_DELAY() + 1):
         new_epoch()
 
     cur_epoch = casper.current_epoch()
     end_epoch = casper.dynasty_start_epoch(
         casper.validators__end_dynasty(validator_index) + 1
     )
-    assert cur_epoch == end_epoch + casper.withdrawal_delay()  # so we are allowed to withdraw
+    assert cur_epoch == end_epoch + casper.WITHDRAWAL_DELAY()  # so we are allowed to withdraw
 
     casper.withdraw(validator_index)
 
