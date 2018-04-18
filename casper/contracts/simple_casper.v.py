@@ -378,6 +378,7 @@ def vote(vote_msg: bytes <= 1024):
     target_epoch: int128 = values[2]
     source_epoch: int128 = values[3]
     sig: bytes <= 1024 = values[4]
+
     # Check the signature
     assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=500000, outsize=32), 0) == convert(1, 'bytes32')
     # Check that this vote has not yet been made
@@ -388,20 +389,21 @@ def vote(vote_msg: bytes <= 1024):
     assert target_epoch == self.current_epoch
     # Check that the vote source points to a justified epoch
     assert self.votes[source_epoch].is_justified
-    # Original starting dynasty of the validator; fail if before
+
+    # ensure validator can vote for the target_epoch
     start_dynasty: int128 = self.validators[validator_index].start_dynasty
-    # Ending dynasty of the current login period
     end_dynasty: int128 = self.validators[validator_index].end_dynasty
-    # Dynasty of the vote
-    current_dynasty: int128 = self.dynasty_in_epoch[target_epoch]
+    current_dynasty: int128 = self.dynasty
     past_dynasty: int128 = current_dynasty - 1
     in_current_dynasty: bool = ((start_dynasty <= current_dynasty) and (current_dynasty < end_dynasty))
     in_prev_dynasty: bool = ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty))
     assert in_current_dynasty or in_prev_dynasty
+
     # Record that the validator voted for this target epoch so they can't again
     self.votes[target_epoch].vote_bitmap[floor(validator_index / 256)] = \
         bitwise_or(self.votes[target_epoch].vote_bitmap[floor(validator_index / 256)],
                    shift(convert(1, 'uint256'), validator_index % 256))
+
     # Record that this vote took place
     current_dynasty_votes: decimal(wei/m) = self.votes[target_epoch].cur_dyn_votes[source_epoch]
     previous_dynasty_votes: decimal(wei/m) = self.votes[target_epoch].prev_dyn_votes[source_epoch]
@@ -411,11 +413,13 @@ def vote(vote_msg: bytes <= 1024):
     if in_prev_dynasty:
         previous_dynasty_votes += self.validators[validator_index].deposit
         self.votes[target_epoch].prev_dyn_votes[source_epoch] = previous_dynasty_votes
+
     # Process rewards.
     # Pay the reward if the vote was submitted in time and the vote is voting the correct data
     if self.expected_source_epoch == source_epoch:
         reward: int128(wei/m) = floor(self.validators[validator_index].deposit * self.reward_factor)
         self.proc_reward(validator_index, reward)
+
     # If enough votes with the same source_epoch and hash are made,
     # then the hash value is justified
     if (current_dynasty_votes >= self.total_curdyn_deposits * 2 / 3 and
@@ -435,6 +439,7 @@ def vote(vote_msg: bytes <= 1024):
             self.last_finalized_epoch = source_epoch
             # Log source epoch status update
             log.Epoch(source_epoch, self.checkpoint_hashes[source_epoch], True, True)
+
     # Log vote event
     log.Vote(self.validators[validator_index].withdrawal_addr, validator_index, target_hash, target_epoch, source_epoch)
 
