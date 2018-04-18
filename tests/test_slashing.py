@@ -82,7 +82,7 @@ def test_slash_after_logout_delay(casper, funded_privkey, deposit_amount, get_la
     assert casper.dynasty_wei_delta(end_dynasty) == -scaled_deposit_size
 
     # step past validator's end_dynasty
-    dynasty_logout_delay = casper.dynasty_logout_delay()
+    dynasty_logout_delay = casper.DYNASTY_LOGOUT_DELAY()
     for _ in range(dynasty_logout_delay + 1):
         casper.vote(mk_suggested_vote(validator_index, funded_privkey))
         new_epoch()

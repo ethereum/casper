@@ -256,7 +256,7 @@ def get_dirs(path):
 def new_epoch(casper_chain, casper):
     def new_epoch():
         next_epoch = casper.current_epoch() + 1
-        epoch_length = casper.epoch_length()
+        epoch_length = casper.EPOCH_LENGTH()
 
         casper_chain.mine(epoch_length * next_epoch - casper_chain.head_state.block_number)
         casper.initialize_epoch(next_epoch)
