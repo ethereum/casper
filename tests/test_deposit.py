@@ -72,4 +72,14 @@ def test_deposit_updates_total_deposits(casper, funded_privkey, deposit_amount,
     assert casper.total_prevdyn_deposits_scaled() == deposit_amount
 
 
+def test_deposit_minimum(casper, casper_config, funded_privkey,
+                         deposit_amount, deposit_validator, assert_tx_failed):
+    below_min_deposit = casper_config["min_deposit_size"] - 1
+    assert_tx_failed(
+        lambda: deposit_validator(funded_privkey, below_min_deposit)
+    )
 
+    below_min_deposit = 0
+    assert_tx_failed(
+        lambda: deposit_validator(funded_privkey, below_min_deposit)
+    )
