@@ -299,12 +299,18 @@ def initialize_epoch(epoch: int128):
 
 
 @public
+def current_min_deposit_size() -> wei_value:
+    return max(self.MIN_DEPOSIT_SIZE, self.num_validators * as_wei_value(1, "ether"))
+
+
+@public
 @payable
 def deposit(validation_addr: address, withdrawal_addr: address):
     assert self.current_epoch == floor(block.number / self.EPOCH_LENGTH)
     assert extract32(raw_call(self.PURITY_CHECKER, concat('\xa1\x90>\xab', convert(validation_addr, 'bytes32')), gas=500000, outsize=32), 0) != convert(0, 'bytes32')
     assert not self.validator_indexes[withdrawal_addr]
-    assert msg.value >= self.MIN_DEPOSIT_SIZE
+    assert msg.value >= self.current_min_deposit_size()
+
     start_dynasty: int128 = self.dynasty + 2
     scaled_deposit: decimal(wei/m) = msg.value / self.deposit_scale_factor[self.current_epoch]
     self.validators[self.next_validator_index] = {
