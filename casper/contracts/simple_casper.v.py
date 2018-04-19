@@ -114,7 +114,7 @@ BASE_PENALTY_FACTOR: public(decimal)
 MIN_DEPOSIT_SIZE: wei_value
 
 # Huge integer to be used for default end_dynasty for new validator
-DEFAULT_END_DYNASTY: public(int128)
+DEFAULT_END_DYNASTY: int128
 
 
 @public
