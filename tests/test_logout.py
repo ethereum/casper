@@ -1,3 +1,4 @@
+DEFAULT_END_DYNASTY = 1000000000000000000000000000000
 
 
 def test_logout_sets_end_dynasty(casper, funded_privkey, deposit_amount,
@@ -5,7 +6,7 @@ def test_logout_sets_end_dynasty(casper, funded_privkey, deposit_amount,
     validator_index = induct_validator(funded_privkey, deposit_amount)
 
     expected_end_dynasty = casper.dynasty() + casper.DYNASTY_LOGOUT_DELAY()
-    assert casper.validators__end_dynasty(validator_index) == 1000000000000000000000000000000
+    assert casper.validators__end_dynasty(validator_index) == DEFAULT_END_DYNASTY
 
     logout_validator(validator_index, funded_privkey)
 
@@ -23,6 +24,34 @@ def test_logout_updates_dynasty_wei_delta(casper, funded_privkey, deposit_amount
     logout_validator(validator_index, funded_privkey)
 
     assert casper.dynasty_wei_delta(expected_end_dynasty) == -scaled_deposit_size
+
+
+def test_logout_decrements_num_validators(casper, funded_privkey, deposit_amount,
+                                          induct_validator, logout_validator):
+    validator_index = induct_validator(funded_privkey, deposit_amount)
+    assert casper.num_validators() > 0
+
+    prev_num_validators = casper.num_validators()
+    logout_validator(validator_index, funded_privkey)
+
+    assert casper.num_validators() == prev_num_validators - 1
+    assert casper.num_validators() >= 0
+
+
+def test_no_double_withdraw(casper, funded_privkey, deposit_amount, new_epoch,
+                            mk_suggested_vote, induct_validator, logout_validator,
+                            assert_tx_failed):
+    validator_index = induct_validator(funded_privkey, deposit_amount)
+
+    logout_validator(validator_index, funded_privkey)
+    assert casper.validators__end_dynasty(validator_index) < DEFAULT_END_DYNASTY
+
+    casper.vote(mk_suggested_vote(validator_index, funded_privkey))
+    new_epoch()
+
+    assert_tx_failed(
+        lambda: logout_validator(validator_index, funded_privkey)
+    )
 
 
 def test_logout_with_multiple_validators(casper, funded_privkeys,

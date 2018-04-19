@@ -27,7 +27,9 @@ validators: public({
 # Historical checkpoint hashes
 checkpoint_hashes: public(bytes32[int128])
 
-# Number of validators
+# Number of active validators
+num_validators: public(int128)
+
 next_validator_index: public(int128)
 
 # Mapping of validator's signature address to their index number
@@ -109,12 +111,10 @@ PURITY_CHECKER: address
 
 BASE_INTEREST_FACTOR: public(decimal)
 BASE_PENALTY_FACTOR: public(decimal)
-
-# Minimum deposit size if no one else is validating
 MIN_DEPOSIT_SIZE: wei_value
 
 # Huge integer to be used for default end_dynasty for new validator
-DEFAULT_END_DYNASTY: int128
+DEFAULT_END_DYNASTY: public(int128)
 
 
 @public
@@ -138,6 +138,7 @@ def __init__(
 
     # Start validator index counter at 1 because validator_indexes[] requires non-zero values
     self.next_validator_index = 1
+    self.num_validators = 0
 
     self.deposit_scale_factor[0] = 10000000000.0
     self.dynasty = 0
@@ -255,6 +256,12 @@ def sqrt_of_total_deposits() -> decimal:
     return sqrt
 
 
+@private
+def decrement_num_validators(validator_index: int128):
+    if self.validators[validator_index].end_dynasty == self.DEFAULT_END_DYNASTY:
+        self.num_validators -= 1
+
+
 # ***** Public *****
 
 # Called at the start of any epoch
@@ -308,6 +315,7 @@ def deposit(validation_addr: address, withdrawal_addr: address):
         withdrawal_addr: withdrawal_addr
     }
     self.validator_indexes[withdrawal_addr] = self.next_validator_index
+    self.num_validators += 1
     self.next_validator_index += 1
     self.dynasty_wei_delta[start_dynasty] += scaled_deposit
     # Log deposit event
@@ -331,6 +339,8 @@ def logout(logout_msg: bytes <= 1024):
     # Check that we haven't already withdrawn
     end_dynasty: int128 = self.dynasty + self.DYNASTY_LOGOUT_DELAY
     assert self.validators[validator_index].end_dynasty > end_dynasty
+
+    self.decrement_num_validators(validator_index)
     # Set the end dynasty
     self.validators[validator_index].end_dynasty = end_dynasty
     self.dynasty_wei_delta[end_dynasty] -= self.validators[validator_index].deposit
@@ -504,8 +514,11 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     slashing_bounty: int128(wei) = floor(validator_deposit / 25)
     deposit_destroyed: int128(wei) = validator_deposit - slashing_bounty
     self.total_destroyed += deposit_destroyed
-    # Log slashing
+
+    # Log slashing before deletion of validator
     log.Slash(msg.sender, self.validators[validator_index_1].withdrawal_addr, validator_index_1, slashing_bounty, deposit_destroyed)
+
+    self.decrement_num_validators(validator_index_1)
 
     # if validator not logged out yet, remove total from next dynasty
     end_dynasty: int128 = self.validators[validator_index_1].end_dynasty
