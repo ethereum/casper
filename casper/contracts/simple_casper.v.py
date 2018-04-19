@@ -295,7 +295,7 @@ def initialize_epoch(epoch: int128):
 @payable
 def deposit(validation_addr: address, withdrawal_addr: address):
     assert self.current_epoch == floor(block.number / self.EPOCH_LENGTH)
-    assert extract32(raw_call(self.PURITY_CHECKER, concat('\xa1\x90>\xab', convert(validation_addr, 'bytes32')), gas=500000, outsize=32), 0) != convert(0, 'bytes32')
+    assert extract32(raw_call(self.PURITY_CHECKER, concat('\xa1\x90\x3e\xab', convert(validation_addr, 'bytes32')), gas=500000, outsize=32), 0) != convert(0, 'bytes32')
     assert not self.validator_indexes[withdrawal_addr]
     assert msg.value >= self.MIN_DEPOSIT_SIZE
     start_dynasty: int128 = self.dynasty + 2
