@@ -25,7 +25,7 @@ WITHDRAWAL_DELAY = 5
 OWNER = utils.checksum_encode(tester.a0)
 BASE_INTEREST_FACTOR = 0.02
 BASE_PENALTY_FACTOR = 0.002
-MIN_DEPOSIT_SIZE = 1000 * 10**18  # 1000 ether
+MIN_DEPOSIT_SIZE = 4 * 10**18  # 4 ether
 
 CASPER_CONFIG = {
     "epoch_length": EPOCH_LENGTH,  # in blocks
@@ -228,6 +228,8 @@ def casper_chain(
     ).sign(base_sender_privkey)
     test_chain.direct_tx(casper_tx)
     nonce += 1
+
+    test_chain.mine(1)
 
     # Casper contract needs money for its activity
     casper_fund_tx = Transaction(

@@ -1,4 +1,43 @@
+import pytest
+
 from ethereum import utils
+from ethereum.tools import tester
+
+
+@pytest.mark.parametrize(
+    'privkey, amount, success',
+    [
+        (tester.k1, 2000 * 10**18, True),
+        (tester.k1, 1000 * 10**18, True),
+        (tester.k2, 1500 * 10**18, True),
+
+        # below min_deposit_size
+        (tester.k1, 2 * 10**18, False),
+        (tester.k1, 0 * 10**18, False),
+    ]
+)
+def test_deposit(casper_chain, casper, privkey, amount,
+                 success, deposit_validator, new_epoch, assert_tx_failed):
+    new_epoch()
+    assert casper.current_epoch() == 1
+    assert casper.next_validator_index() == 1
+
+    if not success:
+        assert_tx_failed(lambda: deposit_validator(privkey, amount))
+        return
+
+    deposit_validator(privkey, amount)
+
+    assert casper.next_validator_index() == 2
+    assert casper.validator_indexes(utils.privtoaddr(privkey)) == 1
+    assert casper.deposit_size(1) == amount
+
+    for i in range(2):
+        new_epoch()
+
+    assert casper.dynasty() == 2
+    assert casper.total_curdyn_deposits_scaled() == amount
+    assert casper.total_prevdyn_deposits_scaled() == 0
 
 
 def test_deposit_sets_withdrawal_addr(casper, funded_privkey, deposit_amount,
@@ -72,4 +111,72 @@ def test_deposit_updates_total_deposits(casper, funded_privkey, deposit_amount,
     assert casper.total_prevdyn_deposits_scaled() == deposit_amount
 
 
+def test_deposit_increments_num_validators(casper, funded_privkey, deposit_amount,
+                                           deposit_validator):
+    prev_num_validators = casper.num_validators()
+    assert prev_num_validators == 0
 
+    deposit_validator(funded_privkey, deposit_amount)
+    assert casper.num_validators() == prev_num_validators + 1
+
+
+def test_deposit_increments_for_multiple_validators(casper, funded_privkeys,
+                                                    deposit_amount, new_epoch,
+                                                    induct_validators):
+    assert casper.num_validators() == 0
+
+    validator_indexes = induct_validators(funded_privkeys, [deposit_amount] * len(funded_privkeys))
+
+    num_validators = len(validator_indexes)
+    assert casper.num_validators() == num_validators
+
+
+def test_deposit_minimum(casper, casper_config, funded_privkey,
+                         deposit_amount, deposit_validator, assert_tx_failed):
+    below_min_deposit = casper_config["min_deposit_size"] - 1
+    assert_tx_failed(
+        lambda: deposit_validator(funded_privkey, below_min_deposit)
+    )
+
+    below_min_deposit = 0
+    assert_tx_failed(
+        lambda: deposit_validator(funded_privkey, below_min_deposit)
+    )
+
+
+def test_current_min_deposit_size(casper, casper_config, funded_privkeys, base_sender_privkey,
+                                  deposit_validator):
+    wei_min_deposit_size = casper_config["min_deposit_size"]
+    eth_min_deposit_size = int(wei_min_deposit_size / 10**18)
+    for key in funded_privkeys[:eth_min_deposit_size+1]:
+        assert casper.current_min_deposit_size() == wei_min_deposit_size
+        deposit_validator(key, wei_min_deposit_size)
+    assert casper.current_min_deposit_size() > wei_min_deposit_size
+
+    new_wei_minimum = (eth_min_deposit_size + 1) * 10**18
+    assert casper.current_min_deposit_size() == new_wei_minimum
+
+    deposit_validator(base_sender_privkey, new_wei_minimum)
+    assert casper.current_min_deposit_size() > new_wei_minimum
+
+    new_wei_minimum = (eth_min_deposit_size + 2) * 10**18
+    assert casper.current_min_deposit_size() == new_wei_minimum
+
+
+def test_deposit_minimum_scales(casper, casper_config, funded_privkeys, base_sender_privkey,
+                                deposit_validator, assert_tx_failed):
+    wei_min_deposit_size = casper_config["min_deposit_size"]
+    eth_min_deposit_size = int(wei_min_deposit_size / 10**18)
+    for key in funded_privkeys[:eth_min_deposit_size+1]:
+        deposit_validator(key, wei_min_deposit_size)
+
+    assert casper.num_validators() > eth_min_deposit_size
+
+    prev_num_validators = casper.num_validators()
+    assert_tx_failed(
+        lambda: deposit_validator(base_sender_privkey, wei_min_deposit_size)
+    )
+
+    assert casper.num_validators() == prev_num_validators
+    deposit_validator(base_sender_privkey, casper.num_validators() * 10**18)
+    assert casper.num_validators() == prev_num_validators + 1
