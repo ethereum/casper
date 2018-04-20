@@ -33,7 +33,8 @@ next_validator_index: public(int128)
 # Mapping of validator's signature address to their index number
 validator_indexes: public(int128[address])
 
-# The current dynasty (validator set changes between dynasties)
+# Current dynasty, it measures the number of finalized checkpoints 
+# in the chain from root to the parent of current block
 dynasty: public(int128)
 
 # Map of the change to total deposits for specific dynasty
