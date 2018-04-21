@@ -30,7 +30,7 @@ checkpoint_hashes: public(bytes32[int128])
 # Number of validators
 next_validator_index: public(int128)
 
-# Mapping of validator's signature address to their index number
+# Mapping of validator's withdrawal address to their index number
 validator_indexes: public(int128[address])
 
 # Current dynasty, it measures the number of finalized checkpoints 
