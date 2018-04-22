@@ -111,8 +111,8 @@ PURITY_CHECKER: address
 BASE_INTEREST_FACTOR: public(decimal)
 BASE_PENALTY_FACTOR: public(decimal)
 
-# Minimum deposit size if no one else is validating
-MIN_DEPOSIT_SIZE: wei_value
+# Minimum deposit size required for a validator
+MIN_DEPOSIT_SIZE: public(wei_value)
 
 # Huge integer to be used for default end_dynasty for new validator
 DEFAULT_END_DYNASTY: int128
