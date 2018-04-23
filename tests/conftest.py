@@ -1,6 +1,7 @@
 import pytest
 import os
 import rlp
+import ast
 
 from ethereum.abi import ContractTranslator
 from ethereum.genesis_helpers import mk_basic_state
@@ -11,6 +12,9 @@ from vyper import compiler
 
 
 OWN_DIR = os.path.dirname(os.path.realpath(__file__))
+
+VALCODES_FILE = os.path.join(OWN_DIR, '..', 'misc',
+                             'validation_codes', 'valcodes.txt')
 
 GAS_PRICE = 25 * 10**9
 
@@ -265,22 +269,13 @@ def new_epoch(casper_chain, casper):
 
 @pytest.fixture
 def mk_validation_code():
-    def mk_validation_code(address):
-        """
-        validation_code = '''
-        ~calldatacopy(0, 0, 128)
-        ~call(3000, 1, 0, 0, 128, 0, 32)
-        return(~mload(0) == {})
-        '''.format(utils.checksum_encode(address))
-        return serpent.compile(validation_code)
-        """
-        # The precompiled bytecode of the validation code which
-        # verifies EC signatures
-        validation_code_bytecode = b"a\x009\x80a\x00\x0e`\x009a\x00GV`\x80`\x00`\x007` "
-        validation_code_bytecode += b"`\x00`\x80`\x00`\x00`\x01a\x0b\xb8\xf1Ps"
-        validation_code_bytecode += address
-        validation_code_bytecode += b"`\x00Q\x14` R` ` \xf3[`\x00\xf3"
-        return validation_code_bytecode
+    def mk_validation_code(address, valcode_type):
+        with open(VALCODES_FILE, 'r') as f:
+            codes = ast.literal_eval(f.read())
+        return codes[valcode_type].replace(
+            b'{address}',
+            address,
+        )
     return mk_validation_code
 
 
@@ -347,22 +342,22 @@ def logout_validator(casper, mk_logout):
 
 @pytest.fixture
 def validation_addr(casper_chain, casper, mk_validation_code):
-    def validation_addr(privkey):
+    def validation_addr(privkey, valcode_type):
         addr = utils.privtoaddr(privkey)
         return casper_chain.tx(
             privkey,
             "",
             0,
-            mk_validation_code(addr)
+            mk_validation_code(addr, valcode_type)
         )
     return validation_addr
 
 
 @pytest.fixture
 def deposit_validator(casper_chain, casper, validation_addr):
-    def deposit_validator(privkey, value):
+    def deposit_validator(privkey, value, valcode_type="pure"):
         addr = utils.privtoaddr(privkey)
-        valcode_addr = validation_addr(privkey)
+        valcode_addr = validation_addr(privkey, valcode_type)
         casper.deposit(valcode_addr, addr, value=value)
         return casper.validator_indexes(addr)
     return deposit_validator
