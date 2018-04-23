@@ -140,9 +140,10 @@ def __init__(
     # Start validator index counter at 1 because validator_indexes[] requires non-zero values
     self.next_validator_index = 1
 
-    self.deposit_scale_factor[0] = 10000000000.0
     self.dynasty = 0
     self.current_epoch = floor(block.number / self.EPOCH_LENGTH)
+    # TODO: test deposit_scale_factor when deploying when current_epoch > 0
+    self.deposit_scale_factor[self.current_epoch] = 10000000000.0
     self.total_curdyn_deposits = 0
     self.total_prevdyn_deposits = 0
     self.DEFAULT_END_DYNASTY = 1000000000000000000000000000000
