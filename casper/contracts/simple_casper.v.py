@@ -465,7 +465,7 @@ def vote(vote_msg: bytes <= 1024):
     log.Vote(self.validators[validator_index].withdrawal_addr, validator_index, target_hash, target_epoch, source_epoch)
 
 
-# Cannot make two prepares in the same epoch; no surrond vote.
+# Cannot sign two votes for same target_epoch; no surround vote.
 @public
 def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     # Message 1: Extract parameters
