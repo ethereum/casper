@@ -125,6 +125,8 @@ def __init__(
         base_interest_factor: decimal, base_penalty_factor: decimal,
         min_deposit_size: wei_value):
 
+    assert epoch_length > 0 and epoch_length < 256
+
     self.EPOCH_LENGTH = epoch_length
     self.WITHDRAWAL_DELAY = withdrawal_delay
     self.DYNASTY_LOGOUT_DELAY = dynasty_logout_delay

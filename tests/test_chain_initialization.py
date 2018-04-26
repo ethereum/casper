@@ -1,4 +1,8 @@
+import pytest
+
 from ethereum import utils
+from ethereum.tools.tester import TransactionFailed
+from conftest import casper_chain
 
 
 def test_rlp_decoding_is_pure(
@@ -43,3 +47,27 @@ def test_init_first_epoch(casper, new_epoch):
     assert casper.dynasty() == 0
     assert casper.next_validator_index() == 1
     assert casper.current_epoch() == 1
+
+
+@pytest.mark.parametrize(
+    'epoch_length, success',
+    [
+        (-1, False),
+        (0, False),
+        (10, True),
+        (250, True),
+        (256, False),
+        (500, False),
+    ]
+)
+def test_epoch_length(epoch_length, success, casper_args,
+                      deploy_casper_contract, assert_failed):
+    # Note: cannot use assert_tx_failed because requires casper_chain
+    if not success:
+        assert_failed(
+            lambda: deploy_casper_contract(casper_args),
+            TransactionFailed
+        )
+        return
+
+    deploy_casper_contract(casper_args)

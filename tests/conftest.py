@@ -27,16 +27,6 @@ BASE_INTEREST_FACTOR = 0.02
 BASE_PENALTY_FACTOR = 0.002
 MIN_DEPOSIT_SIZE = 1000 * 10**18  # 1000 ether
 
-CASPER_CONFIG = {
-    "epoch_length": EPOCH_LENGTH,  # in blocks
-    "withdrawal_delay": WITHDRAWAL_DELAY,  # in epochs
-    "dynasty_logout_delay": DYNASTY_LOGOUT_DELAY,  # in dynasties
-    "owner": OWNER,  # Backdoor address
-    "base_interest_factor": BASE_INTEREST_FACTOR,
-    "base_penalty_factor": BASE_PENALTY_FACTOR,
-    "min_deposit_size": MIN_DEPOSIT_SIZE
-}
-
 FUNDED_PRIVKEYS = [tester.k1, tester.k2, tester.k3, tester.k4, tester.k5]
 DEPOSIT_AMOUNTS = [
     2000 * 10**18,
@@ -105,8 +95,52 @@ def purity_checker_ct():
 
 
 @pytest.fixture
-def casper_config():
-    return CASPER_CONFIG
+def epoch_length():
+    return EPOCH_LENGTH
+
+
+@pytest.fixture
+def withdrawal_delay():
+    return WITHDRAWAL_DELAY
+
+
+@pytest.fixture
+def dynasty_logout_delay():
+    return DYNASTY_LOGOUT_DELAY
+
+
+@pytest.fixture
+def owner():
+    return OWNER
+
+
+@pytest.fixture
+def base_interest_factor():
+    return BASE_INTEREST_FACTOR
+
+
+@pytest.fixture
+def base_penalty_factor():
+    return BASE_PENALTY_FACTOR
+
+
+@pytest.fixture
+def min_deposit_size():
+    return MIN_DEPOSIT_SIZE
+
+
+@pytest.fixture
+def casper_config(epoch_length, withdrawal_delay, dynasty_logout_delay,
+                  owner, base_interest_factor, base_penalty_factor, min_deposit_size):
+    return {
+        "epoch_length": epoch_length,  # in blocks
+        "withdrawal_delay": withdrawal_delay,  # in epochs
+        "dynasty_logout_delay": dynasty_logout_delay,  # in dynasties
+        "owner": owner,  # Backdoor address
+        "base_interest_factor": base_interest_factor,
+        "base_penalty_factor": base_penalty_factor,
+        "min_deposit_size": min_deposit_size
+    }
 
 
 @pytest.fixture
@@ -242,6 +276,24 @@ def casper_chain(
 
     test_chain.mine(1)
     return test_chain
+
+
+@pytest.fixture
+def deploy_casper_contract(
+        test_chain,
+        casper_code,
+        casper_ct,
+        dependency_transactions,
+        sig_hasher_address,
+        purity_checker_address,
+        base_sender_privkey):
+    def deploy_casper_contract(contract_args):
+        casper_chain(
+            test_chain, contract_args, casper_code, casper_ct,
+            dependency_transactions, sig_hasher_address, purity_checker_address,
+            base_sender_privkey
+        )
+    return deploy_casper_contract
 
 
 def get_dirs(path):
@@ -405,7 +457,7 @@ def induct_validators(casper_chain, casper, deposit_validator, new_epoch):
 
 
 @pytest.fixture
-def assert_failed(casper_chain):
+def assert_failed():
     def assert_failed(function_to_test, exception):
         with pytest.raises(exception):
             function_to_test()
