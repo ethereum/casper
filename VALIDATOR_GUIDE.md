@@ -29,7 +29,7 @@ This document outlines the components of implementing an FFG Validator. These in
 ## Validator States
 Validators are highly stateful. They must handle valcode creation, depositing, voting, and logging out. Each stage also requires waiting for transaction confirmations. Because of this complexity, a mapping of state to handler is used.
 
-The validator state mapping [implemented in pyethapp](https://github.com/karlfloersch/pyethapp/blob/dev_env/pyethapp/validator_service.py#L58-L67) is as follows:
+The validator state mapping [implemented in pyethapp](https://github.com/karlfloersch/pyethapp/blob/47df0f592533dded868f052dd51d37ebe57e612f/pyethapp/validator_service.py#L58-L67) is as follows:
 ```
 uninitiated: self.check_status,
 waiting_for_valcode: self.check_valcode,
@@ -48,9 +48,9 @@ Arrows are the logic followed upon receiving a new block while in a given state.
 ## Validation Code
 Validators must deploy their own signature validation contract. This will be used to check the signatures attached to their votes. This validation code **must** be a pure function. This means no storage reads/writes, environment variable reads OR external calls (except to other contracts that have already been purity-verified, or to precompiles) allowed.
 
-For basic signature verification, [ecdsa signatures are currently being used](https://github.com/karlfloersch/pyethereum/blob/develop/ethereum/hybrid_casper/casper_utils.py#L75). The validation code for these ecdsa signatures can be found [here](https://github.com/ethereum/casper/blob/34503973abceed0f0267fe35e229a40e7a94270a/casper/contracts/sighash.se.py).
+For basic signature verification, [ecdsa signatures are currently being used](https://github.com/karlfloersch/pyethereum/blob/a66ab671e0bb19327bb8cd11d69664146451c250/ethereum/hybrid_casper/casper_utils.py#L73). The validation code for these ecdsa signatures can be found [here](https://github.com/karlfloersch/pyethereum/blob/a66ab671e0bb19327bb8cd11d69664146451c250/ethereum/hybrid_casper/casper_utils.py#L52). Note, this LLL code uses the elliptic curve public key recovery precompile.
 
-The validation code contract is currently being deployed as a part of the `induct_validator()` function [found here](https://github.com/karlfloersch/pyethereum/blob/develop/ethereum/hybrid_casper/casper_utils.py#L85-L89):
+The validation code contract is currently being deployed as a part of the `induct_validator()` function [found here](https://github.com/karlfloersch/pyethereum/blob/a66ab671e0bb19327bb8cd11d69664146451c250/ethereum/hybrid_casper/casper_utils.py#L83-L87):
 ```
 def induct_validator(chain, casper, key, value):
     sender = utils.privtoaddr(key)
@@ -81,7 +81,7 @@ To generate a Casper vote which votes on your chain's current head, first get th
 
 Next, RLP encode all these elements. To compute your signature, compute the `sha3` hash of your vote's RLP encoded list, and sign the hash. Your signature must be valid when checked against your validator's `validation_code` contract. Finally, append your signature to the end of the vote message contents.
 
-This is [implemented in Pyethereum](https://github.com/karlfloersch/pyethereum/blob/develop/ethereum/hybrid_casper/casper_utils.py#L73-L77) as follows:
+This is [implemented in Pyethereum](https://github.com/karlfloersch/pyethereum/blob/a66ab671e0bb19327bb8cd11d69664146451c250/ethereum/hybrid_casper/casper_utils.py#L71-L75) as follows:
 ```
 def mk_vote(validator_index, target_hash, target_epoch, source_epoch, key):
     sighash = utils.sha3(rlp.encode([validator_index, target_hash, target_epoch, source_epoch]))
@@ -93,7 +93,7 @@ def mk_vote(validator_index, target_hash, target_epoch, source_epoch, key):
 ## Logout Message Generation
 Like the Casper vote messages, a logout message is an RLP encoded list where the last element is the validator's signature. The elements of the unsigned list are the `validator_index` and `epoch` where epoch is the current epoch. A signature is generated in the same way it is done with votes above.
 
-This is [implemented in Pyethereum](https://github.com/karlfloersch/pyethereum/blob/develop/ethereum/hybrid_casper/casper_utils.py#L79-L83) as follows:
+This is [implemented in Pyethereum](https://github.com/karlfloersch/pyethereum/blob/a66ab671e0bb19327bb8cd11d69664146451c250/ethereum/hybrid_casper/casper_utils.py#L77-L81) as follows:
 ```
 def mk_logout(validator_index, epoch, key):
     sighash = utils.sha3(rlp.encode([validator_index, epoch]))
@@ -103,7 +103,7 @@ def mk_logout(validator_index, epoch, key):
 ```
 
 ## Simple Casper Contract High Level Overview
-The Casper smart contract contains Casper's core logic. It is written in Viper &amp; can be deployed to the blockchain like any other contract to `CASPER_ADDR`. Casper messages are then sent to the contract by calling `vote(vote_msg)` where `vote_msg` is a Casper vote messaged as outlined above.
+The Casper smart contract contains Casper's core logic. It is written in Vyper &amp; can be deployed to the blockchain like any other contract to `CASPER_ADDR`. Casper messages are then sent to the contract by calling `vote(vote_msg)` where `vote_msg` is a Casper vote messaged as outlined above.
 
 ### [[Contract Source]](https://github.com/ethereum/casper/blob/master/casper/contracts/simple_casper.v.py)
 
