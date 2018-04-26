@@ -239,9 +239,6 @@ def casper_chain(
         nonce += 1
 
     for tx in init_transactions:
-        print("tx")
-        print(tx.nonce)
-        print(tx.sender)
         if test_chain.head_state.gas_used + tx.startgas > test_chain.head_state.gas_limit:
             test_chain.mine(1)
         test_chain.direct_tx(tx)
