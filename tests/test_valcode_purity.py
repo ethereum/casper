@@ -1,40 +1,27 @@
 from ethereum import utils
-from ethereum.tools.tester import TransactionFailed
 import pytest
 
-def test_deposit_succeeds_with_pure_sig_validator(casper, funded_privkey,
-                                             deposit_amount,
-                                             deposit_validator):
-    withdrawal_addr = utils.privtoaddr(funded_privkey)
 
-    validator_index = deposit_validator(
-        funded_privkey,
-        deposit_amount,
-        "pure"
-    )
-
-
-def test_deposit_fails_with_sstore_in_sig_validator(casper, funded_privkey,
-                                             deposit_amount,
-                                             deposit_validator):
-    withdrawal_addr = utils.privtoaddr(funded_privkey)
-
-    with pytest.raises(TransactionFailed):
+@pytest.mark.parametrize(
+    "valcode_type,should_succeed",
+    [
+        ("pure", True),
+        ("sstore", False),
+        ("sload", False)
+    ]
+)
+def test_valcode_purity_checks(casper, funded_privkey, assert_tx_failed,
+                               deposit_amount, deposit_validator,
+                               valcode_type, should_succeed):
+    if should_succeed:
         validator_index = deposit_validator(
             funded_privkey,
             deposit_amount,
-            "sstore"
+            valcode_type
         )
-
-
-def test_deposit_fails_with_sload_in_sig_validator(casper, funded_privkey,
-                                             deposit_amount,
-                                             deposit_validator):
-    withdrawal_addr = utils.privtoaddr(funded_privkey)
-
-    with pytest.raises(TransactionFailed):
-        validator_index = deposit_validator(
+    else:
+        assert_tx_failed(lambda: deposit_validator(
             funded_privkey,
             deposit_amount,
-            "sload"
-        )
+            valcode_type
+        ))
