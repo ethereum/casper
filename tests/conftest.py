@@ -1,20 +1,16 @@
 import pytest
 import os
 import rlp
-import ast
 
 from ethereum.abi import ContractTranslator
 from ethereum.genesis_helpers import mk_basic_state
 from ethereum.transactions import Transaction
 from ethereum.tools import tester
 from ethereum import utils
-from vyper import compiler
-
+from vyper import compiler, optimizer, compile_lll
+from vyper.parser.parser_utils import LLLnode
 
 OWN_DIR = os.path.dirname(os.path.realpath(__file__))
-
-VALCODES_FILE = os.path.join(OWN_DIR, '..', 'misc',
-                             'validation_codes', 'valcodes.txt')
 
 GAS_PRICE = 25 * 10**9
 
@@ -266,16 +262,77 @@ def new_epoch(casper_chain, casper):
         casper.initialize_epoch(next_epoch)
     return new_epoch
 
+@pytest.fixture
+def wrap_lll_list():
+    def wrap_lll_list(lll_list):
+        return (
+            ['seq',
+                ['return', [0],
+                    ['lll',
+                        lll_list,
+                        [0]
+                    ]
+                ]
+            ]
+        )
+    return wrap_lll_list
+
 
 @pytest.fixture
-def mk_validation_code():
+def mk_validation_code(wrap_lll_list):
     def mk_validation_code(address, valcode_type):
-        with open(VALCODES_FILE, 'r') as f:
-            codes = ast.literal_eval(f.read())
-        return codes[valcode_type].replace(
-            b'{address}',
-            address,
+        valcodes_lll_lists = dict(
+            pure=wrap_lll_list(
+                ['seq',
+                    ['calldatacopy', 0, 0, 128],
+                    ['call', 3000, 1, 0, 0, 128, 0, 32],
+                    ['mstore',
+                        0,
+                        ['eq',
+                            ['mload', 0],
+                            utils.bytes_to_int(address)
+                        ]
+                    ],
+                    ['return', 0, 32],
+                ]
+            ),
+            sload=wrap_lll_list(
+                ['seq',
+                    ['sload', 0],   # impure
+                    ['calldatacopy', 0, 0, 128],
+                    ['call', 3000, 1, 0, 0, 128, 0, 32],
+                    ['mstore',
+                        0,
+                        ['eq',
+                            ['mload', 0],
+                            utils.bytes_to_int(address)
+                        ]
+                    ],
+                    ['return', 0, 32],
+                ]
+            ),
+            sstore=wrap_lll_list(
+                ['seq',
+                    ['sstore', 1, 1],   # impure
+                    ['calldatacopy', 0, 0, 128],
+                    ['call', 3000, 1, 0, 0, 128, 0, 32],
+                    ['mstore',
+                        0,
+                        ['eq',
+                            ['mload', 0],
+                            utils.bytes_to_int(address)
+                        ]
+                    ],
+                    ['return', 0, 32],
+                ]
+            ),
         )
+        lll_list = valcodes_lll_lists[valcode_type]
+        lll_node = LLLnode.from_list(lll_list)
+        optimized = optimizer.optimize(lll_node)
+        assembly = compile_lll.compile_to_assembly(optimized)
+        evm = compile_lll.assembly_to_evm(assembly)
+        return evm
     return mk_validation_code
 
 
