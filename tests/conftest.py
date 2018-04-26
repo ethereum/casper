@@ -281,6 +281,24 @@ def casper_chain(
     return test_chain
 
 
+@pytest.fixture
+def deploy_casper_contract(
+        test_chain,
+        casper_code,
+        casper_ct,
+        dependency_transactions,
+        sig_hasher_address,
+        purity_checker_address,
+        base_sender_privkey):
+    def deploy_casper_contract(contract_args):
+        casper_chain(
+            test_chain, contract_args, casper_code, casper_ct,
+            dependency_transactions, sig_hasher_address, purity_checker_address,
+            base_sender_privkey
+        )
+    return deploy_casper_contract
+
+
 def get_dirs(path):
     abs_contract_path = os.path.realpath(os.path.join(OWN_DIR, '..', 'casper', 'contracts'))
     sub_dirs = [x[0] for x in os.walk(abs_contract_path)]

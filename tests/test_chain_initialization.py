@@ -60,20 +60,14 @@ def test_init_first_epoch(casper, new_epoch):
         (500, False),
     ]
 )
-def test_epoch_length(epoch_length, success, assert_failed,
-                      test_chain, casper_args, casper_code, casper_ct,
-                      dependency_transactions, sig_hasher_address, purity_checker_address,
-                      base_sender_privkey):
-    def deploy_casper_contract():
-        casper_chain(
-            test_chain, casper_args, casper_code, casper_ct,
-            dependency_transactions, sig_hasher_address, purity_checker_address,
-            base_sender_privkey
-        )
-
+def test_epoch_length(epoch_length, success, casper_args,
+                      deploy_casper_contract, assert_failed):
     # Note: cannot use assert_tx_failed because requires casper_chain
     if not success:
-        assert_failed(deploy_casper_contract, TransactionFailed)
+        assert_failed(
+            lambda: deploy_casper_contract(casper_args),
+            TransactionFailed
+        )
         return
 
-    deploy_casper_contract()
+    deploy_casper_contract(casper_args)
