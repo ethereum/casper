@@ -32,12 +32,20 @@ def test_valcode_purity_checks(casper, funded_privkey, assert_tx_failed,
                                valcode_type, should_succeed,
                                validation_addr):
     if should_succeed:
-        validator_index = deposit_validator(
+        deposit_validator(
             funded_privkey,
             deposit_amount,
             valcode_type
         )
     else:
+        '''
+        Check to ensure the validation_addr can actually be deployed.
+
+        This can help detect fails that are not due to the purity
+        checker, instead are a result of a bug in the contract being
+        tested.
+        '''
+        validation_addr(funded_privkey, valcode_type)
         assert_tx_failed(lambda: deposit_validator(
             funded_privkey,
             deposit_amount,
