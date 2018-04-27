@@ -10,6 +10,8 @@ from ethereum import utils
 from vyper import compiler, optimizer, compile_lll
 from vyper.parser.parser_utils import LLLnode
 
+from utils.valcodes import get_compiled_valcode_bytecode
+
 OWN_DIR = os.path.dirname(os.path.realpath(__file__))
 
 GAS_PRICE = 25 * 10**9
@@ -262,77 +264,11 @@ def new_epoch(casper_chain, casper):
         casper.initialize_epoch(next_epoch)
     return new_epoch
 
-@pytest.fixture
-def wrap_lll_list():
-    def wrap_lll_list(lll_list):
-        return (
-            ['seq',
-                ['return', [0],
-                    ['lll',
-                        lll_list,
-                        [0]
-                    ]
-                ]
-            ]
-        )
-    return wrap_lll_list
-
 
 @pytest.fixture
-def mk_validation_code(wrap_lll_list):
+def mk_validation_code():
     def mk_validation_code(address, valcode_type):
-        valcodes_lll_lists = dict(
-            pure=wrap_lll_list(
-                ['seq',
-                    ['calldatacopy', 0, 0, 128],
-                    ['call', 3000, 1, 0, 0, 128, 0, 32],
-                    ['mstore',
-                        0,
-                        ['eq',
-                            ['mload', 0],
-                            utils.bytes_to_int(address)
-                        ]
-                    ],
-                    ['return', 0, 32],
-                ]
-            ),
-            sload=wrap_lll_list(
-                ['seq',
-                    ['sload', 0],   # impure
-                    ['calldatacopy', 0, 0, 128],
-                    ['call', 3000, 1, 0, 0, 128, 0, 32],
-                    ['mstore',
-                        0,
-                        ['eq',
-                            ['mload', 0],
-                            utils.bytes_to_int(address)
-                        ]
-                    ],
-                    ['return', 0, 32],
-                ]
-            ),
-            sstore=wrap_lll_list(
-                ['seq',
-                    ['sstore', 1, 1],   # impure
-                    ['calldatacopy', 0, 0, 128],
-                    ['call', 3000, 1, 0, 0, 128, 0, 32],
-                    ['mstore',
-                        0,
-                        ['eq',
-                            ['mload', 0],
-                            utils.bytes_to_int(address)
-                        ]
-                    ],
-                    ['return', 0, 32],
-                ]
-            ),
-        )
-        lll_list = valcodes_lll_lists[valcode_type]
-        lll_node = LLLnode.from_list(lll_list)
-        optimized = optimizer.optimize(lll_node)
-        assembly = compile_lll.compile_to_assembly(optimized)
-        evm = compile_lll.assembly_to_evm(assembly)
-        return evm
+        return get_compiled_valcode_bytecode(valcode_type, address)
     return mk_validation_code
 
 
@@ -412,7 +348,7 @@ def validation_addr(casper_chain, casper, mk_validation_code):
 
 @pytest.fixture
 def deposit_validator(casper_chain, casper, validation_addr):
-    def deposit_validator(privkey, value, valcode_type="pure"):
+    def deposit_validator(privkey, value, valcode_type="pure_ecrecover"):
         addr = utils.privtoaddr(privkey)
         valcode_addr = validation_addr(privkey, valcode_type)
         casper.deposit(valcode_addr, addr, value=value)
