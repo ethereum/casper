@@ -523,10 +523,12 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     log.Slash(msg.sender, self.validators[validator_index_1].withdrawal_addr, validator_index_1, slashing_bounty, deposit_destroyed)
 
     # if validator not logged out yet, remove total from next dynasty
+    # and forcibly logout next dynasty
     end_dynasty: int128 = self.validators[validator_index_1].end_dynasty
     if self.dynasty < end_dynasty:
         deposit: decimal(wei/m) = self.validators[validator_index_1].deposit
         self.dynasty_wei_delta[self.dynasty + 1] -= deposit
+        self.validators[validator_index_1].end_dynasty = self.dynasty + 1
 
         # if validator was already staged for logout at end_dynasty,
         # ensure that we don't doubly remove from total
