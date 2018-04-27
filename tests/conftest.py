@@ -264,6 +264,8 @@ def casper_chain(
     test_chain.direct_tx(casper_tx)
     nonce += 1
 
+    test_chain.mine(1)
+
     # Casper contract needs money for its activity
     casper_fund_tx = Transaction(
         nonce,

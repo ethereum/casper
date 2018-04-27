@@ -14,13 +14,11 @@ validators: public({
     # Used to determine the amount of wei the validator holds. To get the actual
     # amount of wei, multiply this by the deposit_scale_factor.
     deposit: decimal(wei/m),
-    # The dynasty the validator is joining
     start_dynasty: int128,
-    # The dynasty the validator is leaving
     end_dynasty: int128,
-    # The address which the validator's signatures must verify to (to be later replaced with validation code)
+    is_slashed: bool,
+    # The address which the validator's signatures must verify against
     addr: address,
-    # The address to withdraw to
     withdrawal_addr: address
 }[int128])
 
@@ -84,9 +82,8 @@ reward_factor: public(decimal)
 # Expected source epoch for a vote
 expected_source_epoch: public(int128)
 
-# Total deposits destroyed
-total_destroyed: wei_value
-
+# Running total of deposits slashed
+total_slashed: public(wei_value[int128])
 
 # ***** Parameters *****
 
@@ -279,6 +276,7 @@ def initialize_epoch(epoch: int128):
     self.last_voter_rescale = 1 + self.collective_reward()
     self.last_nonvoter_rescale = self.last_voter_rescale / (1 + self.reward_factor)
     self.deposit_scale_factor[epoch] = self.deposit_scale_factor[epoch - 1] * self.last_nonvoter_rescale
+    self.total_slashed[epoch] = self.total_slashed[epoch - 1]
 
     if self.deposit_exists():
         # Set the reward factor for the next epoch.
@@ -313,6 +311,7 @@ def deposit(validation_addr: address, withdrawal_addr: address):
         deposit: scaled_deposit,
         start_dynasty: start_dynasty,
         end_dynasty: self.DEFAULT_END_DYNASTY,
+        is_slashed: False,
         addr: validation_addr,
         withdrawal_addr: withdrawal_addr
     }
@@ -357,6 +356,7 @@ def delete_validator(validator_index: int128):
         deposit: 0,
         start_dynasty: 0,
         end_dynasty: 0,
+        is_slashed: False,
         addr: None,
         withdrawal_addr: None
     }
@@ -497,10 +497,9 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
 
     assert self.validate_signature(sighash_2, sig_2, validator_index_2)
 
-    # Check the messages are from the same validator
     assert validator_index_1 == validator_index_2
-    # Check the messages are not the same
     assert sighash_1 != sighash_2
+    assert not self.validators[validator_index_1].is_slashed
 
     # Detect slashing
     slashing_condition_detected: bool = False
@@ -513,11 +512,13 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
         slashing_condition_detected = True
     assert slashing_condition_detected
 
-    # Delete the offending validator, and give a 4% "finder's fee"
+    # Slash the offending validator, and give a 4% "finder's fee"
     validator_deposit: int128(wei) = self.deposit_size(validator_index_1)
     slashing_bounty: int128(wei) = floor(validator_deposit / 25)
     deposit_destroyed: int128(wei) = validator_deposit - slashing_bounty
-    self.total_destroyed += deposit_destroyed
+    self.total_slashed[self.current_epoch] += validator_deposit  # should this be current_epoch + 1?
+    self.validators[validator_index_1].is_slashed = True
+
     # Log slashing
     log.Slash(msg.sender, self.validators[validator_index_1].withdrawal_addr, validator_index_1, slashing_bounty, deposit_destroyed)
 
@@ -532,15 +533,13 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
         if end_dynasty < self.DEFAULT_END_DYNASTY:
             self.dynasty_wei_delta[end_dynasty] += deposit
 
-    self.delete_validator(validator_index_1)
     send(msg.sender, slashing_bounty)
 
 
 # Temporary backdoor for testing purposes (to allow recovering destroyed deposits)
 @public
 def owner_withdraw():
-    send(self.OWNER, self.total_destroyed)
-    self.total_destroyed = 0
+    send(self.OWNER, self.total_slashed[self.current_epoch])
 
 
 # Change backdoor address (set to zero to remove entirely)

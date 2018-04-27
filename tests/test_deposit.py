@@ -43,6 +43,13 @@ def test_deposit_sets_end_dynasty(casper, funded_privkey, deposit_amount,
     assert casper.validators__end_dynasty(validator_index) == expected_end_dynasty
 
 
+def test_deposit_is_not_slashed(casper, funded_privkey, deposit_amount,
+                                deposit_validator):
+    validator_index = deposit_validator(funded_privkey, deposit_amount)
+
+    assert not casper.validators__is_slashed(validator_index)
+
+
 def test_deposit_updates_dynasty_wei_delta(casper, funded_privkey, deposit_amount,
                                            deposit_validator):
     start_dynasty = casper.dynasty() + 2
