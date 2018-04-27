@@ -3,7 +3,7 @@ from vyper.parser.parser_utils import LLLnode
 from ethereum.utils import bytes_to_int
 
 
-def get_pure_ecrecover_as_LLL_source(address):
+def generate_pure_ecrecover_as_LLL_source(address):
     return [
         'seq',
         ['calldatacopy', 0, 0, 128],
@@ -19,7 +19,7 @@ def get_pure_ecrecover_as_LLL_source(address):
     ]
 
 
-def get_impure_opcodes_as_LLL_source(address):
+def generate_impure_opcodes_as_LLL_source(address):
     impure_expressions = [
         ['balance', 1337],
         ['origin'],
@@ -58,7 +58,7 @@ def get_impure_opcodes_as_LLL_source(address):
     return valcodes
 
 
-def get_impure_unused_opcodes_as_evm_bytecode(address):
+def generate_unused_opcodes_as_evm_bytecode(address):
     valcodes = {}
     unused_opcodes = [
         0x46,
@@ -85,20 +85,21 @@ def get_impure_unused_opcodes_as_evm_bytecode(address):
     return valcodes
 
 
-def get_all_valcodes(address):
+def generate_all_valcodes(address):
     return {
-        'pure_ecrecover': get_pure_ecrecover_as_LLL_source(address),
-        **get_impure_opcodes_as_LLL_source(address),
-        **get_impure_unused_opcodes_as_evm_bytecode(address),
+        'pure_ecrecover': generate_pure_ecrecover_as_LLL_source(address),
+        **generate_impure_opcodes_as_LLL_source(address),
+        **generate_unused_opcodes_as_evm_bytecode
+        (address),
     }
 
 
-def get_all_valcode_types():
-    return get_all_valcodes(b'\x00').keys()
+def all_known_valcode_types():
+    return generate_all_valcodes(b'\x00').keys()
 
 
-def get_compiled_valcode_bytecode(valcode_type, address):
-    valcodes = get_all_valcodes(address)
+def compile_valcode_to_evm_bytecode(valcode_type, address):
+    valcodes = generate_all_valcodes(address)
     valcode = valcodes[valcode_type]
     # We assume bytes are compiled evm code
     if type(valcode) is bytes:

@@ -10,7 +10,7 @@ from ethereum import utils
 from vyper import compiler, optimizer, compile_lll
 from vyper.parser.parser_utils import LLLnode
 
-from utils.valcodes import get_compiled_valcode_bytecode
+from utils.valcodes import compile_valcode_to_evm_bytecode
 
 OWN_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -268,7 +268,7 @@ def new_epoch(casper_chain, casper):
 @pytest.fixture
 def mk_validation_code():
     def mk_validation_code(address, valcode_type):
-        return get_compiled_valcode_bytecode(valcode_type, address)
+        return compile_valcode_to_evm_bytecode(valcode_type, address)
     return mk_validation_code
 
 

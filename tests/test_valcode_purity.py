@@ -1,12 +1,14 @@
 from ethereum import utils
-from utils.valcodes import get_all_valcode_types
 import pytest
+
+from utils.valcodes import all_known_valcode_types
+
 
 def build_pass_fail_matrix():
     matrix = []
     pure_prefix = "pure_"
     impure_prefix = "impure_"
-    for valcode_type in get_all_valcode_types():
+    for valcode_type in all_known_valcode_types():
         if valcode_type.startswith(pure_prefix):
             matrix.append((valcode_type, True))
         elif valcode_type.startswith(impure_prefix):
@@ -27,7 +29,8 @@ def build_pass_fail_matrix():
 )
 def test_valcode_purity_checks(casper, funded_privkey, assert_tx_failed,
                                deposit_amount, deposit_validator,
-                               valcode_type, should_succeed):
+                               valcode_type, should_succeed,
+                               validation_addr):
     if should_succeed:
         validator_index = deposit_validator(
             funded_privkey,
