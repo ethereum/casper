@@ -50,6 +50,13 @@ def test_deposit_is_not_slashed(casper, funded_privkey, deposit_amount,
     assert not casper.validators__is_slashed(validator_index)
 
 
+def test_deposit_total_deposits_at_slashing(casper, funded_privkey, deposit_amount,
+                                            deposit_validator):
+    validator_index = deposit_validator(funded_privkey, deposit_amount)
+
+    assert casper.validators__total_deposits_at_logout(validator_index) == 0
+
+
 def test_deposit_updates_dynasty_wei_delta(casper, funded_privkey, deposit_amount,
                                            deposit_validator):
     start_dynasty = casper.dynasty() + 2

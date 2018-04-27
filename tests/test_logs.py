@@ -222,7 +222,7 @@ def test_slash_log(casper, funded_privkey, deposit_amount, get_last_log, base_se
 
     casper.slash(vote_1, vote_2)
     # Slashed!
-    assert casper.deposit_size(validator_index) == 0
+    assert casper.validators__is_slashed(validator_index)
 
     # Slash log
     log = get_last_log(casper_chain, casper)

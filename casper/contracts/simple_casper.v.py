@@ -17,6 +17,7 @@ validators: public({
     start_dynasty: int128,
     end_dynasty: int128,
     is_slashed: bool,
+    total_deposits_at_logout: wei_value,
     # The address which the validator's signatures must verify against
     addr: address,
     withdrawal_addr: address
@@ -312,6 +313,7 @@ def deposit(validation_addr: address, withdrawal_addr: address):
         start_dynasty: start_dynasty,
         end_dynasty: self.DEFAULT_END_DYNASTY,
         is_slashed: False,
+        total_deposits_at_logout: 0,
         addr: validation_addr,
         withdrawal_addr: withdrawal_addr
     }
@@ -341,8 +343,8 @@ def logout(logout_msg: bytes <= 1024):
     end_dynasty: int128 = self.dynasty + self.DYNASTY_LOGOUT_DELAY
     assert self.validators[validator_index].end_dynasty > end_dynasty
 
-    # Set the end dynasty
     self.validators[validator_index].end_dynasty = end_dynasty
+    self.validators[validator_index].total_deposits_at_logout = self.total_curdyn_deposits_scaled()
     self.dynasty_wei_delta[end_dynasty] -= self.validators[validator_index].deposit
 
     log.Logout(self.validators[validator_index].withdrawal_addr, validator_index, self.validators[validator_index].end_dynasty)
@@ -357,6 +359,7 @@ def delete_validator(validator_index: int128):
         start_dynasty: 0,
         end_dynasty: 0,
         is_slashed: False,
+        total_deposits_at_logout: 0,
         addr: None,
         withdrawal_addr: None
     }
@@ -368,9 +371,20 @@ def withdraw(validator_index: int128):
     # Check that we can withdraw
     assert self.dynasty >= self.validators[validator_index].end_dynasty + 1
     end_epoch: int128 = self.dynasty_start_epoch[self.validators[validator_index].end_dynasty + 1]
-    assert self.current_epoch >= end_epoch + self.WITHDRAWAL_DELAY
+    withdrawal_epoch: int128 = end_epoch + self.WITHDRAWAL_DELAY
+    assert self.current_epoch >= withdrawal_epoch
+
     # Withdraw
-    withdraw_amount: int128(wei) = floor(self.validators[validator_index].deposit * self.deposit_scale_factor[end_epoch])
+    withdraw_amount: int128(wei)
+    if not self.validators[validator_index].is_slashed:
+        withdraw_amount = floor(self.validators[validator_index].deposit * self.deposit_scale_factor[end_epoch])
+    else:
+        recently_slashed: wei_value = self.total_slashed[withdrawal_epoch] - self.total_slashed[withdrawal_epoch - 2 * self.WITHDRAWAL_DELAY]
+        fraction_to_slash: decimal = recently_slashed * 3 / self.validators[validator_index].total_deposits_at_logout
+        fraction_to_withdraw: decimal = (1 - fraction_to_slash)
+
+        deposit_size: int128(wei) = floor(self.validators[validator_index].deposit * self.deposit_scale_factor[withdrawal_epoch])
+        withdraw_amount = floor(deposit_size * fraction_to_withdraw)
     send(self.validators[validator_index].withdrawal_addr, withdraw_amount)
     # Log withdraw event
     log.Withdraw(self.validators[validator_index].withdrawal_addr, validator_index, withdraw_amount)
@@ -534,6 +548,9 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
         # ensure that we don't doubly remove from total
         if end_dynasty < self.DEFAULT_END_DYNASTY:
             self.dynasty_wei_delta[end_dynasty] += deposit
+        # if no previously logged out, remember the total deposits at logout
+        else:
+            self.validators[validator_index_1].total_deposits_at_logout = self.total_curdyn_deposits_scaled()
 
     send(msg.sender, slashing_bounty)
 

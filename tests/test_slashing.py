@@ -1,3 +1,4 @@
+from ethereum import utils
 
 
 def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount,
@@ -30,6 +31,7 @@ def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount,
         (-deposit_amount / casper.deposit_scale_factor())
     assert casper.validators__is_slashed(validator_index)
     assert casper.validators__end_dynasty(validator_index) == next_dynasty
+    assert casper.validators__total_deposits_at_logout(validator_index) == deposit_amount
 
 
 def test_slash_no_surround(casper, funded_privkey, deposit_amount, new_epoch,
@@ -62,6 +64,7 @@ def test_slash_no_surround(casper, funded_privkey, deposit_amount, new_epoch,
         (-deposit_amount / casper.deposit_scale_factor())
     assert casper.validators__is_slashed(validator_index)
     assert casper.validators__end_dynasty(validator_index) == next_dynasty
+    assert casper.validators__total_deposits_at_logout(validator_index) == deposit_amount
 
 
 def test_slash_after_logout_delay(casper, funded_privkey, deposit_amount,
@@ -74,6 +77,7 @@ def test_slash_after_logout_delay(casper, funded_privkey, deposit_amount,
 
     logout_validator(validator_index, funded_privkey)
     end_dynasty = casper.validators__end_dynasty(validator_index)
+    assert casper.validators__total_deposits_at_logout(validator_index) == deposit_amount
 
     assert casper.dynasty_wei_delta(end_dynasty) == -scaled_deposit_size
 
@@ -98,6 +102,8 @@ def test_slash_after_logout_delay(casper, funded_privkey, deposit_amount,
     assert casper.total_slashed(casper.current_epoch()) == new_deposit_size
     assert casper.validators__is_slashed(validator_index)
     assert casper.validators__end_dynasty(validator_index) == end_dynasty
+    # unchanged
+    assert casper.validators__total_deposits_at_logout(validator_index) == deposit_amount
 
     # validator already out of current deposits. should not change dynasty_wei_delta
     assert casper.dynasty_wei_delta(end_dynasty) == -new_scaled_deposit_size
@@ -139,6 +145,8 @@ def test_slash_after_logout_before_logout_delay(casper, funded_privkey, deposit_
     # remove deposit from next dynasty rather than end_dynasty
     assert casper.dynasty_wei_delta(end_dynasty) == 0
     assert casper.dynasty_wei_delta(casper.dynasty() + 1) == -new_scaled_deposit_size
+    # unchanged
+    assert casper.validators__total_deposits_at_logout(validator_index) == deposit_amount
 
 
 def test_total_slashed(casper, funded_privkey, deposit_amount, new_epoch,
@@ -168,3 +176,46 @@ def test_double_slash_fails(casper, funded_privkey, deposit_amount,
     vote_1, vote_2 = mk_slash_votes(validator_index, funded_privkey)
     casper.slash(vote_1, vote_2)
     assert_tx_failed(lambda: casper.slash(vote_1, vote_2))
+
+
+def test_withdraw_after_slash(casper, casper_chain,
+                              funded_privkeys, deposit_amount, new_epoch,
+                              induct_validators, mk_suggested_vote, mk_slash_votes):
+    validator_indexes = induct_validators(funded_privkeys, [deposit_amount] * len(funded_privkeys))
+    slashed_fraction_of_total_deposits = 1.0 / len(funded_privkeys)
+
+    # 0th gets slashed
+    slashed_index = validator_indexes[0]
+    slashed_privkey = funded_privkeys[0]
+    slashed_public_key = utils.privtoaddr(slashed_privkey)
+    # the rest remain
+    logged_in_indexes = validator_indexes[1:]
+    logged_in_privkeys = funded_privkeys[1:]
+
+    vote_1, vote_2 = mk_slash_votes(slashed_index, slashed_privkey)
+    casper.slash(vote_1, vote_2)
+
+    current_epoch = casper.current_epoch()
+    assert casper.total_slashed(current_epoch) == deposit_amount
+    assert casper.total_slashed(current_epoch + 1) == 0
+
+    # slashed validator can withdraw after end_dynasty plus delay
+    for i in range(casper.WITHDRAWAL_DELAY() + 2):
+        for i, validator_index in enumerate(logged_in_indexes):
+            casper.vote(mk_suggested_vote(validator_index, logged_in_privkeys[i]))
+        new_epoch()
+
+    prev_balance = casper_chain.head_state.get_balance(slashed_public_key)
+    casper.withdraw(slashed_index)
+    balance = casper_chain.head_state.get_balance(slashed_public_key)
+    assert balance > prev_balance
+
+    expected_slashed_fraction = slashed_fraction_of_total_deposits * 3
+    expected_withdrawal_fraction = 1 - expected_slashed_fraction
+    expected_withdrawal_amount = expected_withdrawal_fraction * deposit_amount
+    withdrawal_amount = balance - prev_balance
+    assert withdrawal_amount < deposit_amount
+    # should be less than because of some loss due to inactivity during withdrawal period
+    assert withdrawal_amount < expected_withdrawal_amount
+    # ensure within proximity to expected_withdrawal_amount
+    assert withdrawal_amount > expected_withdrawal_amount * 0.9
