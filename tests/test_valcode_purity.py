@@ -1,4 +1,3 @@
-from ethereum import utils
 import pytest
 
 from utils.valcodes import all_known_valcode_types
@@ -18,8 +17,7 @@ def build_pass_fail_matrix():
                              "{} (pass) or {} (fail) to indicate "
                              "as to if the test should pass or fail. "
                              "Given: {}."
-                             .format(pure_prefix, impure_prefix,
-                                    valcode_type))
+                             .format(pure_prefix, impure_prefix, valcode_type))
     return matrix
 
 
