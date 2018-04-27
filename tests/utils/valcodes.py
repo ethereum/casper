@@ -40,7 +40,7 @@ def get_impure_opcodes_as_LLL_source(address):
     ]
     valcodes = {}
     for expression in impure_expressions:
-        key = "impure_{}_ecrecover".format(expression[0])
+        key = "impure_{}".format(expression[0])
         valcodes[key] = [
             'seq',
             expression,
@@ -73,14 +73,15 @@ def get_impure_unused_opcodes_as_evm_bytecode(address):
         0x4f,
     ]
     pure_ecrecover_bytecode = (
-        "61003d56{start}60806000600037602060006080600060006001610bb8f15073"
-        "{address}6000511460005260206000f35b61000461003d036100046000396100"
-        "0461003d036000f3")
+        "61003f56{start:02x}5060806000600037602060006080600060006001610bb8f15073"
+        "{address}6000511460005260206000f35b61000461003f036100046000396100"
+        "0461003f036000f3")
     for opcode in unused_opcodes:
-        key = "impure_unused_bytecode_{}_ecrecover".format(chr(opcode))
-        valcodes[key] = pure_ecrecover_bytecode.format(
+        key = "impure_unused_bytecode_{}".format("{:02x}".format(opcode))
+        formatted = pure_ecrecover_bytecode.format(
             start=opcode,
             address=address.hex())
+        valcodes[key] = bytes.fromhex(formatted)
     return valcodes
 
 
@@ -99,8 +100,8 @@ def get_all_valcode_types():
 def get_compiled_valcode_bytecode(valcode_type, address):
     valcodes = get_all_valcodes(address)
     valcode = valcodes[valcode_type]
-    # We assume strings are compiled evm code
-    if type(valcode) is str:
+    # We assume bytes are compiled evm code
+    if type(valcode) is bytes:
         return valcode
     # We assume lists are uncompiled LLL seqs
     elif type(valcode) is list:
@@ -121,5 +122,5 @@ def get_compiled_valcode_bytecode(valcode_type, address):
     # Any other types are unacceptable
     else:
         raise ValueError('Valcode must be of types list (uncompiled LLL), or '
-                         'str (compiled bytecode). Given: '
+                         'bytes (compiled bytecode). Given: '
                          '{}'.format(type(valcode)))
