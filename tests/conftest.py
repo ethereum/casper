@@ -7,8 +7,7 @@ from ethereum.genesis_helpers import mk_basic_state
 from ethereum.transactions import Transaction
 from ethereum.tools import tester
 from ethereum import utils
-from vyper import compiler, optimizer, compile_lll
-from vyper.parser.parser_utils import LLLnode
+from vyper import compiler
 
 from utils.valcodes import compile_valcode_to_evm_bytecode
 
