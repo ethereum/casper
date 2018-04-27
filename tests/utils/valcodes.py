@@ -68,14 +68,10 @@ def generate_impure_opcodes_as_LLL_source(address):
     for expression in impure_expressions:
         key = "impure_{}".format(expression[0])
         valcodes[key] = format_LLL_source(address, expression)
-    # Generate a pure version as a control
-    valcodes['pure_LLL_source_as_control'] = format_LLL_source(
-        address,
-        PURE_EXPRESSION_LLL)
     return valcodes
 
 
-def format_ecrecover_bytecode(opcode, address):
+def format_ecrecover_bytecode(address, opcode):
     pure_ecrecover_bytecode = (
         "61003f56{start:02x}5060806000600037602060006080600060006001610"
         "bb8f15073{address}6000511460005260206000f35b61000461003f036100"
@@ -102,16 +98,17 @@ def generate_unused_opcodes_as_evm_bytecode(address):
     valcodes = {}
     for opcode in unused_opcodes:
         key = "impure_unused_bytecode_{}".format("{:02x}".format(opcode))
-        valcodes[key] = format_ecrecover_bytecode(opcode, address)
-    # Generate a pure version as a control
-    valcodes['pure_bytecode_as_control'] = format_ecrecover_bytecode(
-        PURE_OPCODE_HEX, address)
+        valcodes[key] = format_ecrecover_bytecode(address, opcode)
     return valcodes
 
 
 def generate_all_valcodes(address):
     return {
         'pure_ecrecover': generate_pure_ecrecover_LLL_source(address),
+        'pure_LLL_source_as_control': format_LLL_source(
+            address, PURE_EXPRESSION_LLL),
+        'pure_bytecode_as_control': format_ecrecover_bytecode(
+            address, PURE_OPCODE_HEX),
         **generate_impure_opcodes_as_LLL_source(address),
         **generate_unused_opcodes_as_evm_bytecode(address),
     }
