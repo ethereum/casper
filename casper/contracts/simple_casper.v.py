@@ -259,6 +259,12 @@ def sqrt_of_total_deposits() -> decimal:
     return sqrt
 
 
+@private
+def validate_signature(sighash: bytes32, sig: bytes <= 1024, validator_index: int128) -> bool:
+    return extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
+
+
+
 # ***** Public *****
 
 # Called at the start of any epoch
@@ -321,24 +327,26 @@ def deposit(validation_addr: address, withdrawal_addr: address):
 @public
 def logout(logout_msg: bytes <= 1024):
     assert self.current_epoch == floor(block.number / self.EPOCH_LENGTH)
+
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
     sighash: bytes32 = extract32(raw_call(self.SIGHASHER, logout_msg, gas=self.SIGHASHER_GAS_LIMIT, outsize=32), 0)
-    # Extract parameters
     values = RLPList(logout_msg, [int128, int128, bytes])
     validator_index: int128 = values[0]
     epoch: int128 = values[1]
     sig: bytes <= 1024 = values[2]
+
     assert self.current_epoch >= epoch
-    # Signature check
-    assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
+    assert self.validate_signature(sighash, sig, validator_index)
+
     # Check that we haven't already withdrawn
     end_dynasty: int128 = self.dynasty + self.DYNASTY_LOGOUT_DELAY
     assert self.validators[validator_index].end_dynasty > end_dynasty
+
     # Set the end dynasty
     self.validators[validator_index].end_dynasty = end_dynasty
     self.dynasty_wei_delta[end_dynasty] -= self.validators[validator_index].deposit
-    # Log logout event
+
     log.Logout(self.validators[validator_index].withdrawal_addr, validator_index, self.validators[validator_index].end_dynasty)
 
 
@@ -403,8 +411,7 @@ def vote(vote_msg: bytes <= 1024):
     source_epoch: int128 = values[3]
     sig: bytes <= 1024 = values[4]
 
-    # Check the signature
-    assert extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
+    assert self.validate_signature(sighash, sig, validator_index)
     # Check that this vote has not yet been made
     assert not bitwise_and(self.votes[target_epoch].vote_bitmap[floor(validator_index / 256)],
                            shift(convert(1, 'uint256'), validator_index % 256))
@@ -478,8 +485,9 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     target_epoch_1: int128 = values_1[2]
     source_epoch_1: int128 = values_1[3]
     sig_1: bytes <= 1024 = values_1[4]
-    # Check the signature for vote message 1
-    assert extract32(raw_call(self.validators[validator_index_1].addr, concat(sighash_1, sig_1), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
+
+    assert self.validate_signature(sighash_1, sig_1, validator_index_1)
+
     # Message 2: Extract parameters
     sighash_2: bytes32 = extract32(raw_call(self.SIGHASHER, vote_msg_2, gas=self.SIGHASHER_GAS_LIMIT, outsize=32), 0)
     values_2 = RLPList(vote_msg_2, [int128, bytes32, int128, int128, bytes])
@@ -487,12 +495,14 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     target_epoch_2: int128 = values_2[2]
     source_epoch_2: int128 = values_2[3]
     sig_2: bytes <= 1024 = values_2[4]
-    # Check the signature for vote message 2
-    assert extract32(raw_call(self.validators[validator_index_2].addr, concat(sighash_2, sig_2), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
+
+    assert self.validate_signature(sighash_2, sig_2, validator_index_2)
+
     # Check the messages are from the same validator
     assert validator_index_1 == validator_index_2
     # Check the messages are not the same
     assert sighash_1 != sighash_2
+
     # Detect slashing
     slashing_condition_detected: bool = False
     if target_epoch_1 == target_epoch_2:
@@ -503,6 +513,7 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
         # NO SURROUND VOTE
         slashing_condition_detected = True
     assert slashing_condition_detected
+
     # Delete the offending validator, and give a 4% "finder's fee"
     validator_deposit: int128(wei) = self.deposit_size(validator_index_1)
     slashing_bounty: int128(wei) = floor(validator_deposit / 25)
