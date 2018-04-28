@@ -7,6 +7,10 @@ from ethereum.utils import bytes_to_int
 PURE_OPCODE_HEX = 0x59
 PURE_EXPRESSION_LLL = ['msize']
 
+# Expensive opcode for testing gas limits
+ECRECOVER_LLL = ['call', 3000, 1, 0, 0, 128, 0, 32]
+ECRECOVER_GASCOST = 3000
+
 
 def generate_pure_ecrecover_LLL_source(address):
     return [
@@ -109,6 +113,10 @@ def generate_all_valcodes(address):
             address, PURE_EXPRESSION_LLL),
         'pure_bytecode_as_control': format_ecrecover_bytecode(
             address, PURE_OPCODE_HEX),
+        'pure_greater_than_200k_gas': format_LLL_source(
+            address, ['seq'] + [ECRECOVER_LLL] * int(2e5 / ECRECOVER_GASCOST)),
+        'pure_between_100k-200k_gas': format_LLL_source(
+            address, ['seq'] + [ECRECOVER_LLL] * int(1e5 / ECRECOVER_GASCOST)),
         **generate_impure_opcodes_as_LLL_source(address),
         **generate_unused_opcodes_as_evm_bytecode(address),
     }

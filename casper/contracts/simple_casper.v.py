@@ -264,7 +264,6 @@ def validate_signature(sighash: bytes32, sig: bytes <= 1024, validator_index: in
     return extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
 
 
-
 # ***** Public *****
 
 # Called at the start of any epoch

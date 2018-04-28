@@ -65,6 +65,31 @@ def test_vote_target_epoch_twice(casper, funded_privkey, deposit_amount, new_epo
     assert_tx_failed(lambda: casper.vote(mk_suggested_vote(validator_index, funded_privkey)))
 
 
+@pytest.mark.parametrize(
+    'valcode_type,success',
+    [
+        ('pure_greater_than_200k_gas', False),
+        ('pure_between_100k-200k_gas', True),
+    ]
+)
+def test_vote_validate_signature_gas_limit(valcode_type, success,
+                                           casper, funded_privkey, deposit_amount,
+                                           induct_validator, mk_suggested_vote,
+                                           assert_tx_failed):
+    validator_index = induct_validator(
+        funded_privkey,
+        deposit_amount,
+        valcode_type
+    )
+    assert casper.total_curdyn_deposits_scaled() == deposit_amount
+
+    if not success:
+        assert_tx_failed(lambda: casper.vote(mk_suggested_vote(validator_index, funded_privkey)))
+        return
+
+    casper.vote(mk_suggested_vote(validator_index, funded_privkey))
+
+
 def test_non_finalization_loss(casper, funded_privkey, deposit_amount, new_epoch,
                                induct_validator, mk_suggested_vote, assert_tx_failed):
     validator_index = induct_validator(funded_privkey, deposit_amount)
