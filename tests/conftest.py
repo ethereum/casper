@@ -414,10 +414,10 @@ def deposit_validator(casper_chain, casper, validation_addr):
 #       manually finalize
 @pytest.fixture
 def induct_validator(casper_chain, casper, deposit_validator, new_epoch):
-    def induct_validator(privkey, value):
+    def induct_validator(privkey, value, valcode_type="pure_ecrecover"):
         if casper.current_epoch() == 0:
             new_epoch()
-        validator_index = deposit_validator(privkey, value)
+        validator_index = deposit_validator(privkey, value, valcode_type)
         new_epoch()
         new_epoch()
         return validator_index
