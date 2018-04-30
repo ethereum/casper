@@ -249,13 +249,15 @@ def casper_chain(
     casper_tx = Transaction(
         nonce,
         GAS_PRICE,
-        5000000,
+        6000000,
         b'',
         0,
         deploy_code
     ).sign(base_sender_privkey)
     test_chain.direct_tx(casper_tx)
     nonce += 1
+
+    test_chain.mine(1)
 
     # Casper contract needs money for its activity
     casper_fund_tx = Transaction(

@@ -53,9 +53,11 @@ dynasty_start_epoch: public(int128[int128])
 dynasty_in_epoch: public(int128[int128])
 
 checkpoints: public({
-    # How many votes are there for this source epoch from the current dynasty
+    # track size of scaled deposits for use in client fork choice
+    cur_dyn_deposits: wei_value,
+    prev_dyn_deposits: wei_value,
+    # track total votes for each dynasty
     cur_dyn_votes: decimal(wei / m)[int128],
-    # From the previous dynasty
     prev_dyn_votes: decimal(wei / m)[int128],
     # Bitmap of which validator IDs have already voted
     vote_bitmap: uint256[int128],
@@ -269,7 +271,10 @@ def initialize_epoch(epoch: int128):
     computed_current_epoch: int128 = floor(block.number / self.EPOCH_LENGTH)
     assert epoch <= computed_current_epoch and epoch == self.current_epoch + 1
 
-    # Setup
+    # track the deposits related to the checkpoint _before_ updating current_epoch
+    self.checkpoints[epoch].cur_dyn_deposits = self.total_curdyn_deposits_scaled()
+    self.checkpoints[epoch].prev_dyn_deposits = self.total_prevdyn_deposits_scaled()
+
     self.current_epoch = epoch
 
     self.last_voter_rescale = 1 + self.collective_reward()
@@ -287,11 +292,12 @@ def initialize_epoch(epoch: int128):
         self.insta_finalize()
         self.reward_factor = 0
 
+    # Store checkpoint hash for easy access
+    self.checkpoint_hashes[epoch] = self.recommended_target_hash()
+
     # Increment the dynasty if finalized
     self.increment_dynasty()
 
-    # Store checkpoint hash for easy access
-    self.checkpoint_hashes[epoch] = self.recommended_target_hash()
     # Log new epoch creation
     log.Epoch(epoch, self.checkpoint_hashes[epoch], False, False)
 
