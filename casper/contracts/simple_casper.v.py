@@ -52,7 +52,7 @@ dynasty_start_epoch: public(int128[int128])
 # Mapping of epoch to what dynasty it is
 dynasty_in_epoch: public(int128[int128])
 
-votes: public({
+checkpoints: public({
     # How many votes are there for this source epoch from the current dynasty
     cur_dyn_votes: decimal(wei / m)[int128],
     # From the previous dynasty
@@ -151,8 +151,8 @@ def __init__(
 @public
 @constant
 def main_hash_voted_frac() -> decimal:
-    return min(self.votes[self.current_epoch].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits,
-               self.votes[self.current_epoch].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits)
+    return min(self.checkpoints[self.current_epoch].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits,
+               self.checkpoints[self.current_epoch].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits)
 
 
 @public
@@ -200,7 +200,7 @@ def deposit_exists() -> bool:
 def increment_dynasty():
     epoch: int128 = self.current_epoch
     # Increment the dynasty if finalized
-    if self.votes[epoch - 2].is_finalized:
+    if self.checkpoints[epoch - 2].is_finalized:
         self.dynasty += 1
         self.total_prevdyn_deposits = self.total_curdyn_deposits
         self.total_curdyn_deposits += self.dynasty_wei_delta[self.dynasty]
@@ -225,8 +225,8 @@ def collective_reward() -> decimal:
     if not self.deposit_exists() or not live:
         return 0.0
     # Fraction that voted
-    cur_vote_frac: decimal = self.votes[epoch - 1].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits
-    prev_vote_frac: decimal = self.votes[epoch - 1].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits
+    cur_vote_frac: decimal = self.checkpoints[epoch - 1].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits
+    prev_vote_frac: decimal = self.checkpoints[epoch - 1].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits
     vote_frac: decimal = min(cur_vote_frac, prev_vote_frac)
     return vote_frac * self.reward_factor / 2
 
@@ -235,8 +235,8 @@ def collective_reward() -> decimal:
 def insta_finalize():
     epoch: int128 = self.current_epoch
     self.main_hash_justified = True
-    self.votes[epoch - 1].is_justified = True
-    self.votes[epoch - 1].is_finalized = True
+    self.checkpoints[epoch - 1].is_justified = True
+    self.checkpoints[epoch - 1].is_finalized = True
     self.last_justified_epoch = epoch - 1
     self.last_finalized_epoch = epoch - 1
     # Log previous Epoch status update
@@ -408,13 +408,13 @@ def vote(vote_msg: bytes <= 1024):
 
     assert self.validate_signature(sighash, sig, validator_index)
     # Check that this vote has not yet been made
-    assert not bitwise_and(self.votes[target_epoch].vote_bitmap[floor(validator_index / 256)],
+    assert not bitwise_and(self.checkpoints[target_epoch].vote_bitmap[floor(validator_index / 256)],
                            shift(convert(1, 'uint256'), validator_index % 256))
     # Check that the vote's target epoch and hash are correct
     assert target_hash == self.recommended_target_hash()
     assert target_epoch == self.current_epoch
     # Check that the vote source points to a justified epoch
-    assert self.votes[source_epoch].is_justified
+    assert self.checkpoints[source_epoch].is_justified
 
     # ensure validator can vote for the target_epoch
     start_dynasty: int128 = self.validators[validator_index].start_dynasty
@@ -426,19 +426,19 @@ def vote(vote_msg: bytes <= 1024):
     assert in_current_dynasty or in_prev_dynasty
 
     # Record that the validator voted for this target epoch so they can't again
-    self.votes[target_epoch].vote_bitmap[floor(validator_index / 256)] = \
-        bitwise_or(self.votes[target_epoch].vote_bitmap[floor(validator_index / 256)],
+    self.checkpoints[target_epoch].vote_bitmap[floor(validator_index / 256)] = \
+        bitwise_or(self.checkpoints[target_epoch].vote_bitmap[floor(validator_index / 256)],
                    shift(convert(1, 'uint256'), validator_index % 256))
 
     # Record that this vote took place
-    current_dynasty_votes: decimal(wei/m) = self.votes[target_epoch].cur_dyn_votes[source_epoch]
-    previous_dynasty_votes: decimal(wei/m) = self.votes[target_epoch].prev_dyn_votes[source_epoch]
+    current_dynasty_votes: decimal(wei/m) = self.checkpoints[target_epoch].cur_dyn_votes[source_epoch]
+    previous_dynasty_votes: decimal(wei/m) = self.checkpoints[target_epoch].prev_dyn_votes[source_epoch]
     if in_current_dynasty:
         current_dynasty_votes += self.validators[validator_index].deposit
-        self.votes[target_epoch].cur_dyn_votes[source_epoch] = current_dynasty_votes
+        self.checkpoints[target_epoch].cur_dyn_votes[source_epoch] = current_dynasty_votes
     if in_prev_dynasty:
         previous_dynasty_votes += self.validators[validator_index].deposit
-        self.votes[target_epoch].prev_dyn_votes[source_epoch] = previous_dynasty_votes
+        self.checkpoints[target_epoch].prev_dyn_votes[source_epoch] = previous_dynasty_votes
 
     # Process rewards.
     # Pay the reward if the vote was submitted in time and the vote is voting the correct data
@@ -450,8 +450,8 @@ def vote(vote_msg: bytes <= 1024):
     # then the hash value is justified
     if (current_dynasty_votes >= self.total_curdyn_deposits * 2 / 3 and
             previous_dynasty_votes >= self.total_prevdyn_deposits * 2 / 3) and \
-            not self.votes[target_epoch].is_justified:
-        self.votes[target_epoch].is_justified = True
+            not self.checkpoints[target_epoch].is_justified:
+        self.checkpoints[target_epoch].is_justified = True
         self.last_justified_epoch = target_epoch
         self.main_hash_justified = True
 
@@ -461,7 +461,7 @@ def vote(vote_msg: bytes <= 1024):
         # If two epochs are justified consecutively,
         # then the source_epoch finalized
         if target_epoch == source_epoch + 1:
-            self.votes[source_epoch].is_finalized = True
+            self.checkpoints[source_epoch].is_finalized = True
             self.last_finalized_epoch = source_epoch
             # Log source epoch status update
             log.Epoch(source_epoch, self.checkpoint_hashes[source_epoch], True, True)

@@ -49,7 +49,7 @@ def test_vote_single_validator(casper, funded_privkey, deposit_amount,
     for i in range(10):
         casper.vote(mk_suggested_vote(validator_index, funded_privkey))
         assert casper.main_hash_justified()
-        assert casper.votes__is_finalized(casper.recommended_source_epoch())
+        assert casper.checkpoints__is_finalized(casper.recommended_source_epoch())
         new_epoch()
         assert casper.dynasty() == prev_dynasty + 1
         prev_dynasty += 1
@@ -149,14 +149,14 @@ def test_consensus_after_non_finalization_streak(casper, funded_privkey, deposit
         new_epoch()
 
     assert not casper.main_hash_justified()
-    assert not casper.votes__is_finalized(casper.recommended_source_epoch())
+    assert not casper.checkpoints__is_finalized(casper.recommended_source_epoch())
 
     casper.vote(mk_suggested_vote(validator_index, funded_privkey))
     assert casper.main_hash_justified()
-    assert not casper.votes__is_finalized(casper.recommended_source_epoch())
+    assert not casper.checkpoints__is_finalized(casper.recommended_source_epoch())
 
     new_epoch()
     casper.vote(mk_suggested_vote(validator_index, funded_privkey))
 
     assert casper.main_hash_justified()
-    assert casper.votes__is_finalized(casper.recommended_source_epoch())
+    assert casper.checkpoints__is_finalized(casper.recommended_source_epoch())
