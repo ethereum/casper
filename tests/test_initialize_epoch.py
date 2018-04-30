@@ -20,10 +20,8 @@ def test_checkpoint_hashes(casper_chain, casper, new_epoch):
 
         casper.initialize_epoch(next_epoch)
         current_epoch = casper.current_epoch()
-        # This hash is actually off because our current setup requires us
-        # to mine the block before the call to `initialize_epoch`.
-        # If this were actually a CALL before the block was process as specified in the EIP
-        # Then the expected hash would be of the prev_block (`get_block_hash(1)`)
+        # This looks incorrect but `get_block_hash` actually indexes
+        # into a lost of prev_hashes. The 0th index is the hash of the previous block
         expected_hash = casper_chain.head_state.get_block_hash(0)
 
         assert current_epoch == next_epoch
