@@ -16,7 +16,7 @@ brew install pandoc # required for a python dependency
 For all systems:
 
 ```bash
-pip3 install -r requirements.txt`
+pip3 install -r requirements.txt
 ```
 
 NOTE: pip3 is a version of pip using python version 3.
