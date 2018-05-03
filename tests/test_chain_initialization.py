@@ -50,6 +50,22 @@ def test_init_first_epoch(casper, new_epoch):
 
 
 @pytest.mark.parametrize(
+    'start_epoch',
+    [
+        (0), (1), (4), (10)
+    ]
+)
+def test_start_epoch(test_chain, start_epoch, epoch_length, casper_args, deploy_casper_contract):
+    test_chain.mine(
+        epoch_length * start_epoch - test_chain.head_state.block_number
+    )
+
+    casper = deploy_casper_contract(casper_args)
+    assert casper.START_EPOCH() == start_epoch
+    assert casper.current_epoch() == start_epoch
+
+
+@pytest.mark.parametrize(
     'epoch_length, success',
     [
         (-1, False),

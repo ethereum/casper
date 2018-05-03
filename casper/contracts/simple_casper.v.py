@@ -110,6 +110,7 @@ PURITY_CHECKER: address
 BASE_INTEREST_FACTOR: public(decimal)
 BASE_PENALTY_FACTOR: public(decimal)
 MIN_DEPOSIT_SIZE: public(wei_value)
+START_EPOCH: public(int128)
 DEFAULT_END_DYNASTY: int128
 SIGHASHER_GAS_LIMIT: int128
 VALIDATION_GAS_LIMIT: int128
@@ -131,6 +132,8 @@ def __init__(
     self.BASE_PENALTY_FACTOR = base_penalty_factor
     self.MIN_DEPOSIT_SIZE = min_deposit_size
 
+    self.START_EPOCH = floor(block.number / self.EPOCH_LENGTH)
+
     # helper contracts
     self.SIGHASHER = sighasher
     self.PURITY_CHECKER = purity_checker
@@ -139,7 +142,7 @@ def __init__(
     self.next_validator_index = 1
 
     self.dynasty = 0
-    self.current_epoch = floor(block.number / self.EPOCH_LENGTH)
+    self.current_epoch = self.START_EPOCH
     # TODO: test deposit_scale_factor when deploying when current_epoch > 0
     self.deposit_scale_factor[self.current_epoch] = 10000000000.0
     self.total_curdyn_deposits = 0
@@ -202,6 +205,7 @@ def highest_justified_epoch(min_total_deposits: wei_value) -> int128:
         if is_justified and (enough_cur_dyn_deposits and enough_prev_dyn_deposits):
             return epoch
 
+        # should only actually walk back to the first epoch ever
         if epoch == 0:
             break
 
