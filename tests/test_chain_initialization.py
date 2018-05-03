@@ -70,4 +70,5 @@ def test_epoch_length(epoch_length, success, casper_args,
         )
         return
 
-    deploy_casper_contract(casper_args)
+    casper = deploy_casper_contract(casper_args)
+    assert casper.EPOCH_LENGTH() == epoch_length

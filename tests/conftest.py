@@ -279,16 +279,19 @@ def deploy_casper_contract(
         test_chain,
         casper_code,
         casper_ct,
+        casper_abi,
+        casper_address,
         dependency_transactions,
         sig_hasher_address,
         purity_checker_address,
         base_sender_privkey):
     def deploy_casper_contract(contract_args):
-        casper_chain(
+        chain = casper_chain(
             test_chain, contract_args, casper_code, casper_ct,
             dependency_transactions, sig_hasher_address, purity_checker_address,
             base_sender_privkey
         )
+        return casper(chain, casper_abi, casper_address)
     return deploy_casper_contract
 
 
