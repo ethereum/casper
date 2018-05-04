@@ -199,8 +199,8 @@ def highest_justified_epoch(min_total_deposits: wei_value) -> int128:
     for i in range(1000000000000000000000000000000):
         epoch = self.current_epoch - i
         is_justified: bool = self.checkpoints[epoch].is_justified
-        enough_cur_dyn_deposits: bool = self.checkpoints[epoch].cur_dyn_deposits > min_total_deposits
-        enough_prev_dyn_deposits: bool = self.checkpoints[epoch].prev_dyn_deposits > min_total_deposits
+        enough_cur_dyn_deposits: bool = self.checkpoints[epoch].cur_dyn_deposits >= min_total_deposits
+        enough_prev_dyn_deposits: bool = self.checkpoints[epoch].prev_dyn_deposits >= min_total_deposits
 
         if is_justified and (enough_cur_dyn_deposits and enough_prev_dyn_deposits):
             return epoch
