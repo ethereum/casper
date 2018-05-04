@@ -205,13 +205,33 @@ def highest_justified_epoch(min_total_deposits: wei_value) -> int128:
         if is_justified and (enough_cur_dyn_deposits and enough_prev_dyn_deposits):
             return epoch
 
-        # should only actually walk back to the first epoch ever
-        if epoch == 0:
+        if epoch == self.START_EPOCH:
             break
 
     # no justified epochs found, use 0 as default
     # to 0 out the affect of casper on fork choice
     return 0
+
+@public
+@constant
+def highest_finalized_epoch(min_total_deposits: wei_value) -> int128:
+    epoch: int128
+    for i in range(1000000000000000000000000000000):
+        epoch = self.current_epoch - i
+        is_finalized: bool = self.checkpoints[epoch].is_finalized
+        enough_cur_dyn_deposits: bool = self.checkpoints[epoch].cur_dyn_deposits >= min_total_deposits
+        enough_prev_dyn_deposits: bool = self.checkpoints[epoch].prev_dyn_deposits >= min_total_deposits
+
+        if is_finalized and (enough_cur_dyn_deposits and enough_prev_dyn_deposits):
+            return epoch
+
+        if epoch == self.START_EPOCH:
+            break
+
+    # no finalized epochs found, use -1 as default
+    # to signal not to locally finalize anything
+    return -1
+
 
 
 @private
