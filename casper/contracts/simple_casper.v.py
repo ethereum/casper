@@ -33,7 +33,7 @@ next_validator_index: public(int128)
 # Mapping of validator's withdrawal address to their index number
 validator_indexes: public(int128[address])
 
-# Current dynasty, it measures the number of finalized checkpoints 
+# Current dynasty, it measures the number of finalized checkpoints
 # in the chain from root to the parent of current block
 dynasty: public(int128)
 
@@ -167,13 +167,13 @@ def deposit_size(validator_index: int128) -> int128(wei):
 
 @public
 @constant
-def total_curdyn_deposits_scaled() -> wei_value:
+def total_curdyn_deposits_in_wei() -> wei_value:
     return floor(self.total_curdyn_deposits * self.deposit_scale_factor[self.current_epoch])
 
 
 @public
 @constant
-def total_prevdyn_deposits_scaled() -> wei_value:
+def total_prevdyn_deposits_in_wei() -> wei_value:
     return floor(self.total_prevdyn_deposits * self.deposit_scale_factor[self.current_epoch])
 
 
