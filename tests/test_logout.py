@@ -1,3 +1,6 @@
+from utils.common_assertions import (
+    assert_validator_empty,
+)
 
 
 def test_logout_sets_end_dynasty(casper, funded_privkey, deposit_amount,
@@ -92,6 +95,4 @@ def test_logout_with_multiple_validators(casper, funded_privkeys,
     assert withdrawal_amount > 0
 
     casper.withdraw(logged_out_index)
-    assert casper.deposit_size(logged_out_index) == 0
-    assert casper.validators__deposit(logged_out_index) == 0
-    assert casper.validators__start_dynasty(logged_out_index) == 0
+    assert_validator_empty(casper, logged_out_index)

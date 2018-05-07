@@ -1,5 +1,9 @@
 from ethereum import utils
 
+from utils.common_assertions import (
+    assert_validator_empty,
+)
+
 
 def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount,
                               induct_validator, mk_vote, fake_hash, casper_chain):
@@ -219,3 +223,5 @@ def test_withdraw_after_slash(casper, casper_chain,
     assert withdrawal_amount < expected_withdrawal_amount
     # ensure within proximity to expected_withdrawal_amount
     assert withdrawal_amount > expected_withdrawal_amount * 0.9
+
+    assert_validator_empty(casper, slashed_index)
