@@ -199,7 +199,7 @@ def test_withdraw_log(casper, funded_privkey, new_epoch, deposit_validator, logo
 def test_slash_log(casper, funded_privkey, deposit_amount, get_last_log, base_sender_privkey,
                               induct_validator, mk_vote, fake_hash, casper_chain):
     validator_index = induct_validator(funded_privkey, deposit_amount)
-    assert casper.total_curdyn_deposits_scaled() == deposit_amount
+    assert casper.total_curdyn_deposits_in_wei() == deposit_amount
 
     vote_1 = mk_vote(
         validator_index,
