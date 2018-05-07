@@ -152,7 +152,7 @@ def __init__(
     self.VALIDATION_GAS_LIMIT = 200000
 
 
-# ***** Constants *****
+# ***** Public Constants *****
 @public
 @constant
 def main_hash_voted_frac() -> decimal:
@@ -178,7 +178,10 @@ def total_prevdyn_deposits_in_wei() -> wei_value:
     return floor(self.total_prevdyn_deposits * self.deposit_scale_factor[self.current_epoch])
 
 
+#
 # Helper functions that clients can call to know what to vote
+#
+
 @public
 @constant
 def recommended_source_epoch() -> int128:
@@ -191,7 +194,10 @@ def recommended_target_hash() -> bytes32:
     return blockhash(self.current_epoch*self.EPOCH_LENGTH - 1)
 
 
+#
 # Helper functions for client fork choice
+#
+
 @public
 @constant
 def highest_justified_epoch(min_total_deposits: wei_value) -> int128:
@@ -233,6 +239,27 @@ def highest_finalized_epoch(min_total_deposits: wei_value) -> int128:
     return -1
 
 
+# ****** Private Constants *****
+
+# Returns number of epochs since finalization.
+@private
+@constant
+def esf() -> int128:
+    return self.current_epoch - self.last_finalized_epoch
+
+
+# Compute square root factor
+@private
+@constant
+def sqrt_of_total_deposits() -> decimal:
+    epoch: int128 = self.current_epoch
+    ether_deposited_as_number: int128 = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) *
+                                      self.deposit_scale_factor[epoch - 1] / as_wei_value(1, "ether")) + 1
+    sqrt: decimal = ether_deposited_as_number / 2.0
+    for i in range(20):
+        sqrt = (sqrt + (ether_deposited_as_number / sqrt)) / 2
+    return sqrt
+
 
 @private
 @constant
@@ -259,10 +286,16 @@ def increment_dynasty():
     self.main_hash_justified = False
 
 
-# Returns number of epochs since finalization.
 @private
-def esf() -> int128:
-    return self.current_epoch - self.last_finalized_epoch
+def insta_finalize():
+    epoch: int128 = self.current_epoch
+    self.main_hash_justified = True
+    self.checkpoints[epoch - 1].is_justified = True
+    self.checkpoints[epoch - 1].is_finalized = True
+    self.last_justified_epoch = epoch - 1
+    self.last_finalized_epoch = epoch - 1
+    # Log previous Epoch status update
+    log.Epoch(epoch - 1, self.checkpoint_hashes[epoch - 1], True, True)
 
 
 # Returns the current collective reward factor, which rewards the dynasty for high-voting levels.
@@ -279,30 +312,40 @@ def collective_reward() -> decimal:
     return vote_frac * self.reward_factor / 2
 
 
+# Reward the given validator & miner, and reflect this in total deposit figured
 @private
-def insta_finalize():
-    epoch: int128 = self.current_epoch
-    self.main_hash_justified = True
-    self.checkpoints[epoch - 1].is_justified = True
-    self.checkpoints[epoch - 1].is_finalized = True
-    self.last_justified_epoch = epoch - 1
-    self.last_finalized_epoch = epoch - 1
-    # Log previous Epoch status update
-    log.Epoch(epoch - 1, self.checkpoint_hashes[epoch - 1], True, True)
+def proc_reward(validator_index: int128, reward: int128(wei/m)):
+    # Reward validator
+    self.validators[validator_index].deposit += reward
+    start_dynasty: int128 = self.validators[validator_index].start_dynasty
+    end_dynasty: int128 = self.validators[validator_index].end_dynasty
+    current_dynasty: int128 = self.dynasty
+    past_dynasty: int128 = current_dynasty - 1
+    if ((start_dynasty <= current_dynasty) and (current_dynasty < end_dynasty)):
+        self.total_curdyn_deposits += reward
+    if ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty)):
+        self.total_prevdyn_deposits += reward
+    if end_dynasty < self.DEFAULT_END_DYNASTY:  # validator has submit `logout`
+        self.dynasty_wei_delta[end_dynasty] -= reward
+    # Reward miner
+    send(block.coinbase, floor(reward * self.deposit_scale_factor[self.current_epoch] / 8))
 
 
-# Compute square root factor
+# Removes a validator from the validator pool
 @private
-def sqrt_of_total_deposits() -> decimal:
-    epoch: int128 = self.current_epoch
-    ether_deposited_as_number: int128 = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) *
-                                      self.deposit_scale_factor[epoch - 1] / as_wei_value(1, "ether")) + 1
-    sqrt: decimal = ether_deposited_as_number / 2.0
-    for i in range(20):
-        sqrt = (sqrt + (ether_deposited_as_number / sqrt)) / 2
-    return sqrt
+def delete_validator(validator_index: int128):
+    self.validator_indexes[self.validators[validator_index].withdrawal_addr] = 0
+    self.validators[validator_index] = {
+        deposit: 0,
+        start_dynasty: 0,
+        end_dynasty: 0,
+        addr: None,
+        withdrawal_addr: None
+    }
 
 
+# cannot be labeled @constant because of external call
+# even though the call is to a pure contract call
 @private
 def validate_signature(sighash: bytes32, sig: bytes <= 1024, validator_index: int128) -> bool:
     return extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
@@ -397,18 +440,6 @@ def logout(logout_msg: bytes <= 1024):
     log.Logout(self.validators[validator_index].withdrawal_addr, validator_index, self.validators[validator_index].end_dynasty)
 
 
-# Removes a validator from the validator pool
-@private
-def delete_validator(validator_index: int128):
-    self.validator_indexes[self.validators[validator_index].withdrawal_addr] = 0
-    self.validators[validator_index] = {
-        deposit: 0,
-        start_dynasty: 0,
-        end_dynasty: 0,
-        addr: None,
-        withdrawal_addr: None
-    }
-
 
 # Withdraw deposited ether
 @public
@@ -424,24 +455,6 @@ def withdraw(validator_index: int128):
     log.Withdraw(self.validators[validator_index].withdrawal_addr, validator_index, withdraw_amount)
     self.delete_validator(validator_index)
 
-
-# Reward the given validator & miner, and reflect this in total deposit figured
-@private
-def proc_reward(validator_index: int128, reward: int128(wei/m)):
-    # Reward validator
-    self.validators[validator_index].deposit += reward
-    start_dynasty: int128 = self.validators[validator_index].start_dynasty
-    end_dynasty: int128 = self.validators[validator_index].end_dynasty
-    current_dynasty: int128 = self.dynasty
-    past_dynasty: int128 = current_dynasty - 1
-    if ((start_dynasty <= current_dynasty) and (current_dynasty < end_dynasty)):
-        self.total_curdyn_deposits += reward
-    if ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty)):
-        self.total_prevdyn_deposits += reward
-    if end_dynasty < self.DEFAULT_END_DYNASTY:  # validator has submit `logout`
-        self.dynasty_wei_delta[end_dynasty] -= reward
-    # Reward miner
-    send(block.coinbase, floor(reward * self.deposit_scale_factor[self.current_epoch] / 8))
 
 
 # Process a vote message
