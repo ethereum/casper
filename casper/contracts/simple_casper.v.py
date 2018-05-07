@@ -99,9 +99,6 @@ WITHDRAWAL_DELAY: public(int128)
 # Logout delay in dynasties
 DYNASTY_LOGOUT_DELAY: public(int128)
 
-# [backdoor] Can withdraw destroyed deposits
-OWNER: address
-
 # Sighash calculator library address
 SIGHASHER: address
 
@@ -119,7 +116,7 @@ VALIDATION_GAS_LIMIT: int128
 @public
 def __init__(
         epoch_length: int128, withdrawal_delay: int128, dynasty_logout_delay: int128,
-        owner: address, sighasher: address, purity_checker: address,
+        sighasher: address, purity_checker: address,
         base_interest_factor: decimal, base_penalty_factor: decimal,
         min_deposit_size: wei_value):
 
@@ -128,7 +125,6 @@ def __init__(
     self.EPOCH_LENGTH = epoch_length
     self.WITHDRAWAL_DELAY = withdrawal_delay
     self.DYNASTY_LOGOUT_DELAY = dynasty_logout_delay
-    self.OWNER = owner
     self.BASE_INTEREST_FACTOR = base_interest_factor
     self.BASE_PENALTY_FACTOR = base_penalty_factor
     self.MIN_DEPOSIT_SIZE = min_deposit_size
@@ -534,17 +530,3 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
 
     self.delete_validator(validator_index_1)
     send(msg.sender, slashing_bounty)
-
-
-# Temporary backdoor for testing purposes (to allow recovering destroyed deposits)
-@public
-def owner_withdraw():
-    send(self.OWNER, self.total_destroyed)
-    self.total_destroyed = 0
-
-
-# Change backdoor address (set to zero to remove entirely)
-@public
-def change_owner(new_owner: address):
-    if self.OWNER == msg.sender:
-        self.OWNER = new_owner

@@ -23,7 +23,6 @@ PURITY_CHECKER_ABI = [{'name': 'check(address)', 'type': 'function', 'constant':
 EPOCH_LENGTH = 10
 DYNASTY_LOGOUT_DELAY = 5
 WITHDRAWAL_DELAY = 5
-OWNER = utils.checksum_encode(tester.a0)
 BASE_INTEREST_FACTOR = 0.02
 BASE_PENALTY_FACTOR = 0.002
 MIN_DEPOSIT_SIZE = 1000 * 10**18  # 1000 ether
@@ -111,11 +110,6 @@ def dynasty_logout_delay():
 
 
 @pytest.fixture
-def owner():
-    return OWNER
-
-
-@pytest.fixture
 def base_interest_factor():
     return BASE_INTEREST_FACTOR
 
@@ -132,12 +126,11 @@ def min_deposit_size():
 
 @pytest.fixture
 def casper_config(epoch_length, withdrawal_delay, dynasty_logout_delay,
-                  owner, base_interest_factor, base_penalty_factor, min_deposit_size):
+                  base_interest_factor, base_penalty_factor, min_deposit_size):
     return {
         "epoch_length": epoch_length,  # in blocks
         "withdrawal_delay": withdrawal_delay,  # in epochs
         "dynasty_logout_delay": dynasty_logout_delay,  # in dynasties
-        "owner": owner,  # Backdoor address
         "base_interest_factor": base_interest_factor,
         "base_penalty_factor": base_penalty_factor,
         "min_deposit_size": min_deposit_size
@@ -148,7 +141,7 @@ def casper_config(epoch_length, withdrawal_delay, dynasty_logout_delay,
 def casper_args(casper_config, sig_hasher_address, purity_checker_address):
     return [
         casper_config["epoch_length"], casper_config["withdrawal_delay"],
-        casper_config["dynasty_logout_delay"], casper_config["owner"],
+        casper_config["dynasty_logout_delay"],
         sig_hasher_address, purity_checker_address, casper_config["base_interest_factor"],
         casper_config["base_penalty_factor"], casper_config["min_deposit_size"]
     ]
