@@ -2,6 +2,12 @@
 
 [![Build Status](https://travis-ci.org/ethereum/casper.svg?branch=master)](https://travis-ci.org/ethereum/casper)
 
+See [EIP-1011](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1011.md)
+for a specifcation of the Casper the Friendly Finality Gadget PoW/PoS consensus model.
+
+See [VALIDATOR_GUIDE.md](https://github.com/ethereum/casper/blob/master/VALIDATOR_GUIDE.md)
+for information about implementing a Casper FFG validator.
+
 ## Casper Contract
 Implements [Casper FFG](https://arxiv.org/abs/1710.09437), written in [Vyper](https://github.com/ethereum/vyper).
 
