@@ -101,8 +101,9 @@ WITHDRAWAL_DELAY: public(int128)
 # Logout delay in dynasties
 DYNASTY_LOGOUT_DELAY: public(int128)
 
-# Sighash calculator library address
-SIGHASHER: address
+# MSG_HASHER calculator library address
+# Hashes message contents but not the signature
+MSG_HASHER: address
 
 # Purity checker library address
 PURITY_CHECKER: address
@@ -112,14 +113,14 @@ BASE_PENALTY_FACTOR: public(decimal)
 MIN_DEPOSIT_SIZE: public(wei_value)
 START_EPOCH: public(int128)
 DEFAULT_END_DYNASTY: int128
-SIGHASHER_GAS_LIMIT: int128
+MSG_HASHER_GAS_LIMIT: int128
 VALIDATION_GAS_LIMIT: int128
 
 
 @public
 def __init__(
         epoch_length: int128, withdrawal_delay: int128, dynasty_logout_delay: int128,
-        sighasher: address, purity_checker: address,
+        MSG_HASHER: address, purity_checker: address,
         base_interest_factor: decimal, base_penalty_factor: decimal,
         min_deposit_size: wei_value):
 
@@ -135,7 +136,7 @@ def __init__(
     self.START_EPOCH = floor(block.number / self.EPOCH_LENGTH)
 
     # helper contracts
-    self.SIGHASHER = sighasher
+    self.MSG_HASHER = MSG_HASHER
     self.PURITY_CHECKER = purity_checker
 
     # Start validator index counter at 1 because validator_indexes[] requires non-zero values
@@ -148,7 +149,7 @@ def __init__(
     self.total_curdyn_deposits = 0
     self.total_prevdyn_deposits = 0
     self.DEFAULT_END_DYNASTY = 1000000000000000000000000000000
-    self.SIGHASHER_GAS_LIMIT = 200000
+    self.MSG_HASHER_GAS_LIMIT = 200000
     self.VALIDATION_GAS_LIMIT = 200000
 
 
@@ -426,7 +427,7 @@ def logout(logout_msg: bytes <= 1024):
 
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
-    sighash: bytes32 = extract32(raw_call(self.SIGHASHER, logout_msg, gas=self.SIGHASHER_GAS_LIMIT, outsize=32), 0)
+    sighash: bytes32 = extract32(raw_call(self.MSG_HASHER, logout_msg, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
     values = RLPList(logout_msg, [int128, int128, bytes])
     validator_index: int128 = values[0]
     epoch: int128 = values[1]
@@ -468,7 +469,7 @@ def withdraw(validator_index: int128):
 def vote(vote_msg: bytes <= 1024):
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
-    sighash: bytes32 = extract32(raw_call(self.SIGHASHER, vote_msg, gas=self.SIGHASHER_GAS_LIMIT, outsize=32), 0)
+    sighash: bytes32 = extract32(raw_call(self.MSG_HASHER, vote_msg, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
     # Extract parameters
     values = RLPList(vote_msg, [int128, bytes32, int128, int128, bytes])
     validator_index: int128 = values[0]
@@ -545,7 +546,7 @@ def vote(vote_msg: bytes <= 1024):
 @public
 def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     # Message 1: Extract parameters
-    sighash_1: bytes32 = extract32(raw_call(self.SIGHASHER, vote_msg_1, gas=self.SIGHASHER_GAS_LIMIT, outsize=32), 0)
+    sighash_1: bytes32 = extract32(raw_call(self.MSG_HASHER, vote_msg_1, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
     values_1 = RLPList(vote_msg_1, [int128, bytes32, int128, int128, bytes])
     validator_index_1: int128 = values_1[0]
     target_epoch_1: int128 = values_1[2]
@@ -555,7 +556,7 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     assert self.validate_signature(sighash_1, sig_1, validator_index_1)
 
     # Message 2: Extract parameters
-    sighash_2: bytes32 = extract32(raw_call(self.SIGHASHER, vote_msg_2, gas=self.SIGHASHER_GAS_LIMIT, outsize=32), 0)
+    sighash_2: bytes32 = extract32(raw_call(self.MSG_HASHER, vote_msg_2, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
     values_2 = RLPList(vote_msg_2, [int128, bytes32, int128, int128, bytes])
     validator_index_2: int128 = values_2[0]
     target_epoch_2: int128 = values_2[2]
