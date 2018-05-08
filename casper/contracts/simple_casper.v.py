@@ -120,7 +120,7 @@ VALIDATION_GAS_LIMIT: int128
 @public
 def __init__(
         epoch_length: int128, withdrawal_delay: int128, dynasty_logout_delay: int128,
-        MSG_HASHER: address, purity_checker: address,
+        msg_hasher: address, purity_checker: address,
         base_interest_factor: decimal, base_penalty_factor: decimal,
         min_deposit_size: wei_value):
 
@@ -136,7 +136,7 @@ def __init__(
     self.START_EPOCH = floor(block.number / self.EPOCH_LENGTH)
 
     # helper contracts
-    self.MSG_HASHER = MSG_HASHER
+    self.MSG_HASHER = msg_hasher
     self.PURITY_CHECKER = purity_checker
 
     # Start validator index counter at 1 because validator_indexes[] requires non-zero values
