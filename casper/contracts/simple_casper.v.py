@@ -367,8 +367,8 @@ def initialize_epoch(epoch: int128):
     assert epoch <= computed_current_epoch and epoch == self.current_epoch + 1
 
     # must track the deposits related to the checkpoint _before_ updating current_epoch
-    self.checkpoints[epoch].cur_dyn_deposits = self.total_curdyn_deposits_scaled()
-    self.checkpoints[epoch].prev_dyn_deposits = self.total_prevdyn_deposits_scaled()
+    self.checkpoints[epoch].cur_dyn_deposits = self.total_curdyn_deposits_in_wei()
+    self.checkpoints[epoch].prev_dyn_deposits = self.total_prevdyn_deposits_in_wei()
 
     self.current_epoch = epoch
 

@@ -93,7 +93,7 @@ def test_highest_justified_and_epoch(casper, funded_privkey, deposit_amount,
     validator_index = induct_validator(funded_privkey, deposit_amount)
     higher_deposit = int(deposit_amount * 1.1)
 
-    assert casper.total_curdyn_deposits_scaled() == deposit_amount
+    assert casper.total_curdyn_deposits_in_wei() == deposit_amount
     assert casper.current_epoch() == 3
 
     assert casper.highest_justified_epoch(deposit_amount) == 0

@@ -54,8 +54,8 @@ def test_checkpoint_deposits(casper_chain, casper, funded_privkeys, deposit_amou
 
     # checkpoints are for the last block in the previous epoch
     # so checkpoint dynasty totals should lag behind
-    assert casper.total_curdyn_deposits_scaled() == deposit_amount
-    assert casper.total_prevdyn_deposits_scaled() == 0
+    assert casper.total_curdyn_deposits_in_wei() == deposit_amount
+    assert casper.total_prevdyn_deposits_in_wei() == 0
     assert casper.checkpoints__cur_dyn_deposits(current_epoch) == 0
     assert casper.checkpoints__prev_dyn_deposits(current_epoch) == 0
 
@@ -63,8 +63,8 @@ def test_checkpoint_deposits(casper_chain, casper, funded_privkeys, deposit_amou
     new_epoch()
     current_epoch = casper.current_epoch()
 
-    assert casper.total_curdyn_deposits_scaled() == deposit_amount
-    assert casper.total_prevdyn_deposits_scaled() == deposit_amount
+    assert casper.total_curdyn_deposits_in_wei() == deposit_amount
+    assert casper.total_prevdyn_deposits_in_wei() == deposit_amount
     assert casper.checkpoints__cur_dyn_deposits(current_epoch) == deposit_amount
     assert casper.checkpoints__prev_dyn_deposits(current_epoch) == 0
 
@@ -74,13 +74,13 @@ def test_checkpoint_deposits(casper_chain, casper, funded_privkeys, deposit_amou
     new_epoch()
     current_epoch = casper.current_epoch()
 
-    assert casper.total_curdyn_deposits_scaled() == deposit_amount
-    assert casper.total_prevdyn_deposits_scaled() == deposit_amount
+    assert casper.total_curdyn_deposits_in_wei() == deposit_amount
+    assert casper.total_prevdyn_deposits_in_wei() == deposit_amount
     assert casper.checkpoints__cur_dyn_deposits(current_epoch) == deposit_amount
     assert casper.checkpoints__prev_dyn_deposits(current_epoch) == deposit_amount
 
-    prev_curdyn_deposits = casper.total_curdyn_deposits_scaled()
-    prev_prevdyn_deposits = casper.total_prevdyn_deposits_scaled()
+    prev_curdyn_deposits = casper.total_curdyn_deposits_in_wei()
+    prev_prevdyn_deposits = casper.total_prevdyn_deposits_in_wei()
 
     casper.vote(mk_suggested_vote(initial_validator, funded_privkeys[0]))
     new_epoch()
@@ -92,8 +92,8 @@ def test_checkpoint_deposits(casper_chain, casper, funded_privkeys, deposit_amou
         and casper.checkpoints__prev_dyn_deposits(current_epoch) < prev_prevdyn_deposits * 1.01
 
     for _ in range(3):
-        prev_curdyn_deposits = casper.total_curdyn_deposits_scaled()
-        prev_prevdyn_deposits = casper.total_prevdyn_deposits_scaled()
+        prev_curdyn_deposits = casper.total_curdyn_deposits_in_wei()
+        prev_prevdyn_deposits = casper.total_prevdyn_deposits_in_wei()
 
         casper.vote(mk_suggested_vote(initial_validator, funded_privkeys[0]))
         casper.vote(mk_suggested_vote(second_validator, funded_privkeys[1]))
