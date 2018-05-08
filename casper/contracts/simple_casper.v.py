@@ -153,99 +153,6 @@ def __init__(
     self.SLASH_FRACTION_MULTIPLIER = 3
 
 
-# ***** Public Constants *****
-@public
-@constant
-def main_hash_voted_frac() -> decimal:
-    return min(self.checkpoints[self.current_epoch].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits,
-               self.checkpoints[self.current_epoch].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits)
-
-
-@public
-@constant
-def deposit_size(validator_index: int128) -> int128(wei):
-    return floor(self.validators[validator_index].deposit * self.deposit_scale_factor[self.current_epoch])
-
-
-@public
-@constant
-def total_curdyn_deposits_in_wei() -> wei_value:
-    return floor(self.total_curdyn_deposits * self.deposit_scale_factor[self.current_epoch])
-
-
-@public
-@constant
-def total_prevdyn_deposits_in_wei() -> wei_value:
-    return floor(self.total_prevdyn_deposits * self.deposit_scale_factor[self.current_epoch])
-
-
-#
-# Helper functions that clients can call to know what to vote
-#
-
-@public
-@constant
-def recommended_source_epoch() -> int128:
-    return self.expected_source_epoch
-
-
-@public
-@constant
-def recommended_target_hash() -> bytes32:
-    return blockhash(self.current_epoch*self.EPOCH_LENGTH - 1)
-
-
-#
-# Helper methods for client fork choice
-# NOTE: both methods use a non-conventional loop structure
-#       with an incredibly high range and a return/break to exit.
-#       This is to bypass vyper's prevention of unbounded loops.
-#       This has been assessed as a reasonable tradeoff because these
-#       methods are 'constant' and are only to be called locally rather
-#       than as a part of an actual block tx.
-#
-
-@public
-@constant
-def highest_justified_epoch(min_total_deposits: wei_value) -> int128:
-    epoch: int128
-    for i in range(1000000000000000000000000000000):
-        epoch = self.current_epoch - i
-        is_justified: bool = self.checkpoints[epoch].is_justified
-        enough_cur_dyn_deposits: bool = self.checkpoints[epoch].cur_dyn_deposits >= min_total_deposits
-        enough_prev_dyn_deposits: bool = self.checkpoints[epoch].prev_dyn_deposits >= min_total_deposits
-
-        if is_justified and (enough_cur_dyn_deposits and enough_prev_dyn_deposits):
-            return epoch
-
-        if epoch == self.START_EPOCH:
-            break
-
-    # no justified epochs found, use 0 as default
-    # to 0 out the affect of casper on fork choice
-    return 0
-
-@public
-@constant
-def highest_finalized_epoch(min_total_deposits: wei_value) -> int128:
-    epoch: int128
-    for i in range(1000000000000000000000000000000):
-        epoch = self.current_epoch - i
-        is_finalized: bool = self.checkpoints[epoch].is_finalized
-        enough_cur_dyn_deposits: bool = self.checkpoints[epoch].cur_dyn_deposits >= min_total_deposits
-        enough_prev_dyn_deposits: bool = self.checkpoints[epoch].prev_dyn_deposits >= min_total_deposits
-
-        if is_finalized and (enough_cur_dyn_deposits and enough_prev_dyn_deposits):
-            return epoch
-
-        if epoch == self.START_EPOCH:
-            break
-
-    # no finalized epochs found, use -1 as default
-    # to signal not to locally finalize anything
-    return -1
-
-
 # ****** Private Constants *****
 
 # Returns number of epochs since finalization.
@@ -346,7 +253,7 @@ def delete_validator(validator_index: int128):
         deposit: 0,
         start_dynasty: 0,
         end_dynasty: 0,
-        is_slashed: False,
+        is_slashed: false,
         total_deposits_at_logout: 0,
         addr: None,
         withdrawal_addr: None
@@ -359,6 +266,137 @@ def delete_validator(validator_index: int128):
 def validate_signature(msg_hash: bytes32, sig: bytes <= 1024, validator_index: int128) -> bool:
     return extract32(raw_call(self.validators[validator_index].addr, concat(msg_hash, sig), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
 
+
+# ***** Public Constants *****
+
+@public
+@constant
+def main_hash_voted_frac() -> decimal:
+    return min(self.checkpoints[self.current_epoch].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits,
+               self.checkpoints[self.current_epoch].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits)
+
+
+@public
+@constant
+def deposit_size(validator_index: int128) -> int128(wei):
+    return floor(self.validators[validator_index].deposit * self.deposit_scale_factor[self.current_epoch])
+
+
+@public
+@constant
+def total_curdyn_deposits_in_wei() -> wei_value:
+    return floor(self.total_curdyn_deposits * self.deposit_scale_factor[self.current_epoch])
+
+
+@public
+@constant
+def total_prevdyn_deposits_in_wei() -> wei_value:
+    return floor(self.total_prevdyn_deposits * self.deposit_scale_factor[self.current_epoch])
+
+
+@public
+# cannot be labeled @constant because of external call
+# even though the call is to a pure contract call
+def slashable(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024) -> bool:
+    # Message 1: Extract parameters
+    msg_hash_1: bytes32 = extract32(raw_call(self.MSG_HASHER, vote_msg_1, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
+    values_1 = RLPList(vote_msg_1, [int128, bytes32, int128, int128, bytes])
+    validator_index_1: int128 = values_1[0]
+    target_epoch_1: int128 = values_1[2]
+    source_epoch_1: int128 = values_1[3]
+    sig_1: bytes <= 1024 = values_1[4]
+
+    # Message 2: Extract parameters
+    msg_hash_2: bytes32 = extract32(raw_call(self.MSG_HASHER, vote_msg_2, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
+    values_2 = RLPList(vote_msg_2, [int128, bytes32, int128, int128, bytes])
+    validator_index_2: int128 = values_2[0]
+    target_epoch_2: int128 = values_2[2]
+    source_epoch_2: int128 = values_2[3]
+    sig_2: bytes <= 1024 = values_2[4]
+
+    if not self.validate_signature(msg_hash_1, sig_1, validator_index_1):
+        return False
+    if not self.validate_signature(msg_hash_2, sig_2, validator_index_2):
+        return False
+    if validator_index_1 != validator_index_2:
+        return False
+    if msg_hash_1 == msg_hash_2:
+        return False
+    if self.validators[validator_index_1].is_slashed:
+        return False
+
+    double_vote: bool = target_epoch_1 == target_epoch_2
+    surround_vote: bool = (target_epoch_1 > target_epoch_2 and source_epoch_1 < source_epoch_2) or \
+                          (target_epoch_2 > target_epoch_1 and source_epoch_2 < source_epoch_1)
+
+    return double_vote or surround_vote
+
+
+#
+# Helper functions that clients can call to know what to vote
+#
+
+@public
+@constant
+def recommended_source_epoch() -> int128:
+    return self.expected_source_epoch
+
+
+@public
+@constant
+def recommended_target_hash() -> bytes32:
+    return blockhash(self.current_epoch*self.EPOCH_LENGTH - 1)
+
+
+#
+# Helper methods for client fork choice
+# NOTE: both methods use a non-conventional loop structure
+#       with an incredibly high range and a return/break to exit.
+#       This is to bypass vyper's prevention of unbounded loops.
+#       This has been assessed as a reasonable tradeoff because these
+#       methods are 'constant' and are only to be called locally rather
+#       than as a part of an actual block tx.
+#
+
+@public
+@constant
+def highest_justified_epoch(min_total_deposits: wei_value) -> int128:
+    epoch: int128
+    for i in range(1000000000000000000000000000000):
+        epoch = self.current_epoch - i
+        is_justified: bool = self.checkpoints[epoch].is_justified
+        enough_cur_dyn_deposits: bool = self.checkpoints[epoch].cur_dyn_deposits >= min_total_deposits
+        enough_prev_dyn_deposits: bool = self.checkpoints[epoch].prev_dyn_deposits >= min_total_deposits
+
+        if is_justified and (enough_cur_dyn_deposits and enough_prev_dyn_deposits):
+            return epoch
+
+        if epoch == self.START_EPOCH:
+            break
+
+    # no justified epochs found, use 0 as default
+    # to 0 out the affect of casper on fork choice
+    return 0
+
+@public
+@constant
+def highest_finalized_epoch(min_total_deposits: wei_value) -> int128:
+    epoch: int128
+    for i in range(1000000000000000000000000000000):
+        epoch = self.current_epoch - i
+        is_finalized: bool = self.checkpoints[epoch].is_finalized
+        enough_cur_dyn_deposits: bool = self.checkpoints[epoch].cur_dyn_deposits >= min_total_deposits
+        enough_prev_dyn_deposits: bool = self.checkpoints[epoch].prev_dyn_deposits >= min_total_deposits
+
+        if is_finalized and (enough_cur_dyn_deposits and enough_prev_dyn_deposits):
+            return epoch
+
+        if epoch == self.START_EPOCH:
+            break
+
+    # no finalized epochs found, use -1 as default
+    # to signal not to locally finalize anything
+    return -1
 
 # ***** Public *****
 
@@ -561,58 +599,32 @@ def vote(vote_msg: bytes <= 1024):
 # Cannot sign two votes for same target_epoch; no surround vote.
 @public
 def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
-    # Message 1: Extract parameters
-    msg_hash_1: bytes32 = extract32(raw_call(self.MSG_HASHER, vote_msg_1, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
-    values_1 = RLPList(vote_msg_1, [int128, bytes32, int128, int128, bytes])
-    validator_index_1: int128 = values_1[0]
-    target_epoch_1: int128 = values_1[2]
-    source_epoch_1: int128 = values_1[3]
-    sig_1: bytes <= 1024 = values_1[4]
+    assert self.slashable(vote_msg_1, vote_msg_2)
 
-    assert self.validate_signature(msg_hash_1, sig_1, validator_index_1)
-
-    # Message 2: Extract parameters
-    msg_hash_2: bytes32 = extract32(raw_call(self.MSG_HASHER, vote_msg_2, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
-    values_2 = RLPList(vote_msg_2, [int128, bytes32, int128, int128, bytes])
-    validator_index_2: int128 = values_2[0]
-    target_epoch_2: int128 = values_2[2]
-    source_epoch_2: int128 = values_2[3]
-    sig_2: bytes <= 1024 = values_2[4]
-
-    assert self.validate_signature(msg_hash_2, sig_2, validator_index_2)
-
-    assert validator_index_1 == validator_index_2
-    assert msg_hash_1 != msg_hash_2
-    assert not self.validators[validator_index_1].is_slashed
-
-    # Detect slashing
-    slashing_condition_detected: bool = False
-    if target_epoch_1 == target_epoch_2:
-        # NO DBL VOTE
-        slashing_condition_detected = True
-    elif (target_epoch_1 > target_epoch_2 and source_epoch_1 < source_epoch_2) or \
-            (target_epoch_2 > target_epoch_1 and source_epoch_2 < source_epoch_1):
-        # NO SURROUND VOTE
-        slashing_condition_detected = True
-    assert slashing_condition_detected
+    # Extract validator_index
+    # vote messages were shown to be the same in `slashable`
+    # so just extract validator_index from vote_msg_1
+    msg_hash: bytes32 = extract32(raw_call(self.MSG_HASHER, vote_msg_1, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
+    values = RLPList(vote_msg_1, [int128, bytes32, int128, int128, bytes])
+    validator_index: int128 = values[0]
 
     # Slash the offending validator, and give a 4% "finder's fee"
-    validator_deposit: int128(wei) = self.deposit_size(validator_index_1)
+    validator_deposit: int128(wei) = self.deposit_size(validator_index)
     slashing_bounty: int128(wei) = floor(validator_deposit / 25)
     deposit_destroyed: int128(wei) = validator_deposit - slashing_bounty
     self.total_slashed[self.current_epoch] += validator_deposit
-    self.validators[validator_index_1].is_slashed = True
+    self.validators[validator_index].is_slashed = True
 
     # Log slashing
-    log.Slash(msg.sender, self.validators[validator_index_1].withdrawal_addr, validator_index_1, slashing_bounty, deposit_destroyed)
+    log.Slash(msg.sender, self.validators[validator_index].withdrawal_addr, validator_index, slashing_bounty, deposit_destroyed)
 
     # if validator not logged out yet, remove total from next dynasty
     # and forcibly logout next dynasty
-    end_dynasty: int128 = self.validators[validator_index_1].end_dynasty
+    end_dynasty: int128 = self.validators[validator_index].end_dynasty
     if self.dynasty < end_dynasty:
-        deposit: decimal(wei/m) = self.validators[validator_index_1].deposit
+        deposit: decimal(wei/m) = self.validators[validator_index].deposit
         self.dynasty_wei_delta[self.dynasty + 1] -= deposit
-        self.validators[validator_index_1].end_dynasty = self.dynasty + 1
+        self.validators[validator_index].end_dynasty = self.dynasty + 1
 
         # if validator was already staged for logout at end_dynasty,
         # ensure that we don't doubly remove from total
@@ -620,6 +632,6 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
             self.dynasty_wei_delta[end_dynasty] += deposit
         # if no previously logged out, remember the total deposits at logout
         else:
-            self.validators[validator_index_1].total_deposits_at_logout = self.total_curdyn_deposits_in_wei()
+            self.validators[validator_index].total_deposits_at_logout = self.total_curdyn_deposits_in_wei()
 
     send(msg.sender, slashing_bounty)
