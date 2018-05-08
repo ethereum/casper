@@ -38,7 +38,7 @@ def test_justification_and_finalization(casper, funded_privkeys, deposit_amount,
         for i, validator_index in enumerate(validator_indexes):
             casper.vote(mk_suggested_vote(validator_index, funded_privkeys[i]))
         assert casper.main_hash_justified()
-        assert casper.votes__is_finalized(casper.recommended_source_epoch())
+        assert casper.checkpoints__is_finalized(casper.recommended_source_epoch())
         new_epoch()
         assert casper.dynasty() == prev_dynasty + 1
         prev_dynasty += 1
@@ -58,7 +58,7 @@ def test_voters_make_more(casper, funded_privkeys, deposit_amount, new_epoch,
         for i, validator_index in enumerate(voting_indexes):
             casper.vote(mk_suggested_vote(validator_index, voting_privkeys[i]))
         assert casper.main_hash_justified()
-        assert casper.votes__is_finalized(casper.recommended_source_epoch())
+        assert casper.checkpoints__is_finalized(casper.recommended_source_epoch())
         new_epoch()
         assert casper.dynasty() == prev_dynasty + 1
         prev_dynasty += 1
@@ -95,7 +95,7 @@ def test_partial_online(casper, funded_privkeys, deposit_amount, new_epoch,
 
         if ovp >= 0.75:
             assert casper.main_hash_justified()
-            assert casper.votes__is_finalized(casper.recommended_source_epoch())
+            assert casper.checkpoints__is_finalized(casper.recommended_source_epoch())
             break
 
         new_epoch()
