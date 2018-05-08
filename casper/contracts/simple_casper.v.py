@@ -195,7 +195,13 @@ def recommended_target_hash() -> bytes32:
 
 
 #
-# Helper functions for client fork choice
+# Helper methods for client fork choice
+# NOTE: both methods use a non-conventional loop structure
+#       with an incredibly high range and a return/break to exit.
+#       This is to bypass vyper's prevention of unbounded loops.
+#       This has been assessed as a reasonable tradeoff because these
+#       methods are 'constant' and are only to be called locally rather
+#       than as a part of an actual block tx.
 #
 
 @public
