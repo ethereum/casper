@@ -32,7 +32,7 @@ next_validator_index: public(int128)
 # Mapping of validator's withdrawal address to their index number
 validator_indexes: public(int128[address])
 
-# Current dynasty, it measures the number of finalized checkpoints 
+# Current dynasty, it measures the number of finalized checkpoints
 # in the chain from root to the parent of current block
 dynasty: public(int128)
 
@@ -51,10 +51,12 @@ dynasty_start_epoch: public(int128[int128])
 # Mapping of epoch to what dynasty it is
 dynasty_in_epoch: public(int128[int128])
 
-votes: public({
-    # How many votes are there for this source epoch from the current dynasty
+checkpoints: public({
+    # track size of scaled deposits for use in client fork choice
+    cur_dyn_deposits: wei_value,
+    prev_dyn_deposits: wei_value,
+    # track total votes for each dynasty
     cur_dyn_votes: decimal(wei / m)[int128],
-    # From the previous dynasty
     prev_dyn_votes: decimal(wei / m)[int128],
     # Bitmap of which validator IDs have already voted
     vote_bitmap: uint256[int128],
@@ -97,9 +99,6 @@ WITHDRAWAL_DELAY: public(int128)
 # Logout delay in dynasties
 DYNASTY_LOGOUT_DELAY: public(int128)
 
-# [backdoor] Can withdraw destroyed deposits
-OWNER: address
-
 # Sighash calculator library address
 SIGHASHER: address
 
@@ -109,6 +108,7 @@ PURITY_CHECKER: address
 BASE_INTEREST_FACTOR: public(decimal)
 BASE_PENALTY_FACTOR: public(decimal)
 MIN_DEPOSIT_SIZE: public(wei_value)
+START_EPOCH: public(int128)
 DEFAULT_END_DYNASTY: int128
 SIGHASHER_GAS_LIMIT: int128
 VALIDATION_GAS_LIMIT: int128
@@ -117,7 +117,7 @@ VALIDATION_GAS_LIMIT: int128
 @public
 def __init__(
         epoch_length: int128, withdrawal_delay: int128, dynasty_logout_delay: int128,
-        owner: address, sighasher: address, purity_checker: address,
+        sighasher: address, purity_checker: address,
         base_interest_factor: decimal, base_penalty_factor: decimal,
         min_deposit_size: wei_value):
 
@@ -126,10 +126,11 @@ def __init__(
     self.EPOCH_LENGTH = epoch_length
     self.WITHDRAWAL_DELAY = withdrawal_delay
     self.DYNASTY_LOGOUT_DELAY = dynasty_logout_delay
-    self.OWNER = owner
     self.BASE_INTEREST_FACTOR = base_interest_factor
     self.BASE_PENALTY_FACTOR = base_penalty_factor
     self.MIN_DEPOSIT_SIZE = min_deposit_size
+
+    self.START_EPOCH = floor(block.number / self.EPOCH_LENGTH)
 
     # helper contracts
     self.SIGHASHER = sighasher
@@ -139,7 +140,7 @@ def __init__(
     self.next_validator_index = 1
 
     self.dynasty = 0
-    self.current_epoch = floor(block.number / self.EPOCH_LENGTH)
+    self.current_epoch = self.START_EPOCH
     # TODO: test deposit_scale_factor when deploying when current_epoch > 0
     self.deposit_scale_factor[self.current_epoch] = 10000000000.0
     self.total_curdyn_deposits = 0
@@ -149,12 +150,12 @@ def __init__(
     self.VALIDATION_GAS_LIMIT = 200000
 
 
-# ***** Constants *****
+# ***** Public Constants *****
 @public
 @constant
 def main_hash_voted_frac() -> decimal:
-    return min(self.votes[self.current_epoch].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits,
-               self.votes[self.current_epoch].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits)
+    return min(self.checkpoints[self.current_epoch].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits,
+               self.checkpoints[self.current_epoch].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits)
 
 
 @public
@@ -165,17 +166,20 @@ def deposit_size(validator_index: int128) -> int128(wei):
 
 @public
 @constant
-def total_curdyn_deposits_scaled() -> wei_value:
+def total_curdyn_deposits_in_wei() -> wei_value:
     return floor(self.total_curdyn_deposits * self.deposit_scale_factor[self.current_epoch])
 
 
 @public
 @constant
-def total_prevdyn_deposits_scaled() -> wei_value:
+def total_prevdyn_deposits_in_wei() -> wei_value:
     return floor(self.total_prevdyn_deposits * self.deposit_scale_factor[self.current_epoch])
 
 
+#
 # Helper functions that clients can call to know what to vote
+#
+
 @public
 @constant
 def recommended_source_epoch() -> int128:
@@ -186,6 +190,79 @@ def recommended_source_epoch() -> int128:
 @constant
 def recommended_target_hash() -> bytes32:
     return blockhash(self.current_epoch*self.EPOCH_LENGTH - 1)
+
+
+#
+# Helper methods for client fork choice
+# NOTE: both methods use a non-conventional loop structure
+#       with an incredibly high range and a return/break to exit.
+#       This is to bypass vyper's prevention of unbounded loops.
+#       This has been assessed as a reasonable tradeoff because these
+#       methods are 'constant' and are only to be called locally rather
+#       than as a part of an actual block tx.
+#
+
+@public
+@constant
+def highest_justified_epoch(min_total_deposits: wei_value) -> int128:
+    epoch: int128
+    for i in range(1000000000000000000000000000000):
+        epoch = self.current_epoch - i
+        is_justified: bool = self.checkpoints[epoch].is_justified
+        enough_cur_dyn_deposits: bool = self.checkpoints[epoch].cur_dyn_deposits >= min_total_deposits
+        enough_prev_dyn_deposits: bool = self.checkpoints[epoch].prev_dyn_deposits >= min_total_deposits
+
+        if is_justified and (enough_cur_dyn_deposits and enough_prev_dyn_deposits):
+            return epoch
+
+        if epoch == self.START_EPOCH:
+            break
+
+    # no justified epochs found, use 0 as default
+    # to 0 out the affect of casper on fork choice
+    return 0
+
+@public
+@constant
+def highest_finalized_epoch(min_total_deposits: wei_value) -> int128:
+    epoch: int128
+    for i in range(1000000000000000000000000000000):
+        epoch = self.current_epoch - i
+        is_finalized: bool = self.checkpoints[epoch].is_finalized
+        enough_cur_dyn_deposits: bool = self.checkpoints[epoch].cur_dyn_deposits >= min_total_deposits
+        enough_prev_dyn_deposits: bool = self.checkpoints[epoch].prev_dyn_deposits >= min_total_deposits
+
+        if is_finalized and (enough_cur_dyn_deposits and enough_prev_dyn_deposits):
+            return epoch
+
+        if epoch == self.START_EPOCH:
+            break
+
+    # no finalized epochs found, use -1 as default
+    # to signal not to locally finalize anything
+    return -1
+
+
+# ****** Private Constants *****
+
+# Returns number of epochs since finalization.
+@private
+@constant
+def esf() -> int128:
+    return self.current_epoch - self.last_finalized_epoch
+
+
+# Compute square root factor
+@private
+@constant
+def sqrt_of_total_deposits() -> decimal:
+    epoch: int128 = self.current_epoch
+    ether_deposited_as_number: int128 = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) *
+                                      self.deposit_scale_factor[epoch - 1] / as_wei_value(1, "ether")) + 1
+    sqrt: decimal = ether_deposited_as_number / 2.0
+    for i in range(20):
+        sqrt = (sqrt + (ether_deposited_as_number / sqrt)) / 2
+    return sqrt
 
 
 @private
@@ -202,7 +279,7 @@ def deposit_exists() -> bool:
 def increment_dynasty():
     epoch: int128 = self.current_epoch
     # Increment the dynasty if finalized
-    if self.votes[epoch - 2].is_finalized:
+    if self.checkpoints[epoch - 2].is_finalized:
         self.dynasty += 1
         self.total_prevdyn_deposits = self.total_curdyn_deposits
         self.total_curdyn_deposits += self.dynasty_wei_delta[self.dynasty]
@@ -213,10 +290,16 @@ def increment_dynasty():
     self.main_hash_justified = False
 
 
-# Returns number of epochs since finalization.
 @private
-def esf() -> int128:
-    return self.current_epoch - self.last_finalized_epoch
+def insta_finalize():
+    epoch: int128 = self.current_epoch
+    self.main_hash_justified = True
+    self.checkpoints[epoch - 1].is_justified = True
+    self.checkpoints[epoch - 1].is_finalized = True
+    self.last_justified_epoch = epoch - 1
+    self.last_finalized_epoch = epoch - 1
+    # Log previous Epoch status update
+    log.Epoch(epoch - 1, self.checkpoint_hashes[epoch - 1], True, True)
 
 
 # Returns the current collective reward factor, which rewards the dynasty for high-voting levels.
@@ -227,36 +310,48 @@ def collective_reward() -> decimal:
     if not self.deposit_exists() or not live:
         return 0.0
     # Fraction that voted
-    cur_vote_frac: decimal = self.votes[epoch - 1].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits
-    prev_vote_frac: decimal = self.votes[epoch - 1].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits
+    cur_vote_frac: decimal = self.checkpoints[epoch - 1].cur_dyn_votes[self.expected_source_epoch] / self.total_curdyn_deposits
+    prev_vote_frac: decimal = self.checkpoints[epoch - 1].prev_dyn_votes[self.expected_source_epoch] / self.total_prevdyn_deposits
     vote_frac: decimal = min(cur_vote_frac, prev_vote_frac)
     return vote_frac * self.reward_factor / 2
 
 
+# Reward the given validator & miner, and reflect this in total deposit figured
 @private
-def insta_finalize():
-    epoch: int128 = self.current_epoch
-    self.main_hash_justified = True
-    self.votes[epoch - 1].is_justified = True
-    self.votes[epoch - 1].is_finalized = True
-    self.last_justified_epoch = epoch - 1
-    self.last_finalized_epoch = epoch - 1
-    # Log previous Epoch status update
-    log.Epoch(epoch - 1, self.checkpoint_hashes[epoch - 1], True, True)
+def proc_reward(validator_index: int128, reward: int128(wei/m)):
+    # Reward validator
+    self.validators[validator_index].deposit += reward
+    start_dynasty: int128 = self.validators[validator_index].start_dynasty
+    end_dynasty: int128 = self.validators[validator_index].end_dynasty
+    current_dynasty: int128 = self.dynasty
+    past_dynasty: int128 = current_dynasty - 1
+    if ((start_dynasty <= current_dynasty) and (current_dynasty < end_dynasty)):
+        self.total_curdyn_deposits += reward
+    if ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty)):
+        self.total_prevdyn_deposits += reward
+    if end_dynasty < self.DEFAULT_END_DYNASTY:  # validator has submit `logout`
+        self.dynasty_wei_delta[end_dynasty] -= reward
+    # Reward miner
+    send(block.coinbase, floor(reward * self.deposit_scale_factor[self.current_epoch] / 8))
 
 
-# Compute square root factor
+# Removes a validator from the validator pool
 @private
-def sqrt_of_total_deposits() -> decimal:
-    epoch: int128 = self.current_epoch
-    ether_deposited_as_number: int128 = floor(max(self.total_prevdyn_deposits, self.total_curdyn_deposits) *
-                                      self.deposit_scale_factor[epoch - 1] / as_wei_value(1, "ether")) + 1
-    sqrt: decimal = ether_deposited_as_number / 2.0
-    for i in range(20):
-        sqrt = (sqrt + (ether_deposited_as_number / sqrt)) / 2
-    return sqrt
+def delete_validator(validator_index: int128):
+    self.validator_indexes[self.validators[validator_index].withdrawal_addr] = 0
+    self.validators[validator_index] = {
+        deposit: 0,
+        start_dynasty: 0,
+        end_dynasty: 0,
+        is_slashed: False,
+        total_deposits_at_logout: 0,
+        addr: None,
+        withdrawal_addr: None
+    }
 
 
+# cannot be labeled @constant because of external call
+# even though the call is to a pure contract call
 @private
 def validate_signature(sighash: bytes32, sig: bytes <= 1024, validator_index: int128) -> bool:
     return extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
@@ -271,7 +366,10 @@ def initialize_epoch(epoch: int128):
     computed_current_epoch: int128 = floor(block.number / self.EPOCH_LENGTH)
     assert epoch <= computed_current_epoch and epoch == self.current_epoch + 1
 
-    # Setup
+    # must track the deposits related to the checkpoint _before_ updating current_epoch
+    self.checkpoints[epoch].cur_dyn_deposits = self.total_curdyn_deposits_in_wei()
+    self.checkpoints[epoch].prev_dyn_deposits = self.total_prevdyn_deposits_in_wei()
+
     self.current_epoch = epoch
 
     self.last_voter_rescale = 1 + self.collective_reward()
@@ -290,11 +388,12 @@ def initialize_epoch(epoch: int128):
         self.insta_finalize()
         self.reward_factor = 0
 
+    # Store checkpoint hash for easy access
+    self.checkpoint_hashes[epoch] = self.recommended_target_hash()
+
     # Increment the dynasty if finalized
     self.increment_dynasty()
 
-    # Store checkpoint hash for easy access
-    self.checkpoint_hashes[epoch] = self.recommended_target_hash()
     # Log new epoch creation
     log.Epoch(epoch, self.checkpoint_hashes[epoch], False, False)
 
@@ -344,25 +443,10 @@ def logout(logout_msg: bytes <= 1024):
     assert self.validators[validator_index].end_dynasty > end_dynasty
 
     self.validators[validator_index].end_dynasty = end_dynasty
-    self.validators[validator_index].total_deposits_at_logout = self.total_curdyn_deposits_scaled()
+    self.validators[validator_index].total_deposits_at_logout = self.total_curdyn_deposits_in_wei()
     self.dynasty_wei_delta[end_dynasty] -= self.validators[validator_index].deposit
 
     log.Logout(self.validators[validator_index].withdrawal_addr, validator_index, self.validators[validator_index].end_dynasty)
-
-
-# Removes a validator from the validator pool
-@private
-def delete_validator(validator_index: int128):
-    self.validator_indexes[self.validators[validator_index].withdrawal_addr] = 0
-    self.validators[validator_index] = {
-        deposit: 0,
-        start_dynasty: 0,
-        end_dynasty: 0,
-        is_slashed: False,
-        total_deposits_at_logout: 0,
-        addr: None,
-        withdrawal_addr: None
-    }
 
 
 # Withdraw deposited ether
@@ -391,25 +475,6 @@ def withdraw(validator_index: int128):
     self.delete_validator(validator_index)
 
 
-# Reward the given validator & miner, and reflect this in total deposit figured
-@private
-def proc_reward(validator_index: int128, reward: int128(wei/m)):
-    # Reward validator
-    self.validators[validator_index].deposit += reward
-    start_dynasty: int128 = self.validators[validator_index].start_dynasty
-    end_dynasty: int128 = self.validators[validator_index].end_dynasty
-    current_dynasty: int128 = self.dynasty
-    past_dynasty: int128 = current_dynasty - 1
-    if ((start_dynasty <= current_dynasty) and (current_dynasty < end_dynasty)):
-        self.total_curdyn_deposits += reward
-    if ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty)):
-        self.total_prevdyn_deposits += reward
-    if end_dynasty < self.DEFAULT_END_DYNASTY:  # validator has submit `logout`
-        self.dynasty_wei_delta[end_dynasty] -= reward
-    # Reward miner
-    send(block.coinbase, floor(reward * self.deposit_scale_factor[self.current_epoch] / 8))
-
-
 # Process a vote message
 @public
 def vote(vote_msg: bytes <= 1024):
@@ -426,13 +491,13 @@ def vote(vote_msg: bytes <= 1024):
 
     assert self.validate_signature(sighash, sig, validator_index)
     # Check that this vote has not yet been made
-    assert not bitwise_and(self.votes[target_epoch].vote_bitmap[floor(validator_index / 256)],
+    assert not bitwise_and(self.checkpoints[target_epoch].vote_bitmap[floor(validator_index / 256)],
                            shift(convert(1, 'uint256'), validator_index % 256))
     # Check that the vote's target epoch and hash are correct
     assert target_hash == self.recommended_target_hash()
     assert target_epoch == self.current_epoch
     # Check that the vote source points to a justified epoch
-    assert self.votes[source_epoch].is_justified
+    assert self.checkpoints[source_epoch].is_justified
 
     # ensure validator can vote for the target_epoch
     start_dynasty: int128 = self.validators[validator_index].start_dynasty
@@ -444,19 +509,19 @@ def vote(vote_msg: bytes <= 1024):
     assert in_current_dynasty or in_prev_dynasty
 
     # Record that the validator voted for this target epoch so they can't again
-    self.votes[target_epoch].vote_bitmap[floor(validator_index / 256)] = \
-        bitwise_or(self.votes[target_epoch].vote_bitmap[floor(validator_index / 256)],
+    self.checkpoints[target_epoch].vote_bitmap[floor(validator_index / 256)] = \
+        bitwise_or(self.checkpoints[target_epoch].vote_bitmap[floor(validator_index / 256)],
                    shift(convert(1, 'uint256'), validator_index % 256))
 
     # Record that this vote took place
-    current_dynasty_votes: decimal(wei/m) = self.votes[target_epoch].cur_dyn_votes[source_epoch]
-    previous_dynasty_votes: decimal(wei/m) = self.votes[target_epoch].prev_dyn_votes[source_epoch]
+    current_dynasty_votes: decimal(wei/m) = self.checkpoints[target_epoch].cur_dyn_votes[source_epoch]
+    previous_dynasty_votes: decimal(wei/m) = self.checkpoints[target_epoch].prev_dyn_votes[source_epoch]
     if in_current_dynasty:
         current_dynasty_votes += self.validators[validator_index].deposit
-        self.votes[target_epoch].cur_dyn_votes[source_epoch] = current_dynasty_votes
+        self.checkpoints[target_epoch].cur_dyn_votes[source_epoch] = current_dynasty_votes
     if in_prev_dynasty:
         previous_dynasty_votes += self.validators[validator_index].deposit
-        self.votes[target_epoch].prev_dyn_votes[source_epoch] = previous_dynasty_votes
+        self.checkpoints[target_epoch].prev_dyn_votes[source_epoch] = previous_dynasty_votes
 
     # Process rewards.
     # Pay the reward if the vote was submitted in time and the vote is voting the correct data
@@ -468,8 +533,8 @@ def vote(vote_msg: bytes <= 1024):
     # then the hash value is justified
     if (current_dynasty_votes >= self.total_curdyn_deposits * 2 / 3 and
             previous_dynasty_votes >= self.total_prevdyn_deposits * 2 / 3) and \
-            not self.votes[target_epoch].is_justified:
-        self.votes[target_epoch].is_justified = True
+            not self.checkpoints[target_epoch].is_justified:
+        self.checkpoints[target_epoch].is_justified = True
         self.last_justified_epoch = target_epoch
         self.main_hash_justified = True
 
@@ -479,7 +544,7 @@ def vote(vote_msg: bytes <= 1024):
         # If two epochs are justified consecutively,
         # then the source_epoch finalized
         if target_epoch == source_epoch + 1:
-            self.votes[source_epoch].is_finalized = True
+            self.checkpoints[source_epoch].is_finalized = True
             self.last_finalized_epoch = source_epoch
             # Log source epoch status update
             log.Epoch(source_epoch, self.checkpoint_hashes[source_epoch], True, True)
@@ -550,19 +615,6 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
             self.dynasty_wei_delta[end_dynasty] += deposit
         # if no previously logged out, remember the total deposits at logout
         else:
-            self.validators[validator_index_1].total_deposits_at_logout = self.total_curdyn_deposits_scaled()
+            self.validators[validator_index_1].total_deposits_at_logout = self.total_curdyn_deposits_in_wei()
 
     send(msg.sender, slashing_bounty)
-
-
-# Temporary backdoor for testing purposes (to allow recovering destroyed deposits)
-@public
-def owner_withdraw():
-    send(self.OWNER, self.total_slashed[self.current_epoch])
-
-
-# Change backdoor address (set to zero to remove entirely)
-@public
-def change_owner(new_owner: address):
-    if self.OWNER == msg.sender:
-        self.OWNER = new_owner

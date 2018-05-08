@@ -70,17 +70,17 @@ def test_deposit_updates_dynasty_wei_delta(casper, funded_privkey, deposit_amoun
 
 def test_deposit_updates_total_deposits(casper, funded_privkey, deposit_amount,
                                         induct_validator, mk_suggested_vote, new_epoch):
-    assert casper.total_curdyn_deposits_scaled() == 0
-    assert casper.total_prevdyn_deposits_scaled() == 0
+    assert casper.total_curdyn_deposits_in_wei() == 0
+    assert casper.total_prevdyn_deposits_in_wei() == 0
 
     # note, full induction
     validator_index = induct_validator(funded_privkey, deposit_amount)
 
-    assert casper.total_curdyn_deposits_scaled() == deposit_amount
-    assert casper.total_prevdyn_deposits_scaled() == 0
+    assert casper.total_curdyn_deposits_in_wei() == deposit_amount
+    assert casper.total_prevdyn_deposits_in_wei() == 0
 
     casper.vote(mk_suggested_vote(validator_index, funded_privkey))
     new_epoch()
 
-    assert casper.total_curdyn_deposits_scaled() == deposit_amount
-    assert casper.total_prevdyn_deposits_scaled() == deposit_amount
+    assert casper.total_curdyn_deposits_in_wei() == deposit_amount
+    assert casper.total_prevdyn_deposits_in_wei() == deposit_amount
