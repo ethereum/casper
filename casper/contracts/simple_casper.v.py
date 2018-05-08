@@ -20,7 +20,7 @@ validators: public({
     end_dynasty: int128,
     # The address which the validator's signatures must verify to (to be later replaced with validation code)
     addr: address,
-    # The address to withdraw to
+    # The address in order to withdraw to
     withdrawal_addr: address
 }[int128])
 
@@ -37,7 +37,7 @@ validator_indexes: public(int128[address])
 # in the chain from root to the parent of current block
 dynasty: public(int128)
 
-# Map of the change to total deposits for specific dynasty
+# Mapping of the change to total deposits for specific dynasty
 dynasty_wei_delta: public(decimal(wei / m)[int128])
 
 # Total deposits in the current dynasty
@@ -67,7 +67,7 @@ checkpoints: public({
     is_finalized: bool
 }[int128])  # index: target epoch
 
-# Is the current expected hash justified
+# Is the current expected hash justified?
 main_hash_justified: public(bool)
 
 # Value used to calculate the per-epoch fee that validators should be charged
