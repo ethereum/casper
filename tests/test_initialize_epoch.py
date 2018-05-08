@@ -21,7 +21,7 @@ def test_checkpoint_hashes(casper_chain, casper, new_epoch):
         casper.initialize_epoch(next_epoch)
         current_epoch = casper.current_epoch()
         # This looks incorrect but `get_block_hash` actually indexes
-        # into a lost of prev_hashes. The 0th index is the hash of the previous block
+        # into a list of prev_hashes. The 0th index is the hash of the previous block
         expected_hash = casper_chain.head_state.get_block_hash(0)
 
         assert current_epoch == next_epoch
@@ -52,7 +52,7 @@ def test_checkpoint_deposits(casper_chain, casper, funded_privkeys, deposit_amou
     new_epoch()
     current_epoch = casper.current_epoch()
 
-    # checkpoints are for the lost block in the previous epoch
+    # checkpoints are for the last block in the previous epoch
     # so checkpoint dynasty totals should lag behind
     assert casper.total_curdyn_deposits_scaled() == deposit_amount
     assert casper.total_prevdyn_deposits_scaled() == 0
