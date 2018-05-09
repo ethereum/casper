@@ -63,13 +63,14 @@ def test_slash_no_surround(casper, funded_privkey, deposit_amount, new_epoch,
 
 def test_slash_after_logout_delay(casper, funded_privkey, deposit_amount, get_last_log,
                                   induct_validator, mk_suggested_vote, mk_slash_votes,
-                                  new_epoch, fake_hash, logout_validator):
+                                  new_epoch, fake_hash,
+                                  logout_validator_via_signed_msg):
     validator_index = induct_validator(funded_privkey, deposit_amount)
     scaled_deposit_size = casper.validators__deposit(validator_index)
 
     assert casper.total_curdyn_deposits_in_wei() == deposit_amount
 
-    logout_validator(validator_index, funded_privkey)
+    logout_validator_via_signed_msg(validator_index, funded_privkey)
     end_dynasty = casper.validators__end_dynasty(validator_index)
 
     assert casper.dynasty_wei_delta(end_dynasty) == -scaled_deposit_size
@@ -100,13 +101,14 @@ def test_slash_after_logout_delay(casper, funded_privkey, deposit_amount, get_la
 def test_slash_after_logout_before_logout_delay(casper, funded_privkey, deposit_amount,
                                                 get_last_log, induct_validator,
                                                 mk_suggested_vote, mk_slash_votes,
-                                                new_epoch, fake_hash, logout_validator):
+                                                new_epoch, fake_hash,
+                                                logout_validator_via_signed_msg):
     validator_index = induct_validator(funded_privkey, deposit_amount)
     scaled_deposit_size = casper.validators__deposit(validator_index)
 
     assert casper.total_curdyn_deposits_in_wei() == deposit_amount
 
-    logout_validator(validator_index, funded_privkey)
+    logout_validator_via_signed_msg(validator_index, funded_privkey)
     end_dynasty = casper.validators__end_dynasty(validator_index)
 
     assert casper.dynasty_wei_delta(end_dynasty) == -scaled_deposit_size
