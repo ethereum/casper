@@ -436,7 +436,6 @@ def logout(logout_msg: bytes <= 1024):
     assert from_withdrawal or self.validate_signature(sighash, sig, validator_index)
 
     assert self.current_epoch >= epoch
-    assert self.validate_signature(sighash, sig, validator_index)
 
     # Check that we haven't already withdrawn
     end_dynasty: int128 = self.dynasty + self.DYNASTY_LOGOUT_DELAY
