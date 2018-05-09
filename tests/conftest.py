@@ -365,30 +365,30 @@ def mk_slash_votes(casper, mk_vote, fake_hash):
 
 
 @pytest.fixture
-def mk_logout_message_signed():
-    def mk_logout_message_signed(validator_index, epoch, key):
+def mk_logout_msg_signed():
+    def mk_logout_msg_signed(validator_index, epoch, key):
         msg_hash = utils.sha3(rlp.encode([validator_index, epoch]))
         v, r, s = utils.ecdsa_raw_sign(msg_hash, key)
         sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
         return rlp.encode([validator_index, epoch, sig])
-    return mk_logout_message_signed
+    return mk_logout_msg_signed
 
 
 @pytest.fixture
-def mk_logout_message_unsigned():
-    def mk_logout_message_unsigned(validator_index, epoch):
+def mk_logout_msg_unsigned():
+    def mk_logout_msg_unsigned(validator_index, epoch):
         v, r, s = (0, 0, 0)
         sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
         return rlp.encode([validator_index, epoch, sig])
-    return mk_logout_message_unsigned
+    return mk_logout_msg_unsigned
 
 
 @pytest.fixture
-def logout_validator_via_signed_msg(casper, mk_logout_message_signed):
+def logout_validator_via_signed_msg(casper, mk_logout_msg_signed):
     def logout_validator_via_signed_msg(validator_index, msg_signing_key,
                                         tx_sender_key=None):
         tx_sender_key = tx_sender_key if tx_sender_key else msg_signing_key
-        logout_tx = mk_logout_message_signed(validator_index,
+        logout_tx = mk_logout_msg_signed(validator_index,
                                              casper.current_epoch(),
                                              msg_signing_key)
         casper.logout(logout_tx, sender=tx_sender_key)
@@ -396,9 +396,9 @@ def logout_validator_via_signed_msg(casper, mk_logout_message_signed):
 
 
 @pytest.fixture
-def logout_validator_via_unsigned_msg(casper, mk_logout_message_unsigned):
+def logout_validator_via_unsigned_msg(casper, mk_logout_msg_unsigned):
     def logout_validator_via_unsigned_msg(validator_index, tx_sender_key):
-        logout_tx = mk_logout_message_unsigned(validator_index, casper.current_epoch())
+        logout_tx = mk_logout_msg_unsigned(validator_index, casper.current_epoch())
         casper.logout(logout_tx, sender=tx_sender_key)
     return logout_validator_via_unsigned_msg
 
