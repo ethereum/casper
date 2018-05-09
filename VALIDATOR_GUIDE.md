@@ -84,8 +84,8 @@ Next, RLP encode all these elements. To compute your signature, compute the `sha
 This is [implemented in Pyethereum](https://github.com/karlfloersch/pyethereum/blob/a66ab671e0bb19327bb8cd11d69664146451c250/ethereum/hybrid_casper/casper_utils.py#L71-L75) as follows:
 ```
 def mk_vote(validator_index, target_hash, target_epoch, source_epoch, key):
-    sighash = utils.sha3(rlp.encode([validator_index, target_hash, target_epoch, source_epoch]))
-    v, r, s = utils.ecdsa_raw_sign(sighash, key)
+    msg_hash = utils.sha3(rlp.encode([validator_index, target_hash, target_epoch, source_epoch]))
+    v, r, s = utils.ecdsa_raw_sign(msg_hash, key)
     sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
     return rlp.encode([validator_index, target_hash, target_epoch, source_epoch, sig])
 ```
@@ -96,8 +96,8 @@ Like the Casper vote messages, a logout message is an RLP encoded list where the
 This is [implemented in Pyethereum](https://github.com/karlfloersch/pyethereum/blob/a66ab671e0bb19327bb8cd11d69664146451c250/ethereum/hybrid_casper/casper_utils.py#L77-L81) as follows:
 ```
 def mk_logout(validator_index, epoch, key):
-    sighash = utils.sha3(rlp.encode([validator_index, epoch]))
-    v, r, s = utils.ecdsa_raw_sign(sighash, key)
+    msg_hash = utils.sha3(rlp.encode([validator_index, epoch]))
+    v, r, s = utils.ecdsa_raw_sign(msg_hash, key)
     sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
     return rlp.encode([validator_index, epoch, sig])
 ```
