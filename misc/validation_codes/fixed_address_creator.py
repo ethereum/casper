@@ -5,7 +5,7 @@ from ethereum import utils
 from ethereum import tester
 from ethereum import transactions
 
-sighash = serpent.compile('sighash.se.py')
+msg_hash = serpent.compile('msg_hash.se.py')
 
 tests = [
     [b"\x01"],
@@ -21,20 +21,20 @@ tests = [
 ]
 
 s = tester.state()
-c = s.evm(sighash, sender=tester.k0, endowment=0)
+c = s.evm(msg_hash, sender=tester.k0, endowment=0)
 
 for test in tests:
-    z = s.send(tester.k0, c, 0, rlp.encode(test)) 
+    z = s.send(tester.k0, c, 0, rlp.encode(test))
     assert z == utils.sha3(rlp.encode(test[:-1]))
     print("Passed test, gas consumed: ", s.state.receipts[-1].gas_used - s.state.receipts[-2].gas_used - s.last_tx.intrinsic_gas_used)
 
 # Create transaction
-t = transactions.Transaction(0, 30 * 10**9, 2999999, '', 0, sighash)
-t.startgas = t.intrinsic_gas_used + 50000 + 200 * len(sighash)
+t = transactions.Transaction(0, 30 * 10**9, 2999999, '', 0, msg_hash)
+t.startgas = t.intrinsic_gas_used + 50000 + 200 * len(msg_hash)
 t.v = 27
 t.r = 45
 t.s = 79
-print("Sighash")
+print("Message Hash")
 print('Send %d wei to %s' % (t.startgas * t.gasprice,
                              '0x'+utils.encode_hex(t.sender)))
 

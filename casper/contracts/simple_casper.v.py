@@ -101,8 +101,9 @@ WITHDRAWAL_DELAY: public(int128)
 # Logout delay in dynasties
 DYNASTY_LOGOUT_DELAY: public(int128)
 
-# Sighash calculator library address
-SIGHASHER: address
+# MSG_HASHER calculator library address
+# Hashes message contents but not the signature
+MSG_HASHER: address
 
 # Purity checker library address
 PURITY_CHECKER: address
@@ -112,14 +113,14 @@ BASE_PENALTY_FACTOR: public(decimal)
 MIN_DEPOSIT_SIZE: public(wei_value)
 START_EPOCH: public(int128)
 DEFAULT_END_DYNASTY: int128
-SIGHASHER_GAS_LIMIT: int128
+MSG_HASHER_GAS_LIMIT: int128
 VALIDATION_GAS_LIMIT: int128
 
 
 @public
 def __init__(
         epoch_length: int128, withdrawal_delay: int128, dynasty_logout_delay: int128,
-        sighasher: address, purity_checker: address,
+        msg_hasher: address, purity_checker: address,
         base_interest_factor: decimal, base_penalty_factor: decimal,
         min_deposit_size: wei_value):
 
@@ -135,7 +136,7 @@ def __init__(
     self.START_EPOCH = floor(block.number / self.EPOCH_LENGTH)
 
     # helper contracts
-    self.SIGHASHER = sighasher
+    self.MSG_HASHER = msg_hasher
     self.PURITY_CHECKER = purity_checker
 
     # Start validator index counter at 1 because validator_indexes[] requires non-zero values
@@ -148,7 +149,7 @@ def __init__(
     self.total_curdyn_deposits = 0
     self.total_prevdyn_deposits = 0
     self.DEFAULT_END_DYNASTY = 1000000000000000000000000000000
-    self.SIGHASHER_GAS_LIMIT = 200000
+    self.MSG_HASHER_GAS_LIMIT = 200000
     self.VALIDATION_GAS_LIMIT = 200000
 
 
@@ -353,8 +354,8 @@ def delete_validator(validator_index: int128):
 # cannot be labeled @constant because of external call
 # even though the call is to a pure contract call
 @private
-def validate_signature(sighash: bytes32, sig: bytes <= 1024, validator_index: int128) -> bool:
-    return extract32(raw_call(self.validators[validator_index].addr, concat(sighash, sig), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
+def validate_signature(msg_hash: bytes32, sig: bytes <= 1024, validator_index: int128) -> bool:
+    return extract32(raw_call(self.validators[validator_index].addr, concat(msg_hash, sig), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
 
 
 # ***** Public *****
@@ -426,14 +427,14 @@ def logout(logout_msg: bytes <= 1024):
 
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
-    sighash: bytes32 = extract32(raw_call(self.SIGHASHER, logout_msg, gas=self.SIGHASHER_GAS_LIMIT, outsize=32), 0)
+    msg_hash: bytes32 = extract32(raw_call(self.MSG_HASHER, logout_msg, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
     values = RLPList(logout_msg, [int128, int128, bytes])
     validator_index: int128 = values[0]
     epoch: int128 = values[1]
     sig: bytes <= 1024 = values[2]
 
     assert self.current_epoch >= epoch
-    assert self.validate_signature(sighash, sig, validator_index)
+    assert self.validate_signature(msg_hash, sig, validator_index)
 
     # Check that we haven't already withdrawn
     end_dynasty: int128 = self.dynasty + self.DYNASTY_LOGOUT_DELAY
@@ -468,7 +469,7 @@ def withdraw(validator_index: int128):
 def vote(vote_msg: bytes <= 1024):
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
-    sighash: bytes32 = extract32(raw_call(self.SIGHASHER, vote_msg, gas=self.SIGHASHER_GAS_LIMIT, outsize=32), 0)
+    msg_hash: bytes32 = extract32(raw_call(self.MSG_HASHER, vote_msg, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
     # Extract parameters
     values = RLPList(vote_msg, [int128, bytes32, int128, int128, bytes])
     validator_index: int128 = values[0]
@@ -477,7 +478,7 @@ def vote(vote_msg: bytes <= 1024):
     source_epoch: int128 = values[3]
     sig: bytes <= 1024 = values[4]
 
-    assert self.validate_signature(sighash, sig, validator_index)
+    assert self.validate_signature(msg_hash, sig, validator_index)
     # Check that this vote has not yet been made
     assert not bitwise_and(self.checkpoints[target_epoch].vote_bitmap[floor(validator_index / 256)],
                            shift(convert(1, 'uint256'), validator_index % 256))
@@ -545,29 +546,29 @@ def vote(vote_msg: bytes <= 1024):
 @public
 def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     # Message 1: Extract parameters
-    sighash_1: bytes32 = extract32(raw_call(self.SIGHASHER, vote_msg_1, gas=self.SIGHASHER_GAS_LIMIT, outsize=32), 0)
+    msg_hash_1: bytes32 = extract32(raw_call(self.MSG_HASHER, vote_msg_1, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
     values_1 = RLPList(vote_msg_1, [int128, bytes32, int128, int128, bytes])
     validator_index_1: int128 = values_1[0]
     target_epoch_1: int128 = values_1[2]
     source_epoch_1: int128 = values_1[3]
     sig_1: bytes <= 1024 = values_1[4]
 
-    assert self.validate_signature(sighash_1, sig_1, validator_index_1)
+    assert self.validate_signature(msg_hash_1, sig_1, validator_index_1)
 
     # Message 2: Extract parameters
-    sighash_2: bytes32 = extract32(raw_call(self.SIGHASHER, vote_msg_2, gas=self.SIGHASHER_GAS_LIMIT, outsize=32), 0)
+    msg_hash_2: bytes32 = extract32(raw_call(self.MSG_HASHER, vote_msg_2, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
     values_2 = RLPList(vote_msg_2, [int128, bytes32, int128, int128, bytes])
     validator_index_2: int128 = values_2[0]
     target_epoch_2: int128 = values_2[2]
     source_epoch_2: int128 = values_2[3]
     sig_2: bytes <= 1024 = values_2[4]
 
-    assert self.validate_signature(sighash_2, sig_2, validator_index_2)
+    assert self.validate_signature(msg_hash_2, sig_2, validator_index_2)
 
     # Check the messages are from the same validator
     assert validator_index_1 == validator_index_2
     # Check the messages are not the same
-    assert sighash_1 != sighash_2
+    assert msg_hash_1 != msg_hash_2
 
     # Detect slashing
     slashing_condition_detected: bool = False
