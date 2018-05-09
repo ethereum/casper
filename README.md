@@ -5,7 +5,7 @@
 ## Resources
 
 - [EIP-1011](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1011.md):
-specifcation of the Casper the Friendly Finality Gadget (FFG) PoW/PoS consensus model.
+specification of the Casper the Friendly Finality Gadget (FFG) PoW/PoS consensus model.
 - [VALIDATOR_GUIDE.md](https://github.com/ethereum/casper/blob/master/VALIDATOR_GUIDE.md):
 information about implementing a Casper FFG validator.
 - [Casper the Friendly Finality Gadget](https://arxiv.org/abs/1710.09437): 
