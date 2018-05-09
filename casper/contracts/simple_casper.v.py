@@ -426,7 +426,7 @@ def logout(logout_msg: bytes <= 1024):
 
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
-    sighash: bytes32 = extract32(raw_call(self.SIGHASHER, logout_msg, gas=self.SIGHASHER_GAS_LIMIT, outsize=32), 0)
+    msg_hash: bytes32 = extract32(raw_call(self.SIGHASHER, logout_msg, gas=self.SIGHASHER_GAS_LIMIT, outsize=32), 0)
     values = RLPList(logout_msg, [int128, int128, bytes])
     validator_index: int128 = values[0]
     epoch: int128 = values[1]
@@ -435,7 +435,7 @@ def logout(logout_msg: bytes <= 1024):
     assert self.current_epoch >= epoch
 
     from_withdrawal: bool = msg.sender == self.validators[validator_index].withdrawal_addr
-    assert from_withdrawal or self.validate_signature(sighash, sig, validator_index)
+    assert from_withdrawal or self.validate_signature(msg_hash, sig, validator_index)
 
     # Check that we haven't already withdrawn
     end_dynasty: int128 = self.dynasty + self.DYNASTY_LOGOUT_DELAY
