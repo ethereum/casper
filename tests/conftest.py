@@ -324,10 +324,10 @@ def mk_validation_code():
 @pytest.fixture
 def mk_vote():
     def mk_vote(validator_index, target_hash, target_epoch, source_epoch, privkey):
-        sighash = utils.sha3(
+        msg_hash = utils.sha3(
             rlp.encode([validator_index, target_hash, target_epoch, source_epoch])
         )
-        v, r, s = utils.ecdsa_raw_sign(sighash, privkey)
+        v, r, s = utils.ecdsa_raw_sign(msg_hash, privkey)
         sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
         return rlp.encode([validator_index, target_hash, target_epoch, source_epoch, sig])
     return mk_vote
@@ -367,8 +367,8 @@ def mk_slash_votes(casper, mk_vote, fake_hash):
 @pytest.fixture
 def mk_logout():
     def mk_logout(validator_index, epoch, key):
-        sighash = utils.sha3(rlp.encode([validator_index, epoch]))
-        v, r, s = utils.ecdsa_raw_sign(sighash, key)
+        msg_hash = utils.sha3(rlp.encode([validator_index, epoch]))
+        v, r, s = utils.ecdsa_raw_sign(msg_hash, key)
         sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
         return rlp.encode([validator_index, epoch, sig])
     return mk_logout
