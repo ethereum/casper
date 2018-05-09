@@ -384,20 +384,19 @@ def mk_logout_message_unsigned():
 
 
 @pytest.fixture
-def logout_validator_via_signed_logout_message(casper, mk_logout_message_signed):
-    def logout_validator_via_signed_logout_message(validator_index, key):
+def logout_validator_via_signed_msg(casper, mk_logout_message_signed):
+    def logout_validator_via_signed_msg(validator_index, key):
         logout_tx = mk_logout_message_signed(validator_index, casper.current_epoch(), key)
         casper.logout(logout_tx)
-    return logout_validator_via_signed_logout_message
+    return logout_validator_via_signed_msg
 
 
 @pytest.fixture
-def logout_validator_via_unsigned_logout_message(casper,
-                                                 mk_logout_message_unsigned):
-    def logout_validator_via_unsigned_logout_message(validator_index, key):
+def logout_validator_via_unsigned_msg(casper, mk_logout_message_unsigned):
+    def logout_validator_via_unsigned_msg(validator_index, key):
         logout_tx = mk_logout_message_unsigned(validator_index, casper.current_epoch())
         casper.logout(logout_tx, sender=key)
-    return logout_validator_via_unsigned_logout_message
+    return logout_validator_via_unsigned_msg
 
 
 @pytest.fixture
