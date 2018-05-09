@@ -1,3 +1,4 @@
+from ethereum import utils
 
 
 def test_logout_sets_end_dynasty(casper, funded_privkey, deposit_amount,
@@ -134,3 +135,22 @@ def test_logout_from_non_withdrawal_address_without_signature(casper,
     assert_tx_failed(lambda:
                      logout_validator_via_unsigned_msg(validator_index,
                                                        non_validator_key))
+
+
+def test_logout_from_non_withdrawal_address_with_signature(casper,
+                                                           funded_privkeys,
+                                                           deposit_amount,
+                                                           induct_validator,
+                                                           logout_validator_via_signed_msg,
+                                                           assert_tx_failed):
+    validator_key = funded_privkeys[0]
+    non_validator_key = funded_privkeys[1]
+    assert(validator_key != non_validator_key)
+
+    validator_index = induct_validator(validator_key, deposit_amount)
+    expected_end_dynasty = casper.dynasty() + casper.DYNASTY_LOGOUT_DELAY()
+
+    logout_validator_via_signed_msg(validator_index, validator_key,
+                                    non_validator_key)
+
+    assert casper.validators__end_dynasty(validator_index) == expected_end_dynasty
