@@ -124,32 +124,8 @@ def test_vote_log(casper, funded_privkey, new_epoch, deposit_validator,
     assert log['_source_epoch'] == casper.recommended_source_epoch()
 
 
-def test_logout_log(casper, funded_privkey, new_epoch, deposit_validator, logout_validator,
-                  deposit_amount, get_last_log, casper_chain, mk_suggested_vote):
-    new_epoch()
-    validator_index = casper.next_validator_index()
-    deposit_validator(funded_privkey, deposit_amount)
-    # Validator is registered in Casper
-    assert validator_index == casper.validator_indexes(utils.privtoaddr(funded_privkey))
-
-    new_epoch()
-    new_epoch()
-    # Allowed to vote now
-    assert casper.validators__start_dynasty(validator_index) == casper.dynasty()
-
-    casper.vote(mk_suggested_vote(validator_index, funded_privkey))
-
-    logout_validator(validator_index, funded_privkey)
-    # Logout log
-    log = get_last_log(casper_chain, casper)
-    assert {'_event_type', '_from', '_validator_index', '_end_dyn'} == log.keys()
-    assert log['_event_type'] == b'Logout'
-    assert log['_from'] == '0x' + utils.encode_hex(utils.privtoaddr(funded_privkey))
-    assert log['_validator_index'] == validator_index
-    assert log['_end_dyn'] == casper.dynasty() + casper.DYNASTY_LOGOUT_DELAY()
-
-
-def test_withdraw_log(casper, funded_privkey, new_epoch, deposit_validator, logout_validator,
+def test_logout_log(casper, funded_privkey, new_epoch, deposit_validator,
+                    logout_validator_via_signed_msg,
                     deposit_amount, get_last_log, casper_chain, mk_suggested_vote):
     new_epoch()
     validator_index = casper.next_validator_index()
@@ -163,9 +139,36 @@ def test_withdraw_log(casper, funded_privkey, new_epoch, deposit_validator, logo
     assert casper.validators__start_dynasty(validator_index) == casper.dynasty()
 
     casper.vote(mk_suggested_vote(validator_index, funded_privkey))
+
+    logout_validator_via_signed_msg(validator_index, funded_privkey)
+    # Logout log
+    log = get_last_log(casper_chain, casper)
+    assert {'_event_type', '_from', '_validator_index', '_end_dyn'} == log.keys()
+    assert log['_event_type'] == b'Logout'
+    assert log['_from'] == '0x' + utils.encode_hex(utils.privtoaddr(funded_privkey))
+    assert log['_validator_index'] == validator_index
+    assert log['_end_dyn'] == casper.dynasty() + casper.DYNASTY_LOGOUT_DELAY()
+
+
+def test_withdraw_log(casper, funded_privkey, new_epoch, deposit_validator,
+                      logout_validator_via_signed_msg,
+                      deposit_amount, get_last_log, casper_chain,
+                      mk_suggested_vote):
+    new_epoch()
+    validator_index = casper.next_validator_index()
+    deposit_validator(funded_privkey, deposit_amount)
+    # Validator is registered in Casper
+    assert validator_index == casper.validator_indexes(utils.privtoaddr(funded_privkey))
+
+    new_epoch()
+    new_epoch()
+    # Allowed to vote now
+    assert casper.validators__start_dynasty(validator_index) == casper.dynasty()
+
+    casper.vote(mk_suggested_vote(validator_index, funded_privkey))
     new_epoch()
 
-    logout_validator(validator_index, funded_privkey)
+    logout_validator_via_signed_msg(validator_index, funded_privkey)
     # Logout delay
     for _ in range(casper.DYNASTY_LOGOUT_DELAY() + 1):
         casper.vote(mk_suggested_vote(validator_index, funded_privkey))
