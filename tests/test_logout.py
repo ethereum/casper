@@ -91,15 +91,32 @@ def test_logout_with_multiple_validators(casper, funded_privkeys,
 
 
 def test_logout_from_withdrawal_address_without_signature(casper,
-                                                          funded_privkeys,
+                                                          funded_privkey,
                                                           deposit_amount,
                                                           induct_validator,
                                                           logout_validator_via_unsigned_msg):
-    validator_index = induct_validator(funded_privkeys[0], deposit_amount)
+    validator_index = induct_validator(funded_privkey, deposit_amount)
+    expected_end_dynasty = casper.dynasty() + casper.DYNASTY_LOGOUT_DELAY()
 
-    logout_validator_via_unsigned_msg(validator_index, funded_privkeys[0])
+    logout_validator_via_unsigned_msg(validator_index, funded_privkey)
 
-    # assert here that the validator is logged out
+    assert casper.validators__end_dynasty(validator_index) == expected_end_dynasty
+
+
+def test_logout_from_withdrawal_address_with_signature(casper,
+                                                       funded_privkey,
+                                                       deposit_amount,
+                                                       induct_validator,
+                                                       logout_validator_via_signed_msg,
+                                                       assert_tx_failed):
+    validator_index = induct_validator(funded_privkey, deposit_amount)
+    expected_end_dynasty = casper.dynasty() + casper.DYNASTY_LOGOUT_DELAY()
+
+    logout_validator_via_signed_msg(validator_index,
+                                    funded_privkey,
+                                    funded_privkey)
+
+    assert casper.validators__end_dynasty(validator_index) == expected_end_dynasty
 
 
 def test_logout_from_non_withdrawal_address_without_signature(casper,
