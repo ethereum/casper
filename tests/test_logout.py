@@ -1,4 +1,6 @@
-from ethereum import utils
+from utils.common_assertions import (
+    assert_validator_empty,
+)
 
 
 def test_logout_sets_end_dynasty(casper, funded_privkey, deposit_amount,
@@ -12,6 +14,17 @@ def test_logout_sets_end_dynasty(casper, funded_privkey, deposit_amount,
     logout_validator_via_signed_msg(validator_index, funded_privkey)
 
     assert casper.validators__end_dynasty(validator_index) == expected_end_dynasty
+
+
+def test_logout_sets_total_deposits_at_logout(casper, funded_privkey, deposit_amount,
+                                              induct_validator,
+                                              logout_validator_via_signed_msg):
+    validator_index = induct_validator(funded_privkey, deposit_amount)
+    assert casper.validators__total_deposits_at_logout(validator_index) == 0
+
+    logout_validator_via_signed_msg(validator_index, funded_privkey)
+
+    assert casper.validators__total_deposits_at_logout(validator_index) == deposit_amount
 
 
 def test_logout_updates_dynasty_wei_delta(casper, funded_privkey, deposit_amount,
@@ -86,9 +99,7 @@ def test_logout_with_multiple_validators(casper, funded_privkeys,
     assert withdrawal_amount > 0
 
     casper.withdraw(logged_out_index)
-    assert casper.deposit_size(logged_out_index) == 0
-    assert casper.validators__deposit(logged_out_index) == 0
-    assert casper.validators__start_dynasty(logged_out_index) == 0
+    assert_validator_empty(casper, logged_out_index)
 
 
 def test_logout_from_withdrawal_address_without_signature(casper,
