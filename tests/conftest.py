@@ -386,7 +386,7 @@ def mk_logout_msg_unsigned():
 @pytest.fixture
 def logout_validator_via_signed_msg(casper, mk_logout_msg_signed):
     def logout_validator_via_signed_msg(validator_index, msg_signing_key,
-                                        tx_sender_key=tester.k9):
+                                        tx_sender_key=42):
         logout_tx = mk_logout_msg_signed(validator_index,
                                          casper.current_epoch(),
                                          msg_signing_key)
