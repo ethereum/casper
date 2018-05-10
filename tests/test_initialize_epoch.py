@@ -1,14 +1,84 @@
 # ensure that our fixture 'new_epoch' functions properly
-def test_new_epoch(casper_chain, casper, new_epoch):
+def test_new_epoch_fixture(casper_chain, casper, new_epoch):
+    epoch_length = casper.EPOCH_LENGTH()
     for _ in range(4):
         prev_epoch = casper.current_epoch()
         prev_block_number = casper_chain.head_state.block_number
-        expected_jump = casper.EPOCH_LENGTH() - (prev_block_number % casper.EPOCH_LENGTH())
+        expected_jump = epoch_length - (prev_block_number % epoch_length)
 
         new_epoch()
 
+        block_number = casper_chain.head_state.block_number
         assert casper.current_epoch() == prev_epoch + 1
-        assert casper_chain.head_state.block_number == prev_block_number + expected_jump
+        assert block_number == prev_block_number + expected_jump
+        assert (block_number % epoch_length) == 0
+
+
+def test_early_epoch_initialization(casper_chain, casper, new_epoch, assert_tx_failed):
+    epoch_length = casper.EPOCH_LENGTH()
+
+    new_epoch()
+
+    for _ in range(0, epoch_length):
+        casper_chain.mine(1)
+        block_number = casper_chain.head_state.block_number
+        is_epoch_block = (block_number % epoch_length) == 0
+        next_epoch = casper.current_epoch() + 1
+        if is_epoch_block:
+            casper.initialize_epoch(next_epoch)
+            assert casper.current_epoch() == next_epoch
+        else:
+            assert_tx_failed(
+                lambda: casper.initialize_epoch(next_epoch)
+            )
+
+
+def test_double_epoch_initialization(casper_chain, casper, new_epoch, assert_tx_failed):
+    epoch_length = casper.EPOCH_LENGTH()
+
+    new_epoch()
+    initial_epoch = casper.current_epoch()
+
+    casper_chain.mine(epoch_length)
+
+    next_epoch = initial_epoch + 1
+    casper.initialize_epoch(next_epoch)
+    assert casper.current_epoch() == next_epoch
+    assert_tx_failed(
+        lambda: casper.initialize_epoch(next_epoch)
+    )
+
+
+def test_epoch_initialization_one_block_late(casper_chain, casper, new_epoch):
+    epoch_length = casper.EPOCH_LENGTH()
+
+    new_epoch()
+    initial_epoch = casper.current_epoch()
+
+    casper_chain.mine(epoch_length + 1)
+    assert (casper_chain.head_state.block_number % epoch_length) == 1
+
+    expected_epoch = initial_epoch + 1
+    casper.initialize_epoch(expected_epoch)
+
+    assert casper.current_epoch() == expected_epoch
+
+
+def test_epoch_initialize_one_epoch_late(casper_chain, casper, new_epoch, assert_tx_failed):
+    epoch_length = casper.EPOCH_LENGTH()
+
+    new_epoch()
+    initial_epoch = casper.current_epoch()
+
+    casper_chain.mine(epoch_length * 2)
+    assert_tx_failed(
+        lambda: casper.initialize_epoch(initial_epoch + 2)
+    )
+    assert casper.current_epoch() == initial_epoch
+    casper.initialize_epoch(initial_epoch + 1)
+    assert casper.current_epoch() == initial_epoch + 1
+    casper.initialize_epoch(initial_epoch + 2)
+    assert casper.current_epoch() == initial_epoch + 2
 
 
 def test_checkpoint_hashes(casper_chain, casper, new_epoch):
