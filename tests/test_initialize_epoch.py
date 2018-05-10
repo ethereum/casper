@@ -14,7 +14,7 @@ def test_new_epoch_fixture(casper_chain, casper, new_epoch):
         assert (block_number % epoch_length) == 0
 
 
-def test_early_epoch_initialization(casper_chain, casper, new_epoch, assert_tx_failed):
+def test_epoch_length_range(casper_chain, casper, new_epoch, assert_tx_failed):
     epoch_length = casper.EPOCH_LENGTH()
 
     new_epoch()
