@@ -5,6 +5,95 @@ from utils.common_assertions import (
 )
 
 
+def test_invalid_signature_fails(casper, funded_privkey, deposit_amount,
+                                 induct_validator, mk_vote, fake_hash, assert_tx_failed):
+    validator_index = induct_validator(funded_privkey, deposit_amount)
+
+    # construct double votes but one has an invalid signature
+    valid_signed_vote = mk_vote(
+        validator_index,
+        casper.recommended_target_hash(),
+        casper.current_epoch(),
+        casper.recommended_source_epoch(),
+        funded_privkey
+    )
+    invalid_signed_vote = mk_vote(
+        validator_index,
+        fake_hash,
+        casper.current_epoch(),
+        casper.recommended_source_epoch(),
+        b'\x42'  # not the validators key
+    )
+
+    assert not casper.slashable(valid_signed_vote, invalid_signed_vote)
+    assert_tx_failed(lambda: casper.slash(valid_signed_vote, invalid_signed_vote))
+
+    # flip the order of arguments
+    assert not casper.slashable(invalid_signed_vote, valid_signed_vote)
+    assert_tx_failed(lambda: casper.slash(invalid_signed_vote, valid_signed_vote))
+
+
+def test_different_validators_fails(casper, funded_privkeys, deposit_amount,
+                                    induct_validators, mk_vote, fake_hash, assert_tx_failed):
+    validator_indexes = induct_validators(funded_privkeys, [deposit_amount] * len(funded_privkeys))
+    validator_index_1 = validator_indexes[0]
+    priv_key_1 = funded_privkeys[0]
+    validator_index_2 = validator_indexes[1]
+    priv_key_2 = funded_privkeys[1]
+
+    # construct conflicting vote from different validators
+    valid_signed_vote = mk_vote(
+        validator_index_1,
+        casper.recommended_target_hash(),
+        casper.current_epoch(),
+        casper.recommended_source_epoch(),
+        priv_key_1
+    )
+    invalid_signed_vote = mk_vote(
+        validator_index_2,
+        fake_hash,
+        casper.current_epoch(),
+        casper.recommended_source_epoch(),
+        priv_key_2  # not the validators key
+    )
+
+    assert not casper.slashable(valid_signed_vote, invalid_signed_vote)
+    assert_tx_failed(lambda: casper.slash(valid_signed_vote, invalid_signed_vote))
+
+    # flip the order of arguments
+    assert not casper.slashable(invalid_signed_vote, valid_signed_vote)
+    assert_tx_failed(lambda: casper.slash(invalid_signed_vote, valid_signed_vote))
+
+
+def test_same_msg_fails(casper, funded_privkey, deposit_amount,
+                        induct_validator, mk_vote, assert_tx_failed):
+    validator_index = induct_validator(funded_privkey, deposit_amount)
+
+    vote = mk_vote(
+        validator_index,
+        casper.recommended_target_hash(),
+        casper.current_epoch(),
+        casper.recommended_source_epoch(),
+        funded_privkey
+    )
+
+    assert not casper.slashable(vote, vote)
+    assert_tx_failed(lambda: casper.slash(vote, vote))
+
+
+def test_double_slash_fails(casper, funded_privkey, deposit_amount,
+                            induct_validator, mk_slash_votes, assert_tx_failed):
+    validator_index = induct_validator(funded_privkey, deposit_amount)
+
+    vote_1, vote_2 = mk_slash_votes(validator_index, funded_privkey)
+
+    assert casper.slashable(vote_1, vote_2)
+    casper.slash(vote_1, vote_2)
+
+    assert not casper.slashable(vote_1, vote_2)
+    assert_tx_failed(lambda: casper.slash(vote_1, vote_2))
+
+
 def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount,
                               induct_validator, mk_vote, fake_hash, casper_chain):
     validator_index = induct_validator(funded_privkey, deposit_amount)
@@ -28,6 +117,7 @@ def test_slash_no_dbl_prepare(casper, funded_privkey, deposit_amount,
     next_dynasty = casper.dynasty() + 1
     assert casper.dynasty_wei_delta(casper.dynasty() + 1) == 0
 
+    assert casper.slashable(vote_1, vote_2)
     casper.slash(vote_1, vote_2)
 
     assert casper.total_slashed(casper.current_epoch()) == deposit_amount
@@ -61,6 +151,7 @@ def test_slash_no_surround(casper, funded_privkey, deposit_amount, new_epoch,
     next_dynasty = casper.dynasty() + 1
     assert casper.dynasty_wei_delta(casper.dynasty() + 1) == 0
 
+    assert casper.slashable(vote_1, vote_2)
     casper.slash(vote_1, vote_2)
 
     assert casper.total_slashed(casper.current_epoch()) == deposit_amount
@@ -101,6 +192,7 @@ def test_slash_after_logout_delay(casper, funded_privkey, deposit_amount,
     assert casper.dynasty_wei_delta(casper.dynasty() + 1) == 0
 
     vote_1, vote_2 = mk_slash_votes(validator_index, funded_privkey)
+    assert casper.slashable(vote_1, vote_2)
     casper.slash(vote_1, vote_2)
 
     assert casper.total_slashed(casper.current_epoch()) == new_deposit_size
@@ -140,6 +232,7 @@ def test_slash_after_logout_before_logout_delay(casper, funded_privkey, deposit_
     assert casper.dynasty_wei_delta(end_dynasty) == -new_scaled_deposit_size
 
     vote_1, vote_2 = mk_slash_votes(validator_index, funded_privkey)
+    assert casper.slashable(vote_1, vote_2)
     casper.slash(vote_1, vote_2)
 
     assert casper.total_slashed(casper.current_epoch()) == new_deposit_size
@@ -171,15 +264,6 @@ def test_total_slashed(casper, funded_privkey, deposit_amount, new_epoch,
     current_epoch = casper.current_epoch()
     assert casper.total_slashed(current_epoch - 1) == deposit_amount
     assert casper.total_slashed(current_epoch) == deposit_amount
-
-
-def test_double_slash_fails(casper, funded_privkey, deposit_amount,
-                            induct_validator, mk_slash_votes, assert_tx_failed):
-    validator_index = induct_validator(funded_privkey, deposit_amount)
-
-    vote_1, vote_2 = mk_slash_votes(validator_index, funded_privkey)
-    casper.slash(vote_1, vote_2)
-    assert_tx_failed(lambda: casper.slash(vote_1, vote_2))
 
 
 def test_withdraw_after_slash(casper, casper_chain,

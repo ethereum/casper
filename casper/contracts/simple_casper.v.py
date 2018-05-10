@@ -299,7 +299,10 @@ def total_prevdyn_deposits_in_wei() -> wei_value:
 # even though the call is to a pure contract call
 def slashable(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024) -> bool:
     # Message 1: Extract parameters
-    msg_hash_1: bytes32 = extract32(raw_call(self.MSG_HASHER, vote_msg_1, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
+    msg_hash_1: bytes32 = extract32(
+        raw_call(self.MSG_HASHER, vote_msg_1, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32),
+        0
+    )
     values_1 = RLPList(vote_msg_1, [int128, bytes32, int128, int128, bytes])
     validator_index_1: int128 = values_1[0]
     target_epoch_1: int128 = values_1[2]
@@ -307,7 +310,10 @@ def slashable(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024) -> bool:
     sig_1: bytes <= 1024 = values_1[4]
 
     # Message 2: Extract parameters
-    msg_hash_2: bytes32 = extract32(raw_call(self.MSG_HASHER, vote_msg_2, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
+    msg_hash_2: bytes32 = extract32(
+        raw_call(self.MSG_HASHER, vote_msg_2, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32),
+        0
+    )
     values_2 = RLPList(vote_msg_2, [int128, bytes32, int128, int128, bytes])
     validator_index_2: int128 = values_2[0]
     target_epoch_2: int128 = values_2[2]
@@ -470,7 +476,10 @@ def logout(logout_msg: bytes <= 1024):
 
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
-    msg_hash: bytes32 = extract32(raw_call(self.MSG_HASHER, logout_msg, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
+    msg_hash: bytes32 = extract32(
+        raw_call(self.MSG_HASHER, logout_msg, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32),
+        0
+    )
     values = RLPList(logout_msg, [int128, int128, bytes])
     validator_index: int128 = values[0]
     epoch: int128 = values[1]
@@ -523,7 +532,10 @@ def withdraw(validator_index: int128):
 def vote(vote_msg: bytes <= 1024):
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
-    msg_hash: bytes32 = extract32(raw_call(self.MSG_HASHER, vote_msg, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
+    msg_hash: bytes32 = extract32(
+        raw_call(self.MSG_HASHER, vote_msg, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32),
+        0
+    )
     # Extract parameters
     values = RLPList(vote_msg, [int128, bytes32, int128, int128, bytes])
     validator_index: int128 = values[0]
@@ -604,7 +616,10 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     # Extract validator_index
     # vote messages were shown to be the same in `slashable`
     # so just extract validator_index from vote_msg_1
-    msg_hash: bytes32 = extract32(raw_call(self.MSG_HASHER, vote_msg_1, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32), 0)
+    msg_hash: bytes32 = extract32(
+        raw_call(self.MSG_HASHER, vote_msg_1, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32),
+        0
+    )
     values = RLPList(vote_msg_1, [int128, bytes32, int128, int128, bytes])
     validator_index: int128 = values[0]
 
