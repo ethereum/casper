@@ -113,6 +113,7 @@ START_EPOCH: public(int128)
 DEFAULT_END_DYNASTY: int128
 MSG_HASHER_GAS_LIMIT: int128
 VALIDATION_GAS_LIMIT: int128
+SLASH_FRACTION_MULTIPLIER: int128
 
 
 @public
@@ -149,6 +150,7 @@ def __init__(
     self.DEFAULT_END_DYNASTY = 1000000000000000000000000000000
     self.MSG_HASHER_GAS_LIMIT = 200000
     self.VALIDATION_GAS_LIMIT = 200000
+    self.SLASH_FRACTION_MULTIPLIER = 3
 
 
 # ***** Public Constants *****
@@ -454,7 +456,7 @@ def logout(logout_msg: bytes <= 1024):
 @public
 def withdraw(validator_index: int128):
     # Check that we can withdraw
-    assert self.dynasty >= self.validators[validator_index].end_dynasty + 1
+    assert self.dynasty > self.validators[validator_index].end_dynasty
     end_epoch: int128 = self.dynasty_start_epoch[self.validators[validator_index].end_dynasty + 1]
     withdrawal_epoch: int128 = end_epoch + self.WITHDRAWAL_DELAY
     assert self.current_epoch >= withdrawal_epoch
@@ -465,8 +467,10 @@ def withdraw(validator_index: int128):
         withdraw_amount = floor(self.validators[validator_index].deposit * self.deposit_scale_factor[end_epoch])
     else:
         recently_slashed: wei_value = self.total_slashed[withdrawal_epoch] - self.total_slashed[withdrawal_epoch - 2 * self.WITHDRAWAL_DELAY]
-        fraction_to_slash: decimal = recently_slashed * 3 / self.validators[validator_index].total_deposits_at_logout
-        fraction_to_withdraw: decimal = (1 - fraction_to_slash)
+        fraction_to_slash: decimal = recently_slashed * self.SLASH_FRACTION_MULTIPLIER / self.validators[validator_index].total_deposits_at_logout
+
+        # can't withdraw a negative amount
+        fraction_to_withdraw: decimal = max((1 - fraction_to_slash), 0)
 
         deposit_size: int128(wei) = floor(self.validators[validator_index].deposit * self.deposit_scale_factor[withdrawal_epoch])
         withdraw_amount = floor(deposit_size * fraction_to_withdraw)

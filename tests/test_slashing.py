@@ -225,3 +225,57 @@ def test_withdraw_after_slash(casper, casper_chain,
     assert withdrawal_amount > expected_withdrawal_amount * 0.9
 
     assert_validator_empty(casper, slashed_index)
+
+
+def test_withdraw_after_majority_slash(casper, casper_chain,
+                                       funded_privkeys, deposit_amount, new_epoch,
+                                       induct_validators, mk_suggested_vote, mk_slash_votes):
+    validator_indexes = induct_validators(funded_privkeys, [deposit_amount] * len(funded_privkeys))
+
+    # 0th gets slashed
+    slashed_indexes = validator_indexes[:-1]
+    slashed_privkeys = funded_privkeys[:-1]
+    slashed_public_keys = [
+        utils.privtoaddr(slashed_privkey) for slashed_privkey in slashed_privkeys
+    ]
+    # the rest remain
+    logged_in_index = validator_indexes[-1]
+    logged_in_privkey = funded_privkeys[-1]
+
+    assert len(slashed_indexes) / float(len(funded_privkeys)) >= 1 / 3.0
+
+    for slashed_index, slashed_privkey in zip(slashed_indexes, slashed_privkeys):
+        vote_1, vote_2 = mk_slash_votes(slashed_index, slashed_privkey)
+        casper.slash(vote_1, vote_2)
+
+    current_epoch = casper.current_epoch()
+    assert casper.total_slashed(current_epoch) == deposit_amount * len(slashed_indexes)
+    assert casper.total_slashed(current_epoch + 1) == 0
+
+    # artificially simulate the slashed validators voting
+    # normally if this occured, the validators would likely stop
+    # voting and their deposits would have to bleed out.
+    for i, validator_index in enumerate(validator_indexes):
+        casper.vote(mk_suggested_vote(validator_index, funded_privkeys[i]))
+    new_epoch()
+
+    # slashed validators can withdraw after end_dynasty plus delay
+    for i in range(casper.WITHDRAWAL_DELAY() + 1):
+        casper.vote(mk_suggested_vote(logged_in_index, logged_in_privkey))
+        new_epoch()
+
+    assert casper.dynasty() > casper.validators__end_dynasty(slashed_indexes[0])
+
+    prev_balances = [
+        casper_chain.head_state.get_balance(slashed_public_key)
+        for slashed_public_key in slashed_public_keys
+    ]
+    for slashed_index in slashed_indexes:
+        casper.withdraw(slashed_index)
+
+    for slashed_public_key, prev_balance in zip(slashed_public_keys, prev_balances):
+        balance = casper_chain.head_state.get_balance(slashed_public_key)
+        assert balance == prev_balance
+
+    for slashed_index in slashed_indexes:
+        assert_validator_empty(casper, slashed_index)
