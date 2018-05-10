@@ -249,7 +249,7 @@ def casper_chain(
     casper_tx = Transaction(
         nonce,
         GAS_PRICE,
-        6000000,
+        7000000,
         b'',
         0,
         deploy_code
