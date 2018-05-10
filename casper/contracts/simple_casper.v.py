@@ -253,7 +253,7 @@ def delete_validator(validator_index: int128):
         deposit: 0,
         start_dynasty: 0,
         end_dynasty: 0,
-        is_slashed: false,
+        is_slashed: False,
         total_deposits_at_logout: 0,
         addr: None,
         withdrawal_addr: None
@@ -332,8 +332,10 @@ def slashable(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024) -> bool:
         return False
 
     double_vote: bool = target_epoch_1 == target_epoch_2
-    surround_vote: bool = (target_epoch_1 > target_epoch_2 and source_epoch_1 < source_epoch_2) or \
-                          (target_epoch_2 > target_epoch_1 and source_epoch_2 < source_epoch_1)
+    surround_vote: bool = (
+        target_epoch_1 > target_epoch_2 and source_epoch_1 < source_epoch_2 or
+        target_epoch_2 > target_epoch_1 and source_epoch_2 < source_epoch_1
+    )
 
     return double_vote or surround_vote
 
@@ -614,12 +616,8 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     assert self.slashable(vote_msg_1, vote_msg_2)
 
     # Extract validator_index
-    # vote messages were shown to be the same in `slashable`
+    # `slashable` guarantees that validator_index is the same for each vote_msg
     # so just extract validator_index from vote_msg_1
-    msg_hash: bytes32 = extract32(
-        raw_call(self.MSG_HASHER, vote_msg_1, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32),
-        0
-    )
     values = RLPList(vote_msg_1, [int128, bytes32, int128, int128, bytes])
     validator_index: int128 = values[0]
 
