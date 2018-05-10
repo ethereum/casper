@@ -19,7 +19,7 @@ def test_epoch_length_range(casper_chain, casper, new_epoch, assert_tx_failed):
 
     new_epoch()
 
-    for _ in range(0, epoch_length):
+    for _ in range(epoch_length * 3):   # check the entire range 3 times
         casper_chain.mine(1)
         block_number = casper_chain.head_state.block_number
         is_epoch_block = (block_number % epoch_length) == 0
