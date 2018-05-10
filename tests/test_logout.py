@@ -124,9 +124,11 @@ def test_logout_from_withdrawal_address_with_signature(casper,
     validator_index = induct_validator(funded_privkey, deposit_amount)
     expected_end_dynasty = casper.dynasty() + casper.DYNASTY_LOGOUT_DELAY()
 
-    logout_validator_via_signed_msg(validator_index,
-                                    funded_privkey,
-                                    funded_privkey)
+    logout_validator_via_signed_msg(
+        validator_index,
+        funded_privkey,
+        funded_privkey
+    )
 
     assert casper.validators__end_dynasty(validator_index) == expected_end_dynasty
 
@@ -139,13 +141,13 @@ def test_logout_from_non_withdrawal_address_without_signature(casper,
                                                               assert_tx_failed):
     validator_key = funded_privkeys[0]
     non_validator_key = funded_privkeys[1]
-    assert(validator_key != non_validator_key)
+    assert validator_key != non_validator_key
 
     validator_index = induct_validator(validator_key, deposit_amount)
 
-    assert_tx_failed(lambda:
-                     logout_validator_via_unsigned_msg(validator_index,
-                                                       non_validator_key))
+    assert_tx_failed(
+        lambda: logout_validator_via_unsigned_msg(validator_index, non_validator_key)
+    )
 
 
 def test_logout_from_non_withdrawal_address_with_signature(casper,
@@ -156,12 +158,15 @@ def test_logout_from_non_withdrawal_address_with_signature(casper,
                                                            assert_tx_failed):
     validator_key = funded_privkeys[0]
     non_validator_key = funded_privkeys[1]
-    assert(validator_key != non_validator_key)
+    assert validator_key != non_validator_key
 
     validator_index = induct_validator(validator_key, deposit_amount)
     expected_end_dynasty = casper.dynasty() + casper.DYNASTY_LOGOUT_DELAY()
 
-    logout_validator_via_signed_msg(validator_index, validator_key,
-                                    non_validator_key)
+    logout_validator_via_signed_msg(
+        validator_index,
+        validator_key,
+        non_validator_key
+    )
 
     assert casper.validators__end_dynasty(validator_index) == expected_end_dynasty
