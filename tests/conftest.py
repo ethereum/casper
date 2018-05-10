@@ -387,9 +387,11 @@ def mk_logout_msg_unsigned():
 def logout_validator_via_signed_msg(casper, mk_logout_msg_signed):
     def logout_validator_via_signed_msg(validator_index, msg_signing_key,
                                         tx_sender_key=42):
-        logout_tx = mk_logout_msg_signed(validator_index,
-                                         casper.current_epoch(),
-                                         msg_signing_key)
+        logout_tx = mk_logout_msg_signed(
+            validator_index,
+            casper.current_epoch(),
+            msg_signing_key
+        )
         casper.logout(logout_tx, sender=tx_sender_key)
     return logout_validator_via_signed_msg
 
