@@ -151,7 +151,10 @@ def test_slash_no_surround(casper, funded_privkey, deposit_amount, new_epoch,
     next_dynasty = casper.dynasty() + 1
     assert casper.dynasty_wei_delta(casper.dynasty() + 1) == 0
 
+    # ensure works both ways
     assert casper.slashable(vote_1, vote_2)
+    assert casper.slashable(vote_2, vote_1)
+
     casper.slash(vote_1, vote_2)
 
     assert casper.total_slashed(casper.current_epoch()) == deposit_amount
