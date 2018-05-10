@@ -34,12 +34,10 @@ def test_early_epoch_initialization(casper_chain, casper, new_epoch, assert_tx_f
 
 
 def test_double_epoch_initialization(casper_chain, casper, new_epoch, assert_tx_failed):
-    epoch_length = casper.EPOCH_LENGTH()
-
     new_epoch()
     initial_epoch = casper.current_epoch()
 
-    casper_chain.mine(epoch_length)
+    casper_chain.mine(casper.EPOCH_LENGTH())
 
     next_epoch = initial_epoch + 1
     casper.initialize_epoch(next_epoch)
@@ -65,12 +63,10 @@ def test_epoch_initialization_one_block_late(casper_chain, casper, new_epoch):
 
 
 def test_epoch_initialize_one_epoch_late(casper_chain, casper, new_epoch, assert_tx_failed):
-    epoch_length = casper.EPOCH_LENGTH()
-
     new_epoch()
     initial_epoch = casper.current_epoch()
 
-    casper_chain.mine(epoch_length * 2)
+    casper_chain.mine(casper.EPOCH_LENGTH() * 2)
     assert_tx_failed(
         lambda: casper.initialize_epoch(initial_epoch + 2)
     )
