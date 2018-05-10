@@ -600,7 +600,7 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     validator_deposit: int128(wei) = self.deposit_size(validator_index_1)
     slashing_bounty: int128(wei) = floor(validator_deposit / 25)
     deposit_destroyed: int128(wei) = validator_deposit - slashing_bounty
-    self.total_slashed[self.current_epoch] += validator_deposit  # should this be current_epoch + 1?
+    self.total_slashed[self.current_epoch] += validator_deposit
     self.validators[validator_index_1].is_slashed = True
 
     # Log slashing
