@@ -88,6 +88,9 @@ expected_source_epoch: public(int128)
 # Running total of deposits slashed
 total_slashed: public(wei_value[int128])
 
+# Flag that only allows contract initialization to happen once
+initialized: bool
+
 # ***** Parameters *****
 
 # Length of an epoch in blocks
@@ -117,13 +120,20 @@ SLASH_FRACTION_MULTIPLIER: int128
 
 
 @public
-def init(
-        epoch_length: int128, withdrawal_delay: int128, dynasty_logout_delay: int128,
-        msg_hasher: address, purity_checker: address,
-        base_interest_factor: decimal, base_penalty_factor: decimal,
-        min_deposit_size: wei_value):
+def init(epoch_length: int128, withdrawal_delay: int128, dynasty_logout_delay: int128,
+         msg_hasher: address, purity_checker: address,
+         base_interest_factor: decimal, base_penalty_factor: decimal,
+         min_deposit_size: wei_value):
 
+    assert not self.initialized
     assert epoch_length > 0 and epoch_length < 256
+    assert withdrawal_delay >= 0
+    assert dynasty_logout_delay >= 2
+    assert base_interest_factor >= 0.0
+    assert base_penalty_factor >= 0.0
+    assert min_deposit_size > 0
+
+    self.initialized = True
 
     self.EPOCH_LENGTH = epoch_length
     self.WITHDRAWAL_DELAY = withdrawal_delay

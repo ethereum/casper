@@ -216,7 +216,8 @@ def casper_chain(
         dependency_transactions,
         msg_hasher_address,
         purity_checker_address,
-        base_sender_privkey):
+        base_sender_privkey,
+        initialize_contract=True):
     init_transactions = []
     nonce = 0
     # Create transactions for instantiating RLP decoder, msg hasher and purity checker,
@@ -274,8 +275,9 @@ def casper_chain(
 
     test_chain.mine(1)
 
-    casper_contract = casper(test_chain, casper_abi, casper_address)
-    casper_contract.init(*casper_args)
+    if initialize_contract:
+        casper_contract = casper(test_chain, casper_abi, casper_address)
+        casper_contract.init(*casper_args)
 
     return test_chain
 
@@ -291,11 +293,11 @@ def deploy_casper_contract(
         msg_hasher_address,
         purity_checker_address,
         base_sender_privkey):
-    def deploy_casper_contract(contract_args):
+    def deploy_casper_contract(contract_args, initialize_contract=True):
         chain = casper_chain(
             test_chain, contract_args, casper_code, casper_abi, casper_ct, casper_address,
             dependency_transactions, msg_hasher_address, purity_checker_address,
-            base_sender_privkey
+            base_sender_privkey, initialize_contract
         )
         return casper(chain, casper_abi, casper_address)
     return deploy_casper_contract
