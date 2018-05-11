@@ -246,9 +246,7 @@ def casper_chain(
     # otherwise, vyper compiler cannot properly embed RLP decoder address
     casper_bytecode = compiler.compile(casper_code)
 
-    # init_args = casper_ct.encode_constructor_arguments(casper_args)
-
-    deploy_code = casper_bytecode #+ (init_args)
+    deploy_code = casper_bytecode
     casper_tx = Transaction(
         nonce,
         GAS_PRICE,
