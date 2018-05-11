@@ -210,7 +210,9 @@ def casper_chain(
         test_chain,
         casper_args,
         casper_code,
+        casper_abi,
         casper_ct,
+        casper_address,
         dependency_transactions,
         msg_hasher_address,
         purity_checker_address,
@@ -243,9 +245,9 @@ def casper_chain(
     # otherwise, vyper compiler cannot properly embed RLP decoder address
     casper_bytecode = compiler.compile(casper_code)
 
-    init_args = casper_ct.encode_constructor_arguments(casper_args)
+    # init_args = casper_ct.encode_constructor_arguments(casper_args)
 
-    deploy_code = casper_bytecode + (init_args)
+    deploy_code = casper_bytecode #+ (init_args)
     casper_tx = Transaction(
         nonce,
         GAS_PRICE,
@@ -271,6 +273,10 @@ def casper_chain(
     test_chain.direct_tx(casper_fund_tx)
 
     test_chain.mine(1)
+
+    casper_contract = casper(test_chain, casper_abi, casper_address)
+    casper_contract.init(*casper_args)
+
     return test_chain
 
 
@@ -287,7 +293,7 @@ def deploy_casper_contract(
         base_sender_privkey):
     def deploy_casper_contract(contract_args):
         chain = casper_chain(
-            test_chain, contract_args, casper_code, casper_ct,
+            test_chain, contract_args, casper_code, casper_abi, casper_ct, casper_address,
             dependency_transactions, msg_hasher_address, purity_checker_address,
             base_sender_privkey
         )

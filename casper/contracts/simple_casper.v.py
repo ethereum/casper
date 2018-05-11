@@ -117,7 +117,7 @@ SLASH_FRACTION_MULTIPLIER: int128
 
 
 @public
-def __init__(
+def init(
         epoch_length: int128, withdrawal_delay: int128, dynasty_logout_delay: int128,
         msg_hasher: address, purity_checker: address,
         base_interest_factor: decimal, base_penalty_factor: decimal,
