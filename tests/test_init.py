@@ -5,12 +5,11 @@ from ethereum.tools.tester import TransactionFailed
 
 def test_no_double_init(casper_args,
                         deploy_casper_contract,
-                        assert_failed):
-    # Note: cannot use assert_tx_failed because requires casper_chain
+                        assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
     casper.init(*casper_args)
-    assert_failed(lambda: casper.init(*casper_args), TransactionFailed)
+    assert_tx_failed(lambda: casper.init(*casper_args))
 
 
 @pytest.mark.parametrize(
@@ -19,7 +18,8 @@ def test_no_double_init(casper_args,
         (0), (1), (4), (10)
     ]
 )
-def test_start_epoch(test_chain, start_epoch, epoch_length, casper_args, deploy_casper_contract):
+def test_start_epoch(test_chain, start_epoch, epoch_length,
+                     casper_args, deploy_casper_contract):
     test_chain.mine(
         epoch_length * start_epoch - test_chain.head_state.block_number
     )
@@ -43,15 +43,11 @@ def test_start_epoch(test_chain, start_epoch, epoch_length, casper_args, deploy_
     ]
 )
 def test_init_epoch_length(epoch_length, success, casper_args,
-                           deploy_casper_contract, assert_failed):
-    # Note: cannot use assert_tx_failed because requires casper_chain
+                           deploy_casper_contract, assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
     if not success:
-        assert_failed(
-            lambda: casper.init(*casper_args),
-            TransactionFailed
-        )
+        assert_tx_failed(lambda: casper.init(*casper_args))
         return
 
     casper.init(*casper_args)
@@ -71,15 +67,11 @@ def test_init_epoch_length(epoch_length, success, casper_args,
     ]
 )
 def test_init_withdrawal_delay(withdrawal_delay, success, casper_args,
-                               deploy_casper_contract, assert_failed):
-    # Note: cannot use assert_tx_failed because requires casper_chain
+                               deploy_casper_contract, assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
     if not success:
-        assert_failed(
-            lambda: casper.init(*casper_args),
-            TransactionFailed
-        )
+        assert_tx_failed(lambda: casper.init(*casper_args))
         return
 
     casper.init(*casper_args)
@@ -100,15 +92,11 @@ def test_init_withdrawal_delay(withdrawal_delay, success, casper_args,
     ]
 )
 def test_init_dynasty_logout_delay(dynasty_logout_delay, success, casper_args,
-                                   deploy_casper_contract, assert_failed):
-    # Note: cannot use assert_tx_failed because requires casper_chain
+                                   deploy_casper_contract, assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
     if not success:
-        assert_failed(
-            lambda: casper.init(*casper_args),
-            TransactionFailed
-        )
+        assert_tx_failed(lambda: casper.init(*casper_args))
         return
 
     casper.init(*casper_args)
@@ -127,15 +115,11 @@ def test_init_dynasty_logout_delay(dynasty_logout_delay, success, casper_args,
     ]
 )
 def test_init_base_interest_factor(base_interest_factor, success, casper_args,
-                                   deploy_casper_contract, assert_failed):
-    # Note: cannot use assert_tx_failed because requires casper_chain
+                                   deploy_casper_contract, assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
     if not success:
-        assert_failed(
-            lambda: casper.init(*casper_args),
-            TransactionFailed
-        )
+        assert_tx_failed(lambda: casper.init(*casper_args))
         return
 
     casper.init(*casper_args)
@@ -154,15 +138,11 @@ def test_init_base_interest_factor(base_interest_factor, success, casper_args,
     ]
 )
 def test_init_base_penalty_factor(base_penalty_factor, success, casper_args,
-                                  deploy_casper_contract, assert_failed):
-    # Note: cannot use assert_tx_failed because requires casper_chain
+                                  deploy_casper_contract, assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
     if not success:
-        assert_failed(
-            lambda: casper.init(*casper_args),
-            TransactionFailed
-        )
+        assert_tx_failed(lambda: casper.init(*casper_args))
         return
 
     casper.init(*casper_args)
@@ -183,15 +163,11 @@ def test_init_base_penalty_factor(base_penalty_factor, success, casper_args,
     ]
 )
 def test_init_min_deposit_size(min_deposit_size, success, casper_args,
-                               deploy_casper_contract, assert_failed):
-    # Note: cannot use assert_tx_failed because requires casper_chain
+                               deploy_casper_contract, assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
     if not success:
-        assert_failed(
-            lambda: casper.init(*casper_args),
-            TransactionFailed
-        )
+        assert_tx_failed(lambda: casper.init(*casper_args))
         return
 
     casper.init(*casper_args)

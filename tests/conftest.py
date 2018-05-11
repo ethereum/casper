@@ -480,13 +480,14 @@ def assert_failed():
 
 
 @pytest.fixture
-def assert_tx_failed(casper_chain):
+def assert_tx_failed(test_chain):
     def assert_tx_failed(function_to_test, exception=tester.TransactionFailed):
-        initial_state = casper_chain.snapshot()
+        initial_state = test_chain.snapshot()
         with pytest.raises(exception):
             function_to_test()
-        casper_chain.revert(initial_state)
+        test_chain.revert(initial_state)
     return assert_tx_failed
+
 
 @pytest.fixture
 def get_logs():
@@ -503,6 +504,7 @@ def get_logs():
         # Return all events decoded in the receipt
         return [contract.translator.decode_event(log.topics, log.data) for log in logs]
     return get_logs
+
 
 @pytest.fixture
 def get_last_log(get_logs):
