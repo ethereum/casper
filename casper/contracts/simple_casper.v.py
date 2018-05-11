@@ -488,7 +488,8 @@ def logout(logout_msg: bytes <= 1024):
     sig: bytes <= 1024 = values[2]
 
     assert self.current_epoch >= epoch
-    assert self.validate_signature(msg_hash, sig, validator_index)
+    from_withdrawal: bool = msg.sender == self.validators[validator_index].withdrawal_addr
+    assert from_withdrawal or self.validate_signature(msg_hash, sig, validator_index)
 
     # Check that we haven't already withdrawn
     end_dynasty: int128 = self.dynasty + self.DYNASTY_LOGOUT_DELAY
