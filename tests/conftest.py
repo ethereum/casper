@@ -210,11 +210,14 @@ def casper_chain(
         test_chain,
         casper_args,
         casper_code,
+        casper_abi,
         casper_ct,
+        casper_address,
         dependency_transactions,
         msg_hasher_address,
         purity_checker_address,
-        base_sender_privkey):
+        base_sender_privkey,
+        initialize_contract=True):
     init_transactions = []
     nonce = 0
     # Create transactions for instantiating RLP decoder, msg hasher and purity checker,
@@ -243,9 +246,7 @@ def casper_chain(
     # otherwise, vyper compiler cannot properly embed RLP decoder address
     casper_bytecode = compiler.compile(casper_code)
 
-    init_args = casper_ct.encode_constructor_arguments(casper_args)
-
-    deploy_code = casper_bytecode + (init_args)
+    deploy_code = casper_bytecode
     casper_tx = Transaction(
         nonce,
         GAS_PRICE,
@@ -271,6 +272,11 @@ def casper_chain(
     test_chain.direct_tx(casper_fund_tx)
 
     test_chain.mine(1)
+
+    if initialize_contract:
+        casper_contract = casper(test_chain, casper_abi, casper_address)
+        casper_contract.init(*casper_args)
+
     return test_chain
 
 
@@ -285,11 +291,11 @@ def deploy_casper_contract(
         msg_hasher_address,
         purity_checker_address,
         base_sender_privkey):
-    def deploy_casper_contract(contract_args):
+    def deploy_casper_contract(contract_args, initialize_contract=True):
         chain = casper_chain(
-            test_chain, contract_args, casper_code, casper_ct,
+            test_chain, contract_args, casper_code, casper_abi, casper_ct, casper_address,
             dependency_transactions, msg_hasher_address, purity_checker_address,
-            base_sender_privkey
+            base_sender_privkey, initialize_contract
         )
         return casper(chain, casper_abi, casper_address)
     return deploy_casper_contract
@@ -472,13 +478,14 @@ def assert_failed():
 
 
 @pytest.fixture
-def assert_tx_failed(casper_chain):
+def assert_tx_failed(test_chain):
     def assert_tx_failed(function_to_test, exception=tester.TransactionFailed):
-        initial_state = casper_chain.snapshot()
+        initial_state = test_chain.snapshot()
         with pytest.raises(exception):
             function_to_test()
-        casper_chain.revert(initial_state)
+        test_chain.revert(initial_state)
     return assert_tx_failed
+
 
 @pytest.fixture
 def get_logs():
@@ -495,6 +502,7 @@ def get_logs():
         # Return all events decoded in the receipt
         return [contract.translator.decode_event(log.topics, log.data) for log in logs]
     return get_logs
+
 
 @pytest.fixture
 def get_last_log(get_logs):
