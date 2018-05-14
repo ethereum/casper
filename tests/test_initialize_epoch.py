@@ -1,3 +1,6 @@
+import pytest
+
+
 # ensure that our fixture 'new_epoch' functions properly
 def test_new_epoch_fixture(casper_chain, casper, new_epoch):
     epoch_length = casper.EPOCH_LENGTH()
@@ -31,6 +34,41 @@ def test_epoch_length_range(casper_chain, casper, new_epoch, assert_tx_failed):
             assert_tx_failed(
                 lambda: casper.initialize_epoch(next_epoch)
             )
+
+
+@pytest.mark.parametrize(
+    'warm_up_period, epoch_length',
+    [
+        (15, 5),
+        (20, 10),
+        (100, 50),
+        (220, 20),
+    ]
+)
+def test_cannot_initialize_during_warm_up(casper_chain, casper,
+                                          epoch_length, warm_up_period, assert_tx_failed):
+    assert casper.current_epoch() == \
+        (casper_chain.head_state.block_number + warm_up_period) // epoch_length
+
+    next_epoch = casper.current_epoch() + 1
+    for _ in range(warm_up_period):
+        # check then mine to ensure that the start block counts
+        assert_tx_failed(
+            lambda: casper.initialize_epoch(next_epoch)
+        )
+        casper_chain.mine(1)
+
+    # mine right up until the start of the next epoch
+    blocks_until_next_start = epoch_length - casper_chain.head_state.block_number % epoch_length
+    for _ in range(blocks_until_next_start):
+        assert_tx_failed(
+            lambda: casper.initialize_epoch(next_epoch)
+        )
+        casper_chain.mine(1)
+
+    # at start of next_epoch
+    casper.initialize_epoch(next_epoch)
+    assert casper.current_epoch() == next_epoch
 
 
 def test_double_epoch_initialization(casper_chain, casper, new_epoch, assert_tx_failed):

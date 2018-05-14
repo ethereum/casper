@@ -95,6 +95,7 @@ initialized: bool
 
 # Length of an epoch in blocks
 EPOCH_LENGTH: public(int128)
+WARM_UP_PERIOD: public(int128)
 
 # Withdrawal delay in blocks
 WITHDRAWAL_DELAY: public(int128)
@@ -120,13 +121,15 @@ SLASH_FRACTION_MULTIPLIER: int128
 
 
 @public
-def init(epoch_length: int128, withdrawal_delay: int128, dynasty_logout_delay: int128,
+def init(epoch_length: int128, warm_up_period: int128,
+         withdrawal_delay: int128, dynasty_logout_delay: int128,
          msg_hasher: address, purity_checker: address,
          base_interest_factor: decimal, base_penalty_factor: decimal,
          min_deposit_size: wei_value):
 
     assert not self.initialized
     assert epoch_length > 0 and epoch_length < 256
+    assert warm_up_period >= 0
     assert withdrawal_delay >= 0
     assert dynasty_logout_delay >= 2
     assert base_interest_factor >= 0.0
@@ -136,13 +139,14 @@ def init(epoch_length: int128, withdrawal_delay: int128, dynasty_logout_delay: i
     self.initialized = True
 
     self.EPOCH_LENGTH = epoch_length
+    self.WARM_UP_PERIOD = warm_up_period
     self.WITHDRAWAL_DELAY = withdrawal_delay
     self.DYNASTY_LOGOUT_DELAY = dynasty_logout_delay
     self.BASE_INTEREST_FACTOR = base_interest_factor
     self.BASE_PENALTY_FACTOR = base_penalty_factor
     self.MIN_DEPOSIT_SIZE = min_deposit_size
 
-    self.START_EPOCH = floor(block.number / self.EPOCH_LENGTH)
+    self.START_EPOCH = floor((block.number + warm_up_period) / self.EPOCH_LENGTH)
 
     # helper contracts
     self.MSG_HASHER = msg_hasher
@@ -460,7 +464,6 @@ def initialize_epoch(epoch: int128):
 @public
 @payable
 def deposit(validation_addr: address, withdrawal_addr: address):
-    assert self.current_epoch == floor(block.number / self.EPOCH_LENGTH)
     assert extract32(raw_call(self.PURITY_CHECKER, concat('\xa1\x90\x3e\xab', convert(validation_addr, 'bytes32')), gas=500000, outsize=32), 0) != convert(0, 'bytes32')
     assert not self.validator_indexes[withdrawal_addr]
     assert msg.value >= self.MIN_DEPOSIT_SIZE

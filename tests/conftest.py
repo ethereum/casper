@@ -21,6 +21,7 @@ PURITY_CHECKER_TX_HEX = "0xf90467808506fc23ac00830583c88080b904546104428061000e6
 PURITY_CHECKER_ABI = [{'name': 'check(address)', 'type': 'function', 'constant': True, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}, {'name': 'submit(address)', 'type': 'function', 'constant': False, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}]  # NOQA
 
 EPOCH_LENGTH = 10
+WARM_UP_PERIOD = 0
 DYNASTY_LOGOUT_DELAY = 5
 WITHDRAWAL_DELAY = 5
 BASE_INTEREST_FACTOR = 0.02
@@ -100,6 +101,11 @@ def epoch_length():
 
 
 @pytest.fixture
+def warm_up_period():
+    return WARM_UP_PERIOD
+
+
+@pytest.fixture
 def withdrawal_delay():
     return WITHDRAWAL_DELAY
 
@@ -125,10 +131,11 @@ def min_deposit_size():
 
 
 @pytest.fixture
-def casper_config(epoch_length, withdrawal_delay, dynasty_logout_delay,
+def casper_config(epoch_length, warm_up_period, withdrawal_delay, dynasty_logout_delay,
                   base_interest_factor, base_penalty_factor, min_deposit_size):
     return {
         "epoch_length": epoch_length,  # in blocks
+        "warm_up_period": warm_up_period,  # in blocks
         "withdrawal_delay": withdrawal_delay,  # in epochs
         "dynasty_logout_delay": dynasty_logout_delay,  # in dynasties
         "base_interest_factor": base_interest_factor,
@@ -140,8 +147,8 @@ def casper_config(epoch_length, withdrawal_delay, dynasty_logout_delay,
 @pytest.fixture
 def casper_args(casper_config, msg_hasher_address, purity_checker_address):
     return [
-        casper_config["epoch_length"], casper_config["withdrawal_delay"],
-        casper_config["dynasty_logout_delay"],
+        casper_config["epoch_length"], casper_config["warm_up_period"],
+        casper_config["withdrawal_delay"], casper_config["dynasty_logout_delay"],
         msg_hasher_address, purity_checker_address, casper_config["base_interest_factor"],
         casper_config["base_penalty_factor"], casper_config["min_deposit_size"]
     ]

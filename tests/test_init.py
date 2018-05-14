@@ -13,22 +13,29 @@ def test_no_double_init(casper_args,
 
 
 @pytest.mark.parametrize(
-    'start_epoch',
+    'deploy_epoch,warm_up_period,epoch_length,expected_start_epoch',
     [
-        (0), (1), (4), (10)
+        (0, 0, 50, 0),
+        (0, 10, 50, 0),
+        (0, 51, 50, 1),
+        (0, 100, 50, 2),
+        (1, 0, 20, 1),
+        (1, 21, 20, 2),
+        (4, 230, 50, 8),
+        (10, 500, 25, 30)
     ]
 )
-def test_start_epoch(test_chain, start_epoch, epoch_length,
-                     casper_args, deploy_casper_contract):
+def test_start_epoch(test_chain, deploy_epoch, warm_up_period, expected_start_epoch,
+                     epoch_length, casper_args, casper_config, deploy_casper_contract):
     test_chain.mine(
-        epoch_length * start_epoch - test_chain.head_state.block_number
+        epoch_length * deploy_epoch - test_chain.head_state.block_number
     )
 
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
     casper.init(*casper_args)
 
-    assert casper.START_EPOCH() == start_epoch
-    assert casper.current_epoch() == start_epoch
+    assert casper.START_EPOCH() == expected_start_epoch
+    assert casper.current_epoch() == expected_start_epoch
 
 
 @pytest.mark.parametrize(
@@ -52,6 +59,28 @@ def test_init_epoch_length(epoch_length, success, casper_args,
 
     casper.init(*casper_args)
     assert casper.EPOCH_LENGTH() == epoch_length
+
+
+@pytest.mark.parametrize(
+    'warm_up_period, success',
+    [
+        (-1, False),
+        (0, True),
+        (10, True),
+        (256, True),
+        (50000, True),
+    ]
+)
+def test_init_warm_up_period(warm_up_period, success, casper_args,
+                             deploy_casper_contract, assert_tx_failed):
+    casper = deploy_casper_contract(casper_args, initialize_contract=False)
+
+    if not success:
+        assert_tx_failed(lambda: casper.init(*casper_args))
+        return
+
+    casper.init(*casper_args)
+    assert casper.WARM_UP_PERIOD() == warm_up_period
 
 
 @pytest.mark.parametrize(

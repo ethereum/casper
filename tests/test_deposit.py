@@ -1,3 +1,5 @@
+import pytest
+
 from ethereum import utils
 
 
@@ -84,3 +86,17 @@ def test_deposit_updates_total_deposits(casper, funded_privkey, deposit_amount,
 
     assert casper.total_curdyn_deposits_in_wei() == deposit_amount
     assert casper.total_prevdyn_deposits_in_wei() == deposit_amount
+
+
+@pytest.mark.parametrize(
+    'warm_up_period',
+    [
+        (10), (25), (100)
+    ]
+)
+def test_deposit_during_warm_up_period(casper, funded_privkey, deposit_amount,
+                                       deposit_validator, warm_up_period):
+    validator_index = deposit_validator(funded_privkey, deposit_amount)
+
+    expected_start_dynasty = casper.dynasty() + 2
+    assert casper.validators__start_dynasty(validator_index) == expected_start_dynasty
