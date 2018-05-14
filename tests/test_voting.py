@@ -18,8 +18,9 @@ from ethereum.tools import tester
 )
 def test_deposit(casper_chain, casper, privkey, amount,
                  success, deposit_validator, new_epoch, assert_tx_failed):
+    start_epoch = casper.START_EPOCH()
     new_epoch()
-    assert casper.current_epoch() == 1
+    assert casper.current_epoch() == start_epoch + 1
     assert casper.next_validator_index() == 1
 
     if not success:

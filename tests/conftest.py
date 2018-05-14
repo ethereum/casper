@@ -21,7 +21,7 @@ PURITY_CHECKER_TX_HEX = "0xf90467808506fc23ac00830583c88080b904546104428061000e6
 PURITY_CHECKER_ABI = [{'name': 'check(address)', 'type': 'function', 'constant': True, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}, {'name': 'submit(address)', 'type': 'function', 'constant': False, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}]  # NOQA
 
 EPOCH_LENGTH = 10
-WARM_UP_PERIOD = 0
+WARM_UP_PERIOD = 20
 DYNASTY_LOGOUT_DELAY = 5
 WITHDRAWAL_DELAY = 5
 BASE_INTEREST_FACTOR = 0.02
@@ -448,11 +448,10 @@ def deposit_validator(casper_chain, casper, validation_addr):
 @pytest.fixture
 def induct_validator(casper_chain, casper, deposit_validator, new_epoch):
     def induct_validator(privkey, value, valcode_type="pure_ecrecover"):
-        if casper.current_epoch() == 0:
-            new_epoch()
         validator_index = deposit_validator(privkey, value, valcode_type)
-        new_epoch()
-        new_epoch()
+        new_epoch()  # justify
+        new_epoch()  # finalize and increment dynasty
+        new_epoch()  # finalize and increment dynasty
         return validator_index
     return induct_validator
 
@@ -466,12 +465,11 @@ def induct_validator(casper_chain, casper, deposit_validator, new_epoch):
 def induct_validators(casper_chain, casper, deposit_validator, new_epoch):
     def induct_validators(privkeys, values):
         start_index = casper.next_validator_index()
-        if casper.current_epoch() == 0:
-            new_epoch()
         for privkey, value in zip(privkeys, values):
             deposit_validator(privkey, value)
-        new_epoch()
-        new_epoch()
+        new_epoch()  # justify
+        new_epoch()  # finalize and increment dynasty
+        new_epoch()  # finalize and increment dynasty
         return list(range(start_index, start_index + len(privkeys)))
     return induct_validators
 

@@ -89,14 +89,31 @@ def test_deposit_updates_total_deposits(casper, funded_privkey, deposit_amount,
 
 
 @pytest.mark.parametrize(
-    'warm_up_period',
+    'warm_up_period,epoch_length',
     [
-        (10), (25), (100)
+        (10, 5),
+        (25, 10),
+        (100, 50),
     ]
 )
-def test_deposit_during_warm_up_period(casper, funded_privkey, deposit_amount,
-                                       deposit_validator, warm_up_period):
+def test_deposit_during_warm_up_period(casper_chain, casper, funded_privkey, deposit_amount,
+                                       deposit_validator, new_epoch, warm_up_period, epoch_length):
     validator_index = deposit_validator(funded_privkey, deposit_amount)
 
     expected_start_dynasty = casper.dynasty() + 2
     assert casper.validators__start_dynasty(validator_index) == expected_start_dynasty
+
+    new_epoch()  # new_epoch mines through warm_up_period on first call
+    casper.dynasty() == 0
+    new_epoch()
+    casper.dynasty() == 1
+    new_epoch()
+    casper.dynasty() == 2
+
+    casper.total_curdyn_deposits_in_wei() == deposit_amount
+    casper.total_prevdyn_deposits_in_wei() == 0
+
+    new_epoch()
+
+    casper.total_curdyn_deposits_in_wei() == deposit_amount
+    casper.total_prevdyn_deposits_in_wei() == deposit_amount

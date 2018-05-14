@@ -2,12 +2,24 @@ import pytest
 
 
 # ensure that our fixture 'new_epoch' functions properly
-def test_new_epoch_fixture(casper_chain, casper, new_epoch):
-    epoch_length = casper.EPOCH_LENGTH()
-    for _ in range(4):
+@pytest.mark.parametrize(
+    'warm_up_period, epoch_length',
+    [
+        (0, 5),
+        (20, 10),
+        (21, 10),
+        (220, 20),
+    ]
+)
+def test_new_epoch_fixture(casper_chain, casper, new_epoch, warm_up_period, epoch_length):
+    for i in range(4):
         prev_epoch = casper.current_epoch()
         prev_block_number = casper_chain.head_state.block_number
-        expected_jump = epoch_length - (prev_block_number % epoch_length)
+        if i == 0:
+            expected_jump = warm_up_period
+            expected_jump += epoch_length - (prev_block_number + warm_up_period) % epoch_length
+        else:
+            expected_jump = epoch_length - (prev_block_number % epoch_length)
 
         new_epoch()
 
