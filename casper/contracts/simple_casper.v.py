@@ -23,10 +23,10 @@ validators: public({
     withdrawal_addr: address
 }[int128])
 
-# Historical checkpoint hashes
+# Map of epoch number to checkpoint hash
 checkpoint_hashes: public(bytes32[int128])
 
-# Number of validators
+# Next available validator index
 next_validator_index: public(int128)
 
 # Mapping of validator's withdrawal address to their index number
@@ -39,10 +39,10 @@ dynasty: public(int128)
 # Map of the change to total deposits for specific dynasty
 dynasty_wei_delta: public(decimal(wei / m)[int128])
 
-# Total deposits in the current dynasty
+# Total scaled deposits in the current dynasty
 total_curdyn_deposits: decimal(wei / m)
 
-# Total deposits in the previous dynasty
+# Total scaled deposits in the previous dynasty
 total_prevdyn_deposits: decimal(wei / m)
 
 # Mapping of dynasty to start epoch of that dynasty
