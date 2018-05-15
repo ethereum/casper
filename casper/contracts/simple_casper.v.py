@@ -95,6 +95,8 @@ initialized: bool
 
 # Length of an epoch in blocks
 EPOCH_LENGTH: public(int128)
+
+# Length of warm up period in blocks
 WARM_UP_PERIOD: public(int128)
 
 # Withdrawal delay in blocks

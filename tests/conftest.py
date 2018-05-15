@@ -316,6 +316,8 @@ def get_dirs(path):
     return path, extra_args
 
 
+# Note: If called during "warm_up-period", new_epoch mines all the way through
+# the warm up period until `initialize_epoch` can first be called
 @pytest.fixture
 def new_epoch(casper_chain, casper):
     def new_epoch():
