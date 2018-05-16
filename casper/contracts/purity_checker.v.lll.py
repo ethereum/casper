@@ -1,4 +1,8 @@
-# NOTE: this code is untested and probably contains bugs.
+## This Python source code hosts the Vyper LLL used for the purity checker.
+## The purity checker scans a contract's bytecode to see if it uses any operations that rely on (external) mutable state.
+## This functionality is used in Casper to make sure a validator's signature verification code is "pure" so that the Casper contract can determine the authenticity of messages without reference to additional external state.
+
+# NOTE: the following code is untested and probably contains bugs.
 purity_checker_lll = ["seq",
                       ["return",
                        0,
