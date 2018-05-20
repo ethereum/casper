@@ -1,6 +1,6 @@
 from vyper import optimizer, compile_lll
 from vyper.parser.parser_utils import LLLnode
-from ethereum.utils import bytes_to_int
+from web3 import Web3
 
 
 # We must know a pure opcode so we can do control tests
@@ -24,7 +24,7 @@ def generate_pure_ecrecover_LLL_source(address):
                         0,
                         ['eq',
                             ['mload', 0],
-                            bytes_to_int(address)]],
+                            Web3.toInt(address)]],
                     ['return', 0, 32]],
                 [0]]]
     ]
@@ -43,7 +43,7 @@ def format_LLL_source(address, expression):
                         0,
                         ['eq',
                             ['mload', 0],
-                            bytes_to_int(address)]],
+                            Web3.toInt(address)]],
                     ['return', 0, 32]],
                 [0]]]
     ]
