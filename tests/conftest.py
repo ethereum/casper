@@ -2,12 +2,27 @@ import pytest
 import os
 import rlp
 
+import eth_tester
+from eth_tester import (
+    EthereumTester,
+    PyEVMBackend
+)
+from web3.providers.eth_tester import (
+    EthereumTesterProvider,
+)
+from web3 import (
+    Web3
+)
+from vyper import (
+    compiler,
+    utils as vyper_utils,
+)
+
 from ethereum.abi import ContractTranslator
 from ethereum.genesis_helpers import mk_basic_state
 from ethereum.transactions import Transaction
-from ethereum.tools import tester
+from ethereum.tools import ethereum_tester
 from ethereum import utils
-from vyper import compiler
 
 from utils.valcodes import compile_valcode_to_evm_bytecode
 
@@ -16,8 +31,11 @@ OWN_DIR = os.path.dirname(os.path.realpath(__file__))
 GAS_PRICE = 25 * 10**9
 
 VYPER_RLP_DECODER_TX_HEX = "0xf9035b808506fc23ac0083045f788080b903486103305660006109ac5260006109cc527f0100000000000000000000000000000000000000000000000000000000000000600035046109ec526000610a0c5260006109005260c06109ec51101515585760f86109ec51101561006e5760bf6109ec510336141558576001610a0c52610098565b60013560f76109ec51036020035260005160f66109ec510301361415585760f66109ec5103610a0c525b61022060016064818352015b36610a0c511015156100b557610291565b7f0100000000000000000000000000000000000000000000000000000000000000610a0c5135046109ec526109cc5160206109ac51026040015260016109ac51016109ac5260806109ec51101561013b5760016109cc5161044001526001610a0c516109cc5161046001376001610a0c5101610a0c5260216109cc51016109cc52610281565b60b86109ec5110156101d15760806109ec51036109cc51610440015260806109ec51036001610a0c51016109cc51610460013760816109ec5114156101ac5760807f01000000000000000000000000000000000000000000000000000000000000006001610a0c5101350410151558575b607f6109ec5103610a0c5101610a0c5260606109ec51036109cc51016109cc52610280565b60c06109ec51101561027d576001610a0c51013560b76109ec510360200352600051610a2c526038610a2c5110157f01000000000000000000000000000000000000000000000000000000000000006001610a0c5101350402155857610a2c516109cc516104400152610a2c5160b66109ec5103610a0c51016109cc516104600137610a2c5160b66109ec5103610a0c510101610a0c526020610a2c51016109cc51016109cc5261027f565bfe5b5b5b81516001018083528114156100a4575b5050601f6109ac511115155857602060206109ac5102016109005260206109005103610a0c5261022060016064818352015b6000610a0c5112156102d45761030a565b61090051610a0c516040015101610a0c51610900516104400301526020610a0c5103610a0c5281516001018083528114156102c3575b50506109cc516109005101610420526109cc5161090051016109005161044003f35b61000461033003610004600039610004610330036000f31b2d4f"  # NOQA
+VYPER_RLP_DECODER_TX_SENDER = "0x39ba083c30fCe59883775Fc729bBE1f9dE4DEe11"
 MSG_HASHER_TX_HEX = "0xf9016d808506fc23ac0083026a508080b9015a6101488061000e6000396101565660007f01000000000000000000000000000000000000000000000000000000000000006000350460f8811215610038576001915061003f565b60f6810391505b508060005b368312156100c8577f01000000000000000000000000000000000000000000000000000000000000008335048391506080811215610087576001840193506100c2565b60b881121561009d57607f8103840193506100c1565b60c08112156100c05760b68103600185013560b783036020035260005101840193505b5b5b50610044565b81810360388112156100f4578060c00160005380836001378060010160002060e052602060e0f3610143565b61010081121561010557600161011b565b6201000081121561011757600261011a565b60035b5b8160005280601f038160f701815382856020378282600101018120610140526020610140f350505b505050505b6000f31b2d4f"  # NOQA
+MSG_HASHER_TX_SENDER = "0xd7a3bd6c9ea32eff147d067f907ae6b22d436f91"
 PURITY_CHECKER_TX_HEX = "0xf90467808506fc23ac00830583c88080b904546104428061000e60003961045056600061033f537c0100000000000000000000000000000000000000000000000000000000600035047f80010000000000000000000000000000000000000030ffff1c0e00000000000060205263a1903eab8114156103f7573659905901600090523660048237600435608052506080513b806020015990590160009052818152602081019050905060a0526080513b600060a0516080513c6080513b8060200260200159905901600090528181526020810190509050610100526080513b806020026020015990590160009052818152602081019050905061016052600060005b602060a05103518212156103c957610100601f8360a051010351066020518160020a161561010a57fe5b80606013151561011e57607f811315610121565b60005b1561014f5780607f036101000a60018460a0510101510482602002610160510152605e8103830192506103b2565b60f18114801561015f5780610164565b60f282145b905080156101725780610177565b60f482145b9050156103aa5760028212151561019e5760606001830360200261010051015112156101a1565b60005b156101bc57607f6001830360200261010051015113156101bf565b60005b156101d157600282036102605261031e565b6004821215156101f057600360018303602002610100510151146101f3565b60005b1561020d57605a6002830360200261010051015114610210565b60005b1561022b57606060038303602002610100510151121561022e565b60005b1561024957607f60038303602002610100510151131561024c565b60005b1561025e57600482036102605261031d565b60028212151561027d57605a6001830360200261010051015114610280565b60005b1561029257600282036102605261031c565b6002821215156102b157609060018303602002610100510151146102b4565b60005b156102c657600282036102605261031b565b6002821215156102e65760806001830360200261010051015112156102e9565b60005b156103035760906001830360200261010051015112610306565b60005b1561031857600282036102605261031a565bfe5b5b5b5b5b604060405990590160009052600081526102605160200261016051015181602001528090502054156103555760016102a052610393565b60306102605160200261010051015114156103755760016102a052610392565b60606102605160200261010051015114156103915760016102a0525b5b5b6102a051151561039f57fe5b6001830192506103b1565b6001830192505b5b8082602002610100510152600182019150506100e0565b50506001604060405990590160009052600081526080518160200152809050205560016102e05260206102e0f35b63c23697a8811415610440573659905901600090523660048237600435608052506040604059905901600090526000815260805181602001528090502054610300526020610300f35b505b6000f31b2d4f"  # NOQA
+PURITY_CHECKER_TX_SENDER = "0xea0f0d55ee82edf248ed648a9a8d213fba8b5081"
 PURITY_CHECKER_ABI = [{'name': 'check(address)', 'type': 'function', 'constant': True, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}, {'name': 'submit(address)', 'type': 'function', 'constant': False, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}]  # NOQA
 
 EPOCH_LENGTH = 10
@@ -28,16 +46,47 @@ BASE_INTEREST_FACTOR = 0.02
 BASE_PENALTY_FACTOR = 0.002
 MIN_DEPOSIT_SIZE = 1000 * 10**18  # 1000 ether
 
-FUNDED_PRIVKEYS = [tester.k1, tester.k2, tester.k3, tester.k4, tester.k5]
+FUNDED_PRIVKEYS = [ethereum_tester.k1, ethereum_tester.k2, ethereum_tester.k3, ethereum_tester.k4, ethereum_tester.k5]
 DEPOSIT_AMOUNTS = [
     2000 * 10**18,
     # 1000 * 10**18,
 ]
 
 
+def next_contract_address(base_tester, fake_contract_code):
+    def next_contract_address(sender):
+        snapshot_id = base_tester.take_snapshot()
+        bytecode = compiler.compile(fake_contract_code)
+        tx_hash = w3.eth.sendTransaction({
+            'from': sender,
+            'to': '',
+            'gas': 7000000,
+            'data': bytecode
+        })
+        contract_address = w3.eth.getTransactionReceipt(tx_hash).contractAddress
+
+        base_tester.revert_to_snapshot(snapshot_id)
+        return contract_address
+    return next_contract_address
+
+
 @pytest.fixture
 def fake_hash():
     return b'\xbc' * 32
+
+
+@pytest.fixture
+def fake_contract_code():
+    return '''
+@public
+def five() -> uint256
+     return 5
+'''
+
+
+@pytest.fixture
+def base_sender(base_tester):
+    return base_tester.get_accounts()[-1]
 
 
 @pytest.fixture
@@ -66,8 +115,8 @@ def vyper_rlp_decoder_tx():
 
 
 @pytest.fixture
-def vyper_rlp_decoder_address(vyper_rlp_decoder_tx):
-    return vyper_rlp_decoder_tx.creates
+def vyper_rlp_decoder_address(next_contract_address):
+    return next_contract_address(VYPER_RLP_DECODER_TX_SENDER)
 
 
 @pytest.fixture
@@ -76,7 +125,22 @@ def msg_hasher_tx():
 
 
 @pytest.fixture
-def msg_hasher_address(msg_hasher_tx):
+def msg_hasher_address(base_tester, fake_code):
+    snapshot_id = base_tester.take_snapshot()
+    bytecode = compiler.compile(fake_code)
+    tx_hash = w3.eth.sendTransaction({
+        'from': base_sender,
+        'to': '',
+        'gas': 7000000,
+        'data': bytecode
+    })
+    contract_address = w3.eth.getTransactionReceipt(tx_hash).contractAddress
+
+    base_tester.revert_to_snapshot(snapshot_id)
+    return contract_address
+
+
+
     return msg_hasher_tx.creates
 
 
@@ -86,8 +150,8 @@ def purity_checker_tx():
 
 
 @pytest.fixture
-def purity_checker_address(purity_checker_tx):
-    return purity_checker_tx.creates
+def purity_checker_address(next_contract_address):
+    return next_contract_address(PURITY_CHECKER_TX_SENDER)
 
 
 @pytest.fixture
@@ -154,6 +218,121 @@ def casper_args(casper_config, msg_hasher_address, purity_checker_address):
     ]
 
 
+setattr(eth_tester.backends.pyevm.main, 'GENESIS_GAS_LIMIT', 10**9)
+setattr(eth_tester.backends.pyevm.main, 'GENESIS_DIFFICULTY', 1)
+
+
+@pytest.fixture
+def base_tester():
+    return EthereumTester(PyEVMBackend())
+
+
+def zero_gas_price_strategy(web3, transaction_params=None):
+    return 0  # zero gas price makes testing simpler.
+
+
+@pytest.fixture(scope="module")
+def w3(base_tester):
+    w3 = Web3(EthereumTesterProvider(tester))
+    w3.eth.setGasPriceStrategy(zero_gas_price_strategy)
+    return w3
+
+
+@pytest.fixture
+def deploy_rlp_decoder(tester, w3):
+    def deploy_rlp_decoder():
+        w3.eth.sendTransaction({
+            'to': VYPER_RLP_DECODER_TX_SENDER,
+            'value': 10**17
+        })
+        tx_hash = w3.eth.sendRawTransaction(VYPER_RLP_DECODER_TX_HEX)
+
+        receipt = w3.eth.getTransactionReceipt(tx_hash)
+        contract_address = receipt.contractAddress
+        assert vyper_utils.RLP_DECODER_ADDRESS == w3.toInt(hexstr=contract_address)
+        return contract_address
+
+
+@pytest.fixture
+def deploy_msg_hasher(tester, w3):
+    def deploy_msg_hasher():
+        w3.eth.sendTransaction({
+            'to': MSG_HASHER_TX_SENDER,
+            'value': 10**17
+        })
+        tx_hash = w3.eth.sendRawTransaction(MSG_HASHER_TX_HEX)
+
+        receipt = w3.eth.getTransactionReceipt(tx_hash)
+        return receipt.contractAddress
+
+
+@pytest.fixture
+def deploy_purity_checker(tester, w3):
+    def deploy_purity_checker():
+        w3.eth.sendTransaction({
+            'to': PURITY_CHECKER_TX_SENDER,
+            'value': 10**17
+        })
+        tx_hash = w3.eth.sendRawTransaction(PURITY_CHECKER_TX_SENDER)
+
+        receipt = w3.eth.getTransactionReceipt(tx_hash)
+        return receipt.contractAddress
+
+
+@pytest.fixture
+def tester(
+        w3,
+        base_tester,
+        casper_args,
+        casper_code,
+        casper_abi,
+        casper_ct,
+        casper_address,
+        deploy_rlp_decoder,
+        deploy_msg_hasher,
+        deploy_purity_checker,
+        dependency_transactions,
+        msg_hasher_address,
+        purity_checker_address,
+        base_sender,
+        initialize_contract=True):
+    deploy_rlp_decoder()
+    msg_hasher_address = deploy_msg_hasher()
+    purity_checker_address = deploy_purity_checker()
+
+    # NOTE: bytecode cannot be compiled before RLP Decoder is deployed to chain
+    # otherwise, vyper compiler cannot properly embed RLP decoder address
+    casper_bytecode = compiler.compile(casper_code)
+
+    deploy_code = casper_bytecode
+    tx_hash = w3.eth.sendTransaction({
+        'from': base_sender,
+        'to': '',
+        'gas': 7000000,
+        'data': deploy_code
+    })
+    casper_address = w3.eth.getTransactionReceipt(tx_hash).contractAddress
+
+    # Casper contract needs money for its activity
+    w3.eth.sendTransaction({
+        'to': casper_address,
+        'value': 10**21
+    })
+
+    Casper = w3.eth.contract(abi=casper_abi, bytecode=casper_bytecode)
+    tx_hash = Casper.constructor().transact()
+    tx_receipt = w3.eth.getTransactionReceipt(tx_hash)
+
+    assert tx_receipt.contractAddress == casper_address
+
+    if initialize_contract:
+        casper_contract = casper(w3, base_tester, casper_abi, casper_address)
+        casper_contract.functions.init(*casper_args).transact()
+
+    return tester
+
+
+'''
 @pytest.fixture
 def test_chain(alloc=tester.base_alloc, genesis_gas_limit=9999999,
                min_gas_limit=5000, startgas=3141592):
@@ -171,6 +350,7 @@ def test_chain(alloc=tester.base_alloc, genesis_gas_limit=9999999,
     chain.chain.env.config['MIN_GAS_LIMIT'] = min_gas_limit
     chain.mine(1)
     return chain
+'''
 
 
 @pytest.fixture
@@ -195,96 +375,17 @@ def dependency_transactions(vyper_rlp_decoder_tx, msg_hasher_tx, purity_checker_
 
 
 @pytest.fixture
-def casper_address(dependency_transactions, base_sender_privkey):
-    mock_tx = Transaction(
-        len(dependency_transactions),
-        GAS_PRICE,
-        500000,
-        b'',
-        0,
-        "0x0"
-    ).sign(base_sender_privkey)
-    return mock_tx.creates
+def casper_address(next_contract_address, base_sender):
+    return next_contract_address(base_sender)
 
 
 @pytest.fixture
-def casper(casper_chain, casper_abi, casper_address):
-    return tester.ABIContract(casper_chain, casper_abi, casper_address)
-
-
-@pytest.fixture
-def casper_chain(
-        test_chain,
-        casper_args,
-        casper_code,
-        casper_abi,
-        casper_ct,
-        casper_address,
-        dependency_transactions,
-        msg_hasher_address,
-        purity_checker_address,
-        base_sender_privkey,
-        initialize_contract=True):
-    init_transactions = []
-    nonce = 0
-    # Create transactions for instantiating RLP decoder, msg hasher and purity checker,
-    # plus transactions for feeding the one-time accounts that generate those transactions
-    for tx in dependency_transactions:
-        fund_gas_tx = Transaction(
-            nonce,
-            GAS_PRICE,
-            500000,
-            tx.sender,
-            tx.startgas * tx.gasprice + tx.value,
-            ''
-        ).sign(base_sender_privkey)
-        init_transactions.append(fund_gas_tx)
-        init_transactions.append(tx)
-        nonce += 1
-
-    for tx in init_transactions:
-        if test_chain.head_state.gas_used + tx.startgas > test_chain.head_state.gas_limit:
-            test_chain.mine(1)
-        test_chain.direct_tx(tx)
-
-    test_chain.mine(1)
-
-    # NOTE: bytecode cannot be compiled before RLP Decoder is deployed to chain
-    # otherwise, vyper compiler cannot properly embed RLP decoder address
-    casper_bytecode = compiler.compile(casper_code)
-
-    deploy_code = casper_bytecode
-    casper_tx = Transaction(
-        nonce,
-        GAS_PRICE,
-        7000000,
-        b'',
-        0,
-        deploy_code
-    ).sign(base_sender_privkey)
-    test_chain.direct_tx(casper_tx)
-    nonce += 1
-
-    test_chain.mine(1)
-
-    # Casper contract needs money for its activity
-    casper_fund_tx = Transaction(
-        nonce,
-        GAS_PRICE,
-        5000000,
-        casper_tx.creates,
-        10**21,
-        b''
-    ).sign(base_sender_privkey)
-    test_chain.direct_tx(casper_fund_tx)
-
-    test_chain.mine(1)
-
-    if initialize_contract:
-        casper_contract = casper(test_chain, casper_abi, casper_address)
-        casper_contract.init(*casper_args)
-
-    return test_chain
+def casper(w3, tester, casper_abi, casper_address):
+    casper = w3.eth.contract(
+        address=casper_address,
+        abi=casper_abi
+    )
+    return casper
 
 
 @pytest.fixture
