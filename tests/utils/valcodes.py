@@ -126,7 +126,7 @@ def generate_all_valcodes(address):
 
 
 def all_known_valcode_types():
-    return generate_all_valcodes(b'\x00').keys()
+    return generate_all_valcodes('0x00').keys()
 
 
 def compile_valcode_to_evm_bytecode(valcode_type, address):

@@ -112,10 +112,20 @@ def funded_accounts(base_tester):
 
 
 @pytest.fixture
+def funded_account(funded_accounts):
+    return funded_accounts[0]
+
+
+@pytest.fixture
 def validation_keys(w3, funded_accounts):
     # use address as the keymash to gen new private keys
     # insecure but fine for our purposes
     return [w3.eth.account.create(str(address)).privateKey for address in funded_accounts]
+
+
+@pytest.fixture
+def validation_key(validation_keys):
+    return validation_keys[0]
 
 
 @pytest.fixture
@@ -542,9 +552,19 @@ def deposit_validator(w3, tester, casper, deploy_validation_contract):
 #       If inducting a validator when desposits exists, use `deposit_validator` and
 #       manually finalize
 @pytest.fixture
-def induct_validator(casper_chain, casper, deposit_validator, new_epoch):
-    def induct_validator(privkey, value, valcode_type="pure_ecrecover"):
-        validator_index = deposit_validator(privkey, value, valcode_type)
+def induct_validator(w3, tester, casper, deposit_validator, new_epoch):
+    def induct_validator(
+            withdrawal_addr,
+            validation_key,
+            value,
+            valcode_type="pure_ecrecover"):
+
+        validator_index = deposit_validator(
+            withdrawal_addr,
+            validation_key,
+            value,
+            valcode_type
+        )
         new_epoch()  # justify
         new_epoch()  # finalize and increment dynasty
         new_epoch()  # finalize and increment dynasty

@@ -25,13 +25,19 @@ def build_pass_fail_matrix():
     "valcode_type,should_succeed",
     build_pass_fail_matrix()
 )
-def test_valcode_purity_checks(casper, funded_privkey, assert_tx_failed,
-                               deposit_amount, deposit_validator,
-                               valcode_type, should_succeed,
-                               validation_addr):
+def test_valcode_purity_checks(casper,
+                               funded_account,
+                               validation_key,
+                               assert_tx_failed,
+                               deposit_amount,
+                               deposit_validator,
+                               valcode_type,
+                               should_succeed,
+                               deploy_validation_contract):
     if should_succeed:
         deposit_validator(
-            funded_privkey,
+            funded_account,
+            validation_key,
             deposit_amount,
             valcode_type
         )
@@ -43,9 +49,10 @@ def test_valcode_purity_checks(casper, funded_privkey, assert_tx_failed,
         checker, instead are a result of a bug in the contract being
         tested.
         '''
-        validation_addr(funded_privkey, valcode_type)
+        deploy_validation_contract(funded_account, valcode_type)
         assert_tx_failed(lambda: deposit_validator(
-            funded_privkey,
+            funded_account,
+            validation_key,
             deposit_amount,
             valcode_type
         ))
