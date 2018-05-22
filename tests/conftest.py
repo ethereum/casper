@@ -2,6 +2,8 @@ import pytest
 import os
 import rlp
 
+from decimal import Decimal
+
 import eth_tester
 from eth_tester import (
     EthereumTester,
@@ -10,8 +12,14 @@ from eth_tester import (
 from web3.providers.eth_tester import (
     EthereumTesterProvider,
 )
+from eth_tester.exceptions import (
+    TransactionFailed,
+)
 from web3 import (
-    Web3
+    Web3,
+)
+from web3.contract import (
+    ConciseContract,
 )
 from vyper import (
     compiler,
@@ -30,14 +38,14 @@ MSG_HASHER_TX_HEX = "0xf9016d808506fc23ac0083026a508080b9015a6101488061000e60003
 MSG_HASHER_TX_SENDER = "0xD7a3BD6C9eA32efF147d067f907AE6b22d436F91"
 PURITY_CHECKER_TX_HEX = "0xf90467808506fc23ac00830583c88080b904546104428061000e60003961045056600061033f537c0100000000000000000000000000000000000000000000000000000000600035047f80010000000000000000000000000000000000000030ffff1c0e00000000000060205263a1903eab8114156103f7573659905901600090523660048237600435608052506080513b806020015990590160009052818152602081019050905060a0526080513b600060a0516080513c6080513b8060200260200159905901600090528181526020810190509050610100526080513b806020026020015990590160009052818152602081019050905061016052600060005b602060a05103518212156103c957610100601f8360a051010351066020518160020a161561010a57fe5b80606013151561011e57607f811315610121565b60005b1561014f5780607f036101000a60018460a0510101510482602002610160510152605e8103830192506103b2565b60f18114801561015f5780610164565b60f282145b905080156101725780610177565b60f482145b9050156103aa5760028212151561019e5760606001830360200261010051015112156101a1565b60005b156101bc57607f6001830360200261010051015113156101bf565b60005b156101d157600282036102605261031e565b6004821215156101f057600360018303602002610100510151146101f3565b60005b1561020d57605a6002830360200261010051015114610210565b60005b1561022b57606060038303602002610100510151121561022e565b60005b1561024957607f60038303602002610100510151131561024c565b60005b1561025e57600482036102605261031d565b60028212151561027d57605a6001830360200261010051015114610280565b60005b1561029257600282036102605261031c565b6002821215156102b157609060018303602002610100510151146102b4565b60005b156102c657600282036102605261031b565b6002821215156102e65760806001830360200261010051015112156102e9565b60005b156103035760906001830360200261010051015112610306565b60005b1561031857600282036102605261031a565bfe5b5b5b5b5b604060405990590160009052600081526102605160200261016051015181602001528090502054156103555760016102a052610393565b60306102605160200261010051015114156103755760016102a052610392565b60606102605160200261010051015114156103915760016102a0525b5b5b6102a051151561039f57fe5b6001830192506103b1565b6001830192505b5b8082602002610100510152600182019150506100e0565b50506001604060405990590160009052600081526080518160200152809050205560016102e05260206102e0f35b63c23697a8811415610440573659905901600090523660048237600435608052506040604059905901600090526000815260805181602001528090502054610300526020610300f35b505b6000f31b2d4f"  # NOQA
 PURITY_CHECKER_TX_SENDER = "0xeA0f0D55EE82Edf248eD648A9A8d213FBa8b5081"
-PURITY_CHECKER_ABI = [{'name': 'check(address)', 'type': 'function', 'constant': True, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}, {'name': 'submit(address)', 'type': 'function', 'constant': False, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}]  # NOQA
+PURITY_CHECKER_ABI = [{'name': 'check', 'type': 'function', 'constant': True, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}, {'name': 'submit', 'type': 'function', 'constant': False, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}]  # NOQA
 
 EPOCH_LENGTH = 10
 WARM_UP_PERIOD = 20
 DYNASTY_LOGOUT_DELAY = 5
 WITHDRAWAL_DELAY = 5
-BASE_INTEREST_FACTOR = 0.02
-BASE_PENALTY_FACTOR = 0.002
+BASE_INTEREST_FACTOR = Decimal('0.02')
+BASE_PENALTY_FACTOR = Decimal('0.002')
 MIN_DEPOSIT_SIZE = 1000 * 10**18  # 1000 ether
 
 # FUNDED_PRIVKEYS = [ethereum_tester.k1, ethereum_tester.k2, ethereum_tester.k3, ethereum_tester.k4, ethereum_tester.k5]
@@ -45,6 +53,10 @@ DEPOSIT_AMOUNTS = [
     2000 * 10**18,
     # 1000 * 10**18,
 ]
+
+
+def encode_int32(val):
+    return Web3.toBytes(val).rjust(32, b'\x00')
 
 
 @pytest.fixture
@@ -95,9 +107,21 @@ def base_sender(base_tester):
     # return request.param
 
 
-# @pytest.fixture
-# def funded_privkeys():
-    # return FUNDED_PRIVKEYS
+@pytest.fixture
+def funded_accounts(base_tester):
+    return base_tester.get_accounts()[0:5]
+
+
+@pytest.fixture
+def validation_keys(w3, funded_accounts):
+    # use address as the keymash to gen new private keys
+    # insecure but fine for our purposes
+    return [w3.eth.account.create(str(address)).privateKey for address in funded_accounts]
+
+
+@pytest.fixture
+def validation_addrs(w3, validation_keys):
+    return [w3.eth.account.privateKeyToAccount(key).address for key in validation_keys]
 
 
 @pytest.fixture(params=DEPOSIT_AMOUNTS)
@@ -107,22 +131,25 @@ def deposit_amount(request):
 
 @pytest.fixture
 def vyper_rlp_decoder_address():
-    return vyper_utils.RLP_DECODER_ADDRESS
-
-
-@pytest.fixture
-def msg_hasher_address(base_tester, deploy_msg_hasher):
-    snapshot_id = base_tester.take_snapshot()
-    address = deploy_msg_hasher()
-    base_tester.revert_to_snapshot(snapshot_id)
+    tmp_tester = EthereumTester(PyEVMBackend())
+    tmp_w3 = w3(tmp_tester)
+    address = deploy_rlp_decoder(tmp_w3)()
     return address
 
 
 @pytest.fixture
-def purity_checker_address(base_tester, deploy_purity_checker):
-    snapshot_id = base_tester.take_snapshot()
-    address = deploy_purity_checker()
-    base_tester.revert_to_snapshot(snapshot_id)
+def msg_hasher_address():
+    tmp_tester = EthereumTester(PyEVMBackend())
+    tmp_w3 = w3(tmp_tester)
+    address = deploy_msg_hasher(tmp_w3)()
+    return address
+
+
+@pytest.fixture
+def purity_checker_address():
+    tmp_tester = EthereumTester(PyEVMBackend())
+    tmp_w3 = w3(tmp_tester)
+    address = deploy_purity_checker(tmp_w3)()
     return address
 
 
@@ -187,10 +214,15 @@ def casper_config(epoch_length, warm_up_period, withdrawal_delay, dynasty_logout
 @pytest.fixture
 def casper_args(casper_config, msg_hasher_address, purity_checker_address):
     return [
-        casper_config["epoch_length"], casper_config["warm_up_period"],
-        casper_config["withdrawal_delay"], casper_config["dynasty_logout_delay"],
-        msg_hasher_address, purity_checker_address, casper_config["base_interest_factor"],
-        casper_config["base_penalty_factor"], casper_config["min_deposit_size"]
+        casper_config["epoch_length"],
+        casper_config["warm_up_period"],
+        casper_config["withdrawal_delay"],
+        casper_config["dynasty_logout_delay"],
+        msg_hasher_address,
+        purity_checker_address,
+        casper_config["base_interest_factor"],
+        casper_config["base_penalty_factor"],
+        casper_config["min_deposit_size"]
     ]
 
 
@@ -259,7 +291,7 @@ def tester(
         casper_contract = casper(w3, base_tester, casper_abi, casper_address)
         casper_contract.functions.init(*casper_args).transact()
 
-    return tester
+    return base_tester
 
 
 @pytest.fixture
@@ -332,6 +364,11 @@ def casper(w3, tester, casper_abi, casper_address):
 
 
 @pytest.fixture
+def concise_casper(casper):
+    return ConciseContract(casper)
+
+
+@pytest.fixture
 def deploy_casper_contract(
         w3,
         blank_tester,
@@ -360,13 +397,16 @@ def get_dirs(path):
 # Note: If called during "warm_up-period", new_epoch mines all the way through
 # the warm up period until `initialize_epoch` can first be called
 @pytest.fixture
-def new_epoch(casper_chain, casper):
+def new_epoch(tester, casper, epoch_length):
     def new_epoch():
-        next_epoch = casper.current_epoch() + 1
-        epoch_length = casper.EPOCH_LENGTH()
+        block_number = tester.get_block_by_number('latest')['number']
+        current_epoch = casper.functions.current_epoch().call()
+        next_epoch = current_epoch + 1
 
-        casper_chain.mine(epoch_length * next_epoch - casper_chain.head_state.block_number)
-        casper.initialize_epoch(next_epoch)
+        tester.mine_blocks(epoch_length * next_epoch - block_number)
+
+        casper.functions.initialize_epoch(next_epoch).transact()
+
     return new_epoch
 
 
@@ -378,24 +418,24 @@ def mk_validation_code():
 
 
 @pytest.fixture
-def mk_vote():
-    def mk_vote(validator_index, target_hash, target_epoch, source_epoch, privkey):
-        msg_hash = utils.sha3(
+def mk_vote(w3):
+    def mk_vote(validator_index, target_hash, target_epoch, source_epoch, validation_key):
+        msg_hash = w3.sha3(
             rlp.encode([validator_index, target_hash, target_epoch, source_epoch])
         )
-        v, r, s = utils.ecdsa_raw_sign(msg_hash, privkey)
-        sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
+        signed = w3.eth.account.signHash(msg_hash, validation_key)
+        sig = encode_int32(signed.v) + encode_int32(signed.r) + encode_int32(signed.s)
         return rlp.encode([validator_index, target_hash, target_epoch, source_epoch, sig])
     return mk_vote
 
 
 @pytest.fixture
-def mk_suggested_vote(casper, mk_vote):
-    def mk_suggested_vote(validator_index, privkey):
-        target_hash = casper.recommended_target_hash()
-        target_epoch = casper.current_epoch()
-        source_epoch = casper.recommended_source_epoch()
-        return mk_vote(validator_index, target_hash, target_epoch, source_epoch, privkey)
+def mk_suggested_vote(concise_casper, mk_vote):
+    def mk_suggested_vote(validator_index, validation_key):
+        target_hash = concise_casper.recommended_target_hash()
+        target_epoch = concise_casper.current_epoch()
+        source_epoch = concise_casper.recommended_source_epoch()
+        return mk_vote(validator_index, target_hash, target_epoch, source_epoch, validation_key)
     return mk_suggested_vote
 
 
@@ -461,25 +501,36 @@ def logout_validator_via_unsigned_msg(casper, mk_logout_msg_unsigned):
 
 
 @pytest.fixture
-def validation_addr(casper_chain, casper, mk_validation_code):
-    def validation_addr(privkey, valcode_type):
-        addr = utils.privtoaddr(privkey)
-        return casper_chain.tx(
-            privkey,
-            "",
-            0,
-            mk_validation_code(addr, valcode_type)
-        )
-    return validation_addr
+def deploy_validation_contract(w3, casper, mk_validation_code):
+    def deploy_validation_contract(addr, valcode_type):
+        tx_hash = w3.eth.sendTransaction({
+            'to': '',
+            'data': mk_validation_code(addr, valcode_type)
+        })
+        contract_address = w3.eth.getTransactionReceipt(tx_hash).contractAddress
+        return contract_address
+    return deploy_validation_contract
 
 
 @pytest.fixture
-def deposit_validator(casper_chain, casper, validation_addr):
-    def deposit_validator(privkey, value, valcode_type="pure_ecrecover"):
-        addr = utils.privtoaddr(privkey)
-        valcode_addr = validation_addr(privkey, valcode_type)
-        casper.deposit(valcode_addr, addr, value=value)
-        return casper.validator_indexes(addr)
+def deposit_validator(w3, tester, casper, deploy_validation_contract):
+    def deposit_validator(
+            withdrawal_addr,
+            validation_key,
+            value,
+            valcode_type="pure_ecrecover"):
+
+        validation_addr = w3.eth.account.privateKeyToAccount(validation_key).address
+        validation_contract_addr = deploy_validation_contract(validation_addr, valcode_type)
+
+        casper.functions.deposit(
+            validation_contract_addr,
+            withdrawal_addr
+        ).transact({
+            'value': value
+        })
+
+        return casper.functions.validator_indexes(withdrawal_addr).call()
     return deposit_validator
 
 
@@ -526,12 +577,12 @@ def assert_failed():
 
 
 @pytest.fixture
-def assert_tx_failed(test_chain):
-    def assert_tx_failed(function_to_test, exception=tester.TransactionFailed):
-        initial_state = test_chain.snapshot()
+def assert_tx_failed(base_tester):
+    def assert_tx_failed(function_to_test, exception=eth_tester.exceptions.TransactionFailed):
+        snapshot_id = base_tester.take_snapshot()
         with pytest.raises(exception):
             function_to_test()
-        test_chain.revert(initial_state)
+        base_tester.revert_to_snapshot(snapshot_id)
     return assert_tx_failed
 
 

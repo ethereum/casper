@@ -123,11 +123,17 @@ SLASH_FRACTION_MULTIPLIER: int128
 
 
 @public
-def init(epoch_length: int128, warm_up_period: int128,
-         withdrawal_delay: int128, dynasty_logout_delay: int128,
-         msg_hasher: address, purity_checker: address,
-         base_interest_factor: decimal, base_penalty_factor: decimal,
-         min_deposit_size: wei_value):
+def init(
+        epoch_length: int128,
+        warm_up_period: int128,
+        withdrawal_delay: int128,
+        dynasty_logout_delay: int128,
+        msg_hasher: address,
+        purity_checker: address,
+        base_interest_factor: decimal,
+        base_penalty_factor: decimal,
+        min_deposit_size: wei_value
+        ):
 
     assert not self.initialized
     assert epoch_length > 0 and epoch_length < 256
@@ -194,7 +200,7 @@ def sqrt_of_total_deposits() -> decimal:
 @private
 @constant
 def deposit_exists() -> bool:
-    return self.total_curdyn_deposits > 0 and self.total_prevdyn_deposits > 0
+    return self.total_curdyn_deposits > 0.0 and self.total_prevdyn_deposits > 0.0
 
 
 # ***** Private *****
@@ -279,7 +285,7 @@ def delete_validator(validator_index: int128):
 # cannot be labeled @constant because of external call
 # even though the call is to a pure contract call
 @private
-def validate_signature(msg_hash: bytes32, sig: bytes <= 1024, validator_index: int128) -> bool:
+def validate_signature(msg_hash: bytes32, sig: bytes[1024], validator_index: int128) -> bool:
     return extract32(raw_call(self.validators[validator_index].addr, concat(msg_hash, sig), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
 
 
@@ -313,7 +319,7 @@ def total_prevdyn_deposits_in_wei() -> wei_value:
 @public
 # cannot be labeled @constant because of external call
 # even though the call is to a pure contract call
-def slashable(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024) -> bool:
+def slashable(vote_msg_1: bytes[1024], vote_msg_2: bytes[1024]) -> bool:
     # Message 1: Extract parameters
     msg_hash_1: bytes32 = extract32(
         raw_call(self.MSG_HASHER, vote_msg_1, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32),
@@ -323,7 +329,7 @@ def slashable(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024) -> bool:
     validator_index_1: int128 = values_1[0]
     target_epoch_1: int128 = values_1[2]
     source_epoch_1: int128 = values_1[3]
-    sig_1: bytes <= 1024 = values_1[4]
+    sig_1: bytes[1024] = values_1[4]
 
     # Message 2: Extract parameters
     msg_hash_2: bytes32 = extract32(
@@ -334,7 +340,7 @@ def slashable(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024) -> bool:
     validator_index_2: int128 = values_2[0]
     target_epoch_2: int128 = values_2[2]
     source_epoch_2: int128 = values_2[3]
-    sig_2: bytes <= 1024 = values_2[4]
+    sig_2: bytes[1024] = values_2[4]
 
     if not self.validate_signature(msg_hash_1, sig_1, validator_index_1):
         return False
@@ -447,7 +453,7 @@ def initialize_epoch(epoch: int128):
         adj_interest_base: decimal = self.BASE_INTEREST_FACTOR / self.sqrt_of_total_deposits()
         self.reward_factor = adj_interest_base + self.BASE_PENALTY_FACTOR * (self.esf() - 2)
         # ESF is only thing that is changing and reward_factor is being used above.
-        assert self.reward_factor > 0
+        assert self.reward_factor > 0.0
     else:
         # Before the first validator deposits, new epochs are finalized instantly.
         self.insta_finalize()
@@ -488,7 +494,7 @@ def deposit(validation_addr: address, withdrawal_addr: address):
 
 
 @public
-def logout(logout_msg: bytes <= 1024):
+def logout(logout_msg: bytes[1024]):
     assert self.current_epoch == floor(block.number / self.EPOCH_LENGTH)
 
     # Get hash for signature, and implicitly assert that it is an RLP list
@@ -500,7 +506,7 @@ def logout(logout_msg: bytes <= 1024):
     values = RLPList(logout_msg, [int128, int128, bytes])
     validator_index: int128 = values[0]
     epoch: int128 = values[1]
-    sig: bytes <= 1024 = values[2]
+    sig: bytes[1024] = values[2]
 
     assert self.current_epoch >= epoch
     from_withdrawal: bool = msg.sender == self.validators[validator_index].withdrawal_addr
@@ -547,7 +553,7 @@ def withdraw(validator_index: int128):
 
 # Process a vote message
 @public
-def vote(vote_msg: bytes <= 1024):
+def vote(vote_msg: bytes[1024]):
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
     msg_hash: bytes32 = extract32(
@@ -560,7 +566,7 @@ def vote(vote_msg: bytes <= 1024):
     target_hash: bytes32 = values[1]
     target_epoch: int128 = values[2]
     source_epoch: int128 = values[3]
-    sig: bytes <= 1024 = values[4]
+    sig: bytes[1024] = values[4]
 
     assert self.validate_signature(msg_hash, sig, validator_index)
     # Check that this vote has not yet been made
@@ -628,7 +634,7 @@ def vote(vote_msg: bytes <= 1024):
 
 # Cannot sign two votes for same target_epoch; no surround vote.
 @public
-def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
+def slash(vote_msg_1: bytes[1024], vote_msg_2: bytes[1024]):
     assert self.slashable(vote_msg_1, vote_msg_2)
 
     # Extract validator_index
