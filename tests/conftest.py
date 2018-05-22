@@ -2,7 +2,9 @@ import pytest
 import os
 import rlp
 
-from decimal import Decimal
+from decimal import (
+    Decimal,
+)
 
 import eth_tester
 from eth_tester import (
@@ -11,9 +13,6 @@ from eth_tester import (
 )
 from web3.providers.eth_tester import (
     EthereumTesterProvider,
-)
-from eth_tester.exceptions import (
-    TransactionFailed,
 )
 from web3 import (
     Web3,
@@ -371,14 +370,17 @@ def concise_casper(casper):
 @pytest.fixture
 def deploy_casper_contract(
         w3,
-        blank_tester,
+        base_tester,
         casper_code,
         casper_abi,
         casper_address,
+        deploy_rlp_decoder,
+        deploy_msg_hasher,
+        deploy_purity_checker,
         base_sender):
     def deploy_casper_contract(contract_args, initialize_contract=True):
         t = tester(
-            w3, blank_tester, contract_args, casper_code, casper_abi, casper_address,
+            w3, base_tester, contract_args, casper_code, casper_abi, casper_address,
             deploy_rlp_decoder, deploy_msg_hasher, deploy_purity_checker,
             base_sender, initialize_contract
         )
