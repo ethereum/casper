@@ -360,6 +360,36 @@ def casper_address(next_contract_address, base_sender):
 
 
 @pytest.fixture
+def casper_deposit_filter(casper):
+    return casper.events.Deposit.createFilter(fromBlock='latest')
+
+
+@pytest.fixture
+def casper_vote_filter(casper):
+    return casper.events.Vote.createFilter(fromBlock='latest')
+
+
+@pytest.fixture
+def casper_logout_filter(casper):
+    return casper.events.Logout.createFilter(fromBlock='latest')
+
+
+@pytest.fixture
+def casper_withdraw_filter(casper):
+    return casper.events.Withdraw.createFilter(fromBlock='latest')
+
+
+@pytest.fixture
+def casper_slash_filter(casper):
+    return casper.events.Slash.createFilter(fromBlock='latest')
+
+
+@pytest.fixture
+def casper_epoch_filter(casper):
+    return casper.events.Epoch.createFilter(fromBlock='latest')
+
+
+@pytest.fixture
 def casper(w3, tester, casper_abi, casper_address):
     casper = w3.eth.contract(
         address=casper_address,

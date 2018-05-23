@@ -7,7 +7,7 @@ Deposit: event({_from: indexed(address), _validator_index: indexed(int128), _val
 Vote: event({_from: indexed(address), _validator_index: indexed(int128), _target_hash: indexed(bytes32), _target_epoch: int128, _source_epoch: int128})
 Logout: event({_from: indexed(address), _validator_index: indexed(int128), _end_dyn: int128})
 Withdraw: event({_to: indexed(address), _validator_index: indexed(int128), _amount: int128(wei)})
-Slash: event({_from: indexed(address), _offender: indexed(address), _offender_index: indexed(int128), _bounty: int128(wei), _destroyed: int128(wei)})
+Slash: event({_from: indexed(address), _offender: indexed(address), _offender_index: indexed(int128), _bounty: int128(wei)})
 Epoch: event({_number: indexed(int128), _checkpoint_hash: indexed(bytes32), _is_justified: bool, _is_finalized: bool})
 
 validators: public({
@@ -475,9 +475,10 @@ def deposit(validation_addr: address, withdrawal_addr: address):
     assert extract32(raw_call(self.PURITY_CHECKER, concat('\xa1\x90\x3e\xab', convert(validation_addr, 'bytes32')), gas=500000, outsize=32), 0) != convert(0, 'bytes32')
     assert not self.validator_indexes[withdrawal_addr]
     assert msg.value >= self.MIN_DEPOSIT_SIZE
+    validator_index: int128 = self.next_validator_index
     start_dynasty: int128 = self.dynasty + 2
     scaled_deposit: decimal(wei/m) = msg.value / self.deposit_scale_factor[self.current_epoch]
-    self.validators[self.next_validator_index] = {
+    self.validators[validator_index] = {
         deposit: scaled_deposit,
         start_dynasty: start_dynasty,
         end_dynasty: self.DEFAULT_END_DYNASTY,
@@ -486,11 +487,17 @@ def deposit(validation_addr: address, withdrawal_addr: address):
         addr: validation_addr,
         withdrawal_addr: withdrawal_addr
     }
-    self.validator_indexes[withdrawal_addr] = self.next_validator_index
+    self.validator_indexes[withdrawal_addr] = validator_index
     self.next_validator_index += 1
     self.dynasty_wei_delta[start_dynasty] += scaled_deposit
     # Log deposit event
-    log.Deposit(withdrawal_addr, self.validator_indexes[withdrawal_addr], validation_addr, self.validators[self.validator_indexes[withdrawal_addr]].start_dynasty, msg.value)
+    log.Deposit(
+        withdrawal_addr,
+        validator_index,
+        validation_addr,
+        start_dynasty,
+        msg.value
+    )
 
 
 @public
@@ -520,15 +527,21 @@ def logout(logout_msg: bytes[1024]):
     self.validators[validator_index].total_deposits_at_logout = self.total_curdyn_deposits_in_wei()
     self.dynasty_wei_delta[end_dynasty] -= self.validators[validator_index].deposit
 
-    log.Logout(self.validators[validator_index].withdrawal_addr, validator_index, self.validators[validator_index].end_dynasty)
+    log.Logout(
+        self.validators[validator_index].withdrawal_addr,
+        validator_index,
+        self.validators[validator_index].end_dynasty
+    )
 
 
 # Withdraw deposited ether
 @public
 def withdraw(validator_index: int128):
     # Check that we can withdraw
-    assert self.dynasty > self.validators[validator_index].end_dynasty
-    end_epoch: int128 = self.dynasty_start_epoch[self.validators[validator_index].end_dynasty + 1]
+    end_dynasty: int128 = self.validators[validator_index].end_dynasty
+    assert self.dynasty > end_dynasty
+
+    end_epoch: int128 = self.dynasty_start_epoch[end_dynasty + 1]
     withdrawal_epoch: int128 = end_epoch + self.WITHDRAWAL_DELAY
     assert self.current_epoch >= withdrawal_epoch
 
@@ -545,9 +558,16 @@ def withdraw(validator_index: int128):
 
         deposit_size: int128(wei) = floor(self.validators[validator_index].deposit * self.deposit_scale_factor[withdrawal_epoch])
         withdraw_amount = floor(deposit_size * fraction_to_withdraw)
+
     send(self.validators[validator_index].withdrawal_addr, withdraw_amount)
+
     # Log withdraw event
-    log.Withdraw(self.validators[validator_index].withdrawal_addr, validator_index, withdraw_amount)
+    log.Withdraw(
+        self.validators[validator_index].withdrawal_addr,
+        validator_index,
+        withdraw_amount
+    )
+
     self.delete_validator(validator_index)
 
 
@@ -629,7 +649,13 @@ def vote(vote_msg: bytes[1024]):
             log.Epoch(source_epoch, self.checkpoint_hashes[source_epoch], True, True)
 
     # Log vote event
-    log.Vote(self.validators[validator_index].withdrawal_addr, validator_index, target_hash, target_epoch, source_epoch)
+    log.Vote(
+        self.validators[validator_index].withdrawal_addr,
+        validator_index,
+        target_hash,
+        target_epoch,
+        source_epoch
+    )
 
 
 # Cannot sign two votes for same target_epoch; no surround vote.
@@ -646,12 +672,16 @@ def slash(vote_msg_1: bytes[1024], vote_msg_2: bytes[1024]):
     # Slash the offending validator, and give a 4% "finder's fee"
     validator_deposit: int128(wei) = self.deposit_size(validator_index)
     slashing_bounty: int128(wei) = floor(validator_deposit / 25)
-    deposit_destroyed: int128(wei) = validator_deposit - slashing_bounty
     self.total_slashed[self.current_epoch] += validator_deposit
     self.validators[validator_index].is_slashed = True
 
     # Log slashing
-    log.Slash(msg.sender, self.validators[validator_index].withdrawal_addr, validator_index, slashing_bounty, deposit_destroyed)
+    log.Slash(
+        msg.sender,
+        self.validators[validator_index].withdrawal_addr,
+        validator_index,
+        slashing_bounty,
+    )
 
     # if validator not logged out yet, remove total from next dynasty
     # and forcibly logout next dynasty

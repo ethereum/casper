@@ -129,7 +129,8 @@ def test_logout_from_non_withdrawal_address_with_signature(concise_casper,
     assert concise_casper.validators__end_dynasty(validator_index) == expected_end_dynasty
 
 
-def test_logout_with_multiple_validators(casper,
+def test_logout_with_multiple_validators(w3,
+                                         casper,
                                          concise_casper,
                                          funded_accounts,
                                          validation_keys,
@@ -157,6 +158,7 @@ def test_logout_with_multiple_validators(casper,
     # 0th logs out
     logged_out_index = validator_indexes[0]
     logged_out_key = validation_keys[0]
+    logged_out_addr = funded_accounts[0]
     # the rest remain
     logged_in_indexes = validator_indexes[1:]
     logged_in_keys = validation_keys[1:]
@@ -204,8 +206,25 @@ def test_logout_with_multiple_validators(casper,
             ).transact()
         new_epoch()
 
-    withdrawal_amount = concise_casper.deposit_size(logged_out_index)
+    current_epoch = concise_casper.current_epoch()
+    end_dynasty = concise_casper.validators__end_dynasty(logged_out_index)
+    assert concise_casper.dynasty() > end_dynasty
+    end_epoch = concise_casper.dynasty_start_epoch(end_dynasty + 1)
+
+    # Allowed to withdraw
+    assert current_epoch == end_epoch + concise_casper.WITHDRAWAL_DELAY()
+ 
+    withdrawal_amount = int(
+        concise_casper.validators__deposit(logged_out_index) * \
+        concise_casper.deposit_scale_factor(end_epoch)
+    )
     assert withdrawal_amount > 0
 
+    # ensure withdrawal went to the addr
+    prev_balance = w3.eth.getBalance(logged_out_addr)
     casper.functions.withdraw(logged_out_index).transact()
+    balance = w3.eth.getBalance(logged_out_addr)
+    assert balance > prev_balance
+    assert balance - prev_balance == withdrawal_amount
+
     assert_validator_empty(concise_casper, logged_out_index)
