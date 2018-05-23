@@ -25,6 +25,7 @@ from vyper import (
     utils as vyper_utils,
 )
 
+from utils.utils import encode_int32
 from utils.valcodes import compile_valcode_to_evm_bytecode
 
 OWN_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -42,7 +43,7 @@ PURITY_CHECKER_ABI = [{'name': 'check', 'type': 'function', 'constant': True, 'i
 EPOCH_LENGTH = 10
 WARM_UP_PERIOD = 20
 DYNASTY_LOGOUT_DELAY = 5
-WITHDRAWAL_DELAY = 5
+WITHDRAWAL_DELAY = 8
 BASE_INTEREST_FACTOR = Decimal('0.02')
 BASE_PENALTY_FACTOR = Decimal('0.002')
 MIN_DEPOSIT_SIZE = 1000 * 10**18  # 1000 ether
@@ -52,10 +53,6 @@ DEPOSIT_AMOUNTS = [
     2000 * 10**18,
     # 1000 * 10**18,
 ]
-
-
-def encode_int32(val):
-    return Web3.toBytes(val).rjust(32, b'\x00')
 
 
 @pytest.fixture
@@ -452,32 +449,32 @@ def mk_suggested_vote(concise_casper, mk_vote):
 
 
 @pytest.fixture
-def mk_slash_votes(casper, mk_vote, fake_hash):
-    def mk_slash_votes(validator_index, privkey):
+def mk_slash_votes(concise_casper, mk_vote, fake_hash):
+    def mk_slash_votes(validator_index, validation_key):
         vote_1 = mk_vote(
             validator_index,
-            casper.recommended_target_hash(),
-            casper.current_epoch(),
-            casper.recommended_source_epoch(),
-            privkey
+            concise_casper.recommended_target_hash(),
+            concise_casper.current_epoch(),
+            concise_casper.recommended_source_epoch(),
+            validation_key
         )
         vote_2 = mk_vote(
             validator_index,
             fake_hash,
-            casper.current_epoch(),
-            casper.recommended_source_epoch(),
-            privkey
+            concise_casper.current_epoch(),
+            concise_casper.recommended_source_epoch(),
+            validation_key
         )
         return vote_1, vote_2
     return mk_slash_votes
 
 
 @pytest.fixture
-def mk_logout_msg_signed():
-    def mk_logout_msg_signed(validator_index, epoch, key):
-        msg_hash = utils.sha3(rlp.encode([validator_index, epoch]))
-        v, r, s = utils.ecdsa_raw_sign(msg_hash, key)
-        sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
+def mk_logout_msg_signed(w3):
+    def mk_logout_msg_signed(validator_index, epoch, validation_key):
+        msg_hash = Web3.sha3(rlp.encode([validator_index, epoch]))
+        signed = w3.eth.account.signHash(msg_hash, validation_key)
+        sig = encode_int32(signed.v) + encode_int32(signed.r) + encode_int32(signed.s)
         return rlp.encode([validator_index, epoch, sig])
     return mk_logout_msg_signed
 
@@ -492,15 +489,16 @@ def mk_logout_msg_unsigned():
 
 
 @pytest.fixture
-def logout_validator_via_signed_msg(casper, mk_logout_msg_signed):
-    def logout_validator_via_signed_msg(validator_index, msg_signing_key,
-                                        tx_sender_key=42):
-        logout_tx = mk_logout_msg_signed(
+def logout_validator_via_signed_msg(casper, concise_casper, mk_logout_msg_signed, base_sender):
+    def logout_validator_via_signed_msg(validator_index,
+                                        msg_signing_key,
+                                        tx_sender_address=base_sender):
+        logout_msg = mk_logout_msg_signed(
             validator_index,
-            casper.current_epoch(),
+            concise_casper.current_epoch(),
             msg_signing_key
         )
-        casper.logout(logout_tx, sender=tx_sender_key)
+        casper.functions.logout(logout_msg).transact({'from': tx_sender_address})
     return logout_validator_via_signed_msg
 
 
@@ -578,15 +576,15 @@ def induct_validator(w3, tester, casper, deposit_validator, new_epoch):
 #       If inducting validators when desposits exists, use `deposit_validator` and
 #       manually finalize
 @pytest.fixture
-def induct_validators(casper_chain, casper, deposit_validator, new_epoch):
-    def induct_validators(privkeys, values):
-        start_index = casper.next_validator_index()
-        for privkey, value in zip(privkeys, values):
-            deposit_validator(privkey, value)
+def induct_validators(tester, casper, deposit_validator, new_epoch):
+    def induct_validators(accounts, validation_keys, values):
+        start_index = casper.functions.next_validator_index().call()
+        for account, key, value in zip(accounts, validation_keys, values):
+            deposit_validator(account, key, value)
         new_epoch()  # justify
         new_epoch()  # finalize and increment dynasty
         new_epoch()  # finalize and increment dynasty
-        return list(range(start_index, start_index + len(privkeys)))
+        return list(range(start_index, start_index + len(accounts)))
     return induct_validators
 
 
