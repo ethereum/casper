@@ -48,7 +48,6 @@ BASE_INTEREST_FACTOR = Decimal('0.02')
 BASE_PENALTY_FACTOR = Decimal('0.002')
 MIN_DEPOSIT_SIZE = 1000 * 10**18  # 1000 ether
 
-# FUNDED_PRIVKEYS = [ethereum_tester.k1, ethereum_tester.k2, ethereum_tester.k3, ethereum_tester.k4, ethereum_tester.k5]
 DEPOSIT_AMOUNTS = [
     2000 * 10**18,
     # 1000 * 10**18,

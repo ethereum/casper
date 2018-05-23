@@ -1,69 +1,99 @@
 import pytest
 
-from ethereum import utils
-from ethereum.tools import tester
-
 
 @pytest.mark.parametrize(
-    'privkey, amount, success',
+    'amount, min_deposit_size, success',
     [
-        (tester.k1, 2000 * 10**18, True),
-        (tester.k1, 1000 * 10**18, True),
-        (tester.k2, 1500 * 10**18, True),
+        (2000 * 10**18, 2000 * 10**18, True),
+        (1000 * 10**18, 100 * 10**18, True),
+        (1500 * 10**18, 1499 * 10**18, True),
+        (1, 1, True),
 
         # below min_deposit_size
-        (tester.k1, 999 * 10**18, False),
-        (tester.k1, 10 * 10**18, False),
+        (999 * 10**18, 1000 * 10**18, False),
+        (10 * 10**18, 1500 * 10**18, False),
+        (0, 1, False),
     ]
 )
-def test_deposit(casper_chain, casper, privkey, amount,
-                 success, deposit_validator, new_epoch, assert_tx_failed):
-    start_epoch = casper.START_EPOCH()
+def test_deposit(casper,
+                 concise_casper,
+                 funded_account,
+                 validation_key,
+                 amount,
+                 success,
+                 deposit_validator,
+                 new_epoch,
+                 assert_tx_failed):
+    start_epoch = concise_casper.START_EPOCH()
     new_epoch()
-    assert casper.current_epoch() == start_epoch + 1
-    assert casper.next_validator_index() == 1
+    assert concise_casper.current_epoch() == start_epoch + 1
+    assert concise_casper.next_validator_index() == 1
 
     if not success:
-        assert_tx_failed(lambda: deposit_validator(privkey, amount))
+        assert_tx_failed(
+            lambda: deposit_validator(funded_account, validation_key, amount)
+        )
         return
 
-    deposit_validator(privkey, amount)
+    deposit_validator(funded_account, validation_key, amount)
 
-    assert casper.next_validator_index() == 2
-    assert casper.validator_indexes(utils.privtoaddr(privkey)) == 1
-    assert casper.deposit_size(1) == amount
+    assert concise_casper.next_validator_index() == 2
+    assert concise_casper.validator_indexes(funded_account) == 1
+    assert concise_casper.deposit_size(1) == amount
 
     for i in range(2):
         new_epoch()
 
-    assert casper.dynasty() == 2
-    assert casper.total_curdyn_deposits_in_wei() == amount
-    assert casper.total_prevdyn_deposits_in_wei() == 0
+    assert concise_casper.dynasty() == 2
+    assert concise_casper.total_curdyn_deposits_in_wei() == amount
+    assert concise_casper.total_prevdyn_deposits_in_wei() == 0
 
 
-def test_vote_single_validator(casper, funded_privkey, deposit_amount,
-                               new_epoch, induct_validator, mk_suggested_vote):
-    validator_index = induct_validator(funded_privkey, deposit_amount)
-    assert casper.total_curdyn_deposits_in_wei() == deposit_amount
+def test_vote_single_validator(casper,
+                               concise_casper,
+                               funded_account,
+                               validation_key,
+                               deposit_amount,
+                               new_epoch,
+                               induct_validator,
+                               mk_suggested_vote):
+    validator_index = induct_validator(funded_account, validation_key, deposit_amount)
+    assert concise_casper.total_curdyn_deposits_in_wei() == deposit_amount
 
-    prev_dynasty = casper.dynasty()
+    prev_dynasty = concise_casper.dynasty()
     for i in range(10):
-        casper.vote(mk_suggested_vote(validator_index, funded_privkey))
-        assert casper.main_hash_justified()
-        assert casper.checkpoints__is_finalized(casper.recommended_source_epoch())
+        casper.functions.vote(
+            mk_suggested_vote(validator_index, validation_key)
+        ).transact()
+        assert concise_casper.main_hash_justified()
+        assert concise_casper.checkpoints__is_finalized(concise_casper.recommended_source_epoch())
         new_epoch()
-        assert casper.dynasty() == prev_dynasty + 1
+        assert concise_casper.dynasty() == prev_dynasty + 1
         prev_dynasty += 1
 
 
-def test_vote_target_epoch_twice(casper, funded_privkey, deposit_amount, new_epoch,
-                                 induct_validator, mk_suggested_vote, assert_tx_failed):
-    validator_index = induct_validator(funded_privkey, deposit_amount)
-    assert casper.total_curdyn_deposits_in_wei() == deposit_amount
+def test_vote_target_epoch_twice(casper,
+                                 concise_casper,
+                                 funded_account,
+                                 validation_key,
+                                 deposit_amount,
+                                 new_epoch,
+                                 induct_validator,
+                                 mk_suggested_vote,
+                                 assert_tx_failed):
+    validator_index = induct_validator(funded_account, validation_key, deposit_amount)
+    assert concise_casper.total_curdyn_deposits_in_wei() == deposit_amount
 
-    casper.vote(mk_suggested_vote(validator_index, funded_privkey))
+    casper.functions.vote(
+        mk_suggested_vote(validator_index, validation_key)
+    ).transact()
+
     # second vote on same target epoch fails
-    assert_tx_failed(lambda: casper.vote(mk_suggested_vote(validator_index, funded_privkey)))
+    assert_tx_failed(
+        lambda: casper.functions.vote(
+            mk_suggested_vote(validator_index, validation_key)
+        ).transact()
+    )
 
 
 @pytest.mark.parametrize(
@@ -73,91 +103,140 @@ def test_vote_target_epoch_twice(casper, funded_privkey, deposit_amount, new_epo
         ('pure_between_100k-200k_gas', True),
     ]
 )
-def test_vote_validate_signature_gas_limit(valcode_type, success,
-                                           casper, funded_privkey, deposit_amount,
-                                           induct_validator, mk_suggested_vote,
+def test_vote_validate_signature_gas_limit(valcode_type,
+                                           success,
+                                           casper,
+                                           concise_casper,
+                                           funded_account,
+                                           validation_key,
+                                           deposit_amount,
+                                           induct_validator,
+                                           mk_suggested_vote,
                                            assert_tx_failed):
     validator_index = induct_validator(
-        funded_privkey,
+        funded_account,
+        validation_key,
         deposit_amount,
         valcode_type
     )
-    assert casper.total_curdyn_deposits_in_wei() == deposit_amount
+    assert concise_casper.total_curdyn_deposits_in_wei() == deposit_amount
 
     if not success:
-        assert_tx_failed(lambda: casper.vote(mk_suggested_vote(validator_index, funded_privkey)))
+        assert_tx_failed(
+            lambda: casper.functions.vote(
+                mk_suggested_vote(validator_index, validation_key)
+            ).transact()
+        )
         return
 
-    casper.vote(mk_suggested_vote(validator_index, funded_privkey))
+    casper.functions.vote(
+        mk_suggested_vote(validator_index, validation_key)
+    ).transact()
 
 
-def test_non_finalization_loss(casper, funded_privkey, deposit_amount, new_epoch,
-                               induct_validator, mk_suggested_vote, assert_tx_failed):
-    validator_index = induct_validator(funded_privkey, deposit_amount)
-    assert casper.total_curdyn_deposits_in_wei() == deposit_amount
+def test_non_finalization_loss(casper,
+                               concise_casper,
+                               funded_account,
+                               validation_key,
+                               deposit_amount,
+                               new_epoch,
+                               induct_validator,
+                               mk_suggested_vote,
+                               assert_tx_failed):
+    validator_index = induct_validator(funded_account, validation_key, deposit_amount)
+    assert concise_casper.total_curdyn_deposits_in_wei() == deposit_amount
 
-    casper.vote(mk_suggested_vote(validator_index, funded_privkey))
+    casper.functions.vote(
+        mk_suggested_vote(validator_index, validation_key)
+    ).transact()
     new_epoch()
-    casper.vote(mk_suggested_vote(validator_index, funded_privkey))
+
+    casper.functions.vote(
+        mk_suggested_vote(validator_index, validation_key)
+    ).transact()
     new_epoch()
 
-    ds_prev_non_finalized = casper.deposit_size(validator_index)
+    ds_prev_non_finalized = concise_casper.deposit_size(validator_index)
     for i in range(5):
         new_epoch()
-        ds_cur_non_finalized = casper.deposit_size(validator_index)
+        ds_cur_non_finalized = concise_casper.deposit_size(validator_index)
         assert ds_cur_non_finalized < ds_prev_non_finalized
         ds_prev_non_finalized = ds_cur_non_finalized
 
 
-def test_mismatched_epoch_and_hash(casper, funded_privkey, deposit_amount,
-                                   induct_validator, mk_vote, new_epoch, assert_tx_failed):
-    validator_index = induct_validator(funded_privkey, deposit_amount)
-    assert casper.total_curdyn_deposits_in_wei() == deposit_amount
+def test_mismatched_epoch_and_hash(casper,
+                                   concise_casper,
+                                   funded_account,
+                                   validation_key,
+                                   deposit_amount,
+                                   induct_validator,
+                                   mk_vote,
+                                   new_epoch,
+                                   assert_tx_failed):
+    validator_index = induct_validator(funded_account, validation_key, deposit_amount)
+    assert concise_casper.total_curdyn_deposits_in_wei() == deposit_amount
 
     # step forward one epoch to ensure that validator is allowed
     # to vote on (current_epoch - 1)
     new_epoch()
 
-    target_hash = casper.recommended_target_hash()
-    mismatched_target_epoch = casper.current_epoch() - 1
-    source_epoch = casper.recommended_source_epoch()
+    target_hash = concise_casper.recommended_target_hash()
+    mismatched_target_epoch = concise_casper.current_epoch() - 1
+    source_epoch = concise_casper.recommended_source_epoch()
 
     mismatched_vote = mk_vote(
         validator_index,
         target_hash,
         mismatched_target_epoch,
         source_epoch,
-        funded_privkey
+        validation_key
     )
 
-    assert_tx_failed(lambda: casper.vote(mismatched_vote))
+    assert_tx_failed(
+        lambda: casper.functions.vote(mismatched_vote).transact()
+    )
 
 
-def test_consensus_after_non_finalization_streak(casper, funded_privkey, deposit_amount, new_epoch,
-                                                 induct_validator, mk_suggested_vote,
+def test_consensus_after_non_finalization_streak(casper,
+                                                 concise_casper,
+                                                 funded_account,
+                                                 validation_key,
+                                                 deposit_amount,
+                                                 new_epoch,
+                                                 induct_validator,
+                                                 mk_suggested_vote,
                                                  assert_tx_failed):
-    validator_index = induct_validator(funded_privkey, deposit_amount)
-    assert casper.total_curdyn_deposits_in_wei() == deposit_amount
+    validator_index = induct_validator(funded_account, validation_key, deposit_amount)
+    assert concise_casper.total_curdyn_deposits_in_wei() == deposit_amount
 
     # finalize an epoch as a base to the test
-    casper.vote(mk_suggested_vote(validator_index, funded_privkey))
+    casper.functions.vote(
+        mk_suggested_vote(validator_index, validation_key)
+    ).transact()
     new_epoch()
-    casper.vote(mk_suggested_vote(validator_index, funded_privkey))
+
+    casper.functions.vote(
+        mk_suggested_vote(validator_index, validation_key)
+    ).transact()
     new_epoch()
 
     # step forward 5 epochs without finalization
     for i in range(5):
         new_epoch()
 
-    assert not casper.main_hash_justified()
-    assert not casper.checkpoints__is_finalized(casper.recommended_source_epoch())
+    assert not concise_casper.main_hash_justified()
+    assert not concise_casper.checkpoints__is_finalized(concise_casper.recommended_source_epoch())
 
-    casper.vote(mk_suggested_vote(validator_index, funded_privkey))
-    assert casper.main_hash_justified()
-    assert not casper.checkpoints__is_finalized(casper.recommended_source_epoch())
+    casper.functions.vote(
+        mk_suggested_vote(validator_index, validation_key)
+    ).transact()
+    assert concise_casper.main_hash_justified()
+    assert not concise_casper.checkpoints__is_finalized(concise_casper.recommended_source_epoch())
 
     new_epoch()
-    casper.vote(mk_suggested_vote(validator_index, funded_privkey))
+    casper.functions.vote(
+        mk_suggested_vote(validator_index, validation_key)
+    ).transact()
 
-    assert casper.main_hash_justified()
-    assert casper.checkpoints__is_finalized(casper.recommended_source_epoch())
+    assert concise_casper.main_hash_justified()
+    assert concise_casper.checkpoints__is_finalized(concise_casper.recommended_source_epoch())
