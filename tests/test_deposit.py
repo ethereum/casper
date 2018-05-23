@@ -1,91 +1,118 @@
 import pytest
 
-from ethereum import utils
 
-
-def test_deposit_sets_withdrawal_addr(casper, funded_privkey, deposit_amount,
+def test_deposit_sets_withdrawal_addr(concise_casper,
+                                      funded_account,
+                                      validation_key,
+                                      deposit_amount,
                                       deposit_validator):
-    withdrawal_addr = utils.privtoaddr(funded_privkey)
-    validator_index = deposit_validator(funded_privkey, deposit_amount)
+    validator_index = deposit_validator(funded_account, validation_key, deposit_amount)
 
-    withdrawal_addr_as_hex = '0x' + utils.encode_hex(withdrawal_addr)
-    assert casper.validators__withdrawal_addr(validator_index) == withdrawal_addr_as_hex
+    assert concise_casper.validators__withdrawal_addr(validator_index) == funded_account
 
 
-def test_deposit_sets_validator_deposit(casper, funded_privkey, deposit_amount,
+def test_deposit_sets_validator_deposit(concise_casper,
+                                        funded_account,
+                                        validation_key,
+                                        deposit_amount,
                                         deposit_validator):
-    scale_factor = casper.deposit_scale_factor(casper.current_epoch())
+    current_epoch = concise_casper.current_epoch()
+    scale_factor = concise_casper.deposit_scale_factor(current_epoch)
     expected_scaled_deposit = deposit_amount / scale_factor
-    validator_index = deposit_validator(funded_privkey, deposit_amount)
+    validator_index = deposit_validator(funded_account, validation_key, deposit_amount)
 
-    assert casper.validators__deposit(validator_index) == expected_scaled_deposit
+    assert concise_casper.validators__deposit(validator_index) == expected_scaled_deposit
 
 
-def test_deposit_updates_next_val_index(casper, funded_privkey, deposit_amount,
+def test_deposit_updates_next_val_index(concise_casper,
+                                        funded_account,
+                                        validation_key,
+                                        deposit_amount,
                                         deposit_validator):
-    next_validator_index = casper.next_validator_index()
-    validator_index = deposit_validator(funded_privkey, deposit_amount)
+    next_validator_index = concise_casper.next_validator_index()
+    validator_index = deposit_validator(funded_account, validation_key, deposit_amount)
     assert validator_index == next_validator_index
-    assert casper.next_validator_index() == next_validator_index + 1
+    assert concise_casper.next_validator_index() == next_validator_index + 1
 
 
-def test_deposit_sets_start_dynasty(casper, funded_privkey, deposit_amount,
+def test_deposit_sets_start_dynasty(concise_casper,
+                                    funded_account,
+                                    validation_key,
+                                    deposit_amount,
                                     deposit_validator):
-    validator_index = deposit_validator(funded_privkey, deposit_amount)
+    validator_index = deposit_validator(funded_account, validation_key, deposit_amount)
+    expected_start_dynasty = concise_casper.dynasty() + 2
+    assert concise_casper.validators__start_dynasty(validator_index) == expected_start_dynasty
 
-    expected_start_dynasty = casper.dynasty() + 2
-    assert casper.validators__start_dynasty(validator_index) == expected_start_dynasty
 
-
-def test_deposit_sets_end_dynasty(casper, funded_privkey, deposit_amount,
+def test_deposit_sets_end_dynasty(concise_casper,
+                                  funded_account,
+                                  validation_key,
+                                  deposit_amount,
                                   deposit_validator):
-    validator_index = deposit_validator(funded_privkey, deposit_amount)
+    validator_index = deposit_validator(funded_account, validation_key, deposit_amount)
 
     expected_end_dynasty = 1000000000000000000000000000000
-    assert casper.validators__end_dynasty(validator_index) == expected_end_dynasty
+    assert concise_casper.validators__end_dynasty(validator_index) == expected_end_dynasty
 
 
-def test_deposit_is_not_slashed(casper, funded_privkey, deposit_amount,
+def test_deposit_is_not_slashed(concise_casper,
+                                funded_account,
+                                validation_key,
+                                deposit_amount,
                                 deposit_validator):
-    validator_index = deposit_validator(funded_privkey, deposit_amount)
+    validator_index = deposit_validator(funded_account, validation_key, deposit_amount)
+    assert not concise_casper.validators__is_slashed(validator_index)
 
-    assert not casper.validators__is_slashed(validator_index)
 
-
-def test_deposit_total_deposits_at_logout(casper, funded_privkey, deposit_amount,
+def test_deposit_total_deposits_at_logout(concise_casper,
+                                          funded_account,
+                                          validation_key,
+                                          deposit_amount,
                                           deposit_validator):
-    validator_index = deposit_validator(funded_privkey, deposit_amount)
+    validator_index = deposit_validator(funded_account, validation_key, deposit_amount)
 
-    assert casper.validators__total_deposits_at_logout(validator_index) == 0
+    assert concise_casper.validators__total_deposits_at_logout(validator_index) == 0
 
 
-def test_deposit_updates_dynasty_wei_delta(casper, funded_privkey, deposit_amount,
+def test_deposit_updates_dynasty_wei_delta(concise_casper,
+                                           funded_account,
+                                           validation_key,
+                                           deposit_amount,
                                            deposit_validator):
-    start_dynasty = casper.dynasty() + 2
-    assert casper.dynasty_wei_delta(start_dynasty) == 0
+    start_dynasty = concise_casper.dynasty() + 2
+    assert concise_casper.dynasty_wei_delta(start_dynasty) == 0
 
-    validator_index = deposit_validator(funded_privkey, deposit_amount)
-    scaled_deposit_size = casper.validators__deposit(validator_index)
+    validator_index = deposit_validator(funded_account, validation_key, deposit_amount)
+    scaled_deposit_size = concise_casper.validators__deposit(validator_index)
 
-    assert casper.dynasty_wei_delta(start_dynasty) == scaled_deposit_size
+    assert concise_casper.dynasty_wei_delta(start_dynasty) == scaled_deposit_size
 
 
-def test_deposit_updates_total_deposits(casper, funded_privkey, deposit_amount,
-                                        induct_validator, mk_suggested_vote, new_epoch):
-    assert casper.total_curdyn_deposits_in_wei() == 0
-    assert casper.total_prevdyn_deposits_in_wei() == 0
+def test_deposit_updates_total_deposits(casper,
+                                        concise_casper,
+                                        funded_account,
+                                        validation_key,
+                                        deposit_amount,
+                                        induct_validator,
+                                        mk_suggested_vote,
+                                        new_epoch):
+    assert concise_casper.total_curdyn_deposits_in_wei() == 0
+    assert concise_casper.total_prevdyn_deposits_in_wei() == 0
 
     # note, full induction
-    validator_index = induct_validator(funded_privkey, deposit_amount)
+    validator_index = induct_validator(funded_account, validation_key, deposit_amount)
 
-    assert casper.total_curdyn_deposits_in_wei() == deposit_amount
-    assert casper.total_prevdyn_deposits_in_wei() == 0
+    assert concise_casper.total_curdyn_deposits_in_wei() == deposit_amount
+    assert concise_casper.total_prevdyn_deposits_in_wei() == 0
 
-    casper.vote(mk_suggested_vote(validator_index, funded_privkey))
+    casper.functions.vote(
+        mk_suggested_vote(validator_index, validation_key)
+    ).transact()
     new_epoch()
 
-    assert casper.total_curdyn_deposits_in_wei() == deposit_amount
-    assert casper.total_prevdyn_deposits_in_wei() == deposit_amount
+    assert concise_casper.total_curdyn_deposits_in_wei() == deposit_amount
+    assert concise_casper.total_prevdyn_deposits_in_wei() == deposit_amount
 
 
 @pytest.mark.parametrize(
@@ -96,24 +123,30 @@ def test_deposit_updates_total_deposits(casper, funded_privkey, deposit_amount,
         (100, 50),
     ]
 )
-def test_deposit_during_warm_up_period(casper_chain, casper, funded_privkey, deposit_amount,
-                                       deposit_validator, new_epoch, warm_up_period, epoch_length):
-    validator_index = deposit_validator(funded_privkey, deposit_amount)
+def test_deposit_during_warm_up_period(concise_casper,
+                                       funded_account,
+                                       validation_key,
+                                       deposit_amount,
+                                       deposit_validator,
+                                       new_epoch,
+                                       warm_up_period,
+                                       epoch_length):
+    validator_index = deposit_validator(funded_account, validation_key, deposit_amount)
 
-    expected_start_dynasty = casper.dynasty() + 2
-    assert casper.validators__start_dynasty(validator_index) == expected_start_dynasty
+    expected_start_dynasty = concise_casper.dynasty() + 2
+    assert concise_casper.validators__start_dynasty(validator_index) == expected_start_dynasty
 
     new_epoch()  # new_epoch mines through warm_up_period on first call
-    casper.dynasty() == 0
+    concise_casper.dynasty() == 0
     new_epoch()
-    casper.dynasty() == 1
+    concise_casper.dynasty() == 1
     new_epoch()
-    casper.dynasty() == 2
+    concise_casper.dynasty() == 2
 
-    casper.total_curdyn_deposits_in_wei() == deposit_amount
-    casper.total_prevdyn_deposits_in_wei() == 0
+    concise_casper.total_curdyn_deposits_in_wei() == deposit_amount
+    concise_casper.total_prevdyn_deposits_in_wei() == 0
 
     new_epoch()
 
-    casper.total_curdyn_deposits_in_wei() == deposit_amount
-    casper.total_prevdyn_deposits_in_wei() == deposit_amount
+    concise_casper.total_curdyn_deposits_in_wei() == deposit_amount
+    concise_casper.total_prevdyn_deposits_in_wei() == deposit_amount
