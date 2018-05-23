@@ -482,7 +482,7 @@ def mk_logout_msg_signed(w3):
 def mk_logout_msg_unsigned():
     def mk_logout_msg_unsigned(validator_index, epoch):
         v, r, s = (0, 0, 0)
-        sig = utils.encode_int32(v) + utils.encode_int32(r) + utils.encode_int32(s)
+        sig = encode_int32(v) + encode_int32(r) + encode_int32(s)
         return rlp.encode([validator_index, epoch, sig])
     return mk_logout_msg_unsigned
 
@@ -491,21 +491,21 @@ def mk_logout_msg_unsigned():
 def logout_validator_via_signed_msg(casper, concise_casper, mk_logout_msg_signed, base_sender):
     def logout_validator_via_signed_msg(validator_index,
                                         msg_signing_key,
-                                        tx_sender_address=base_sender):
+                                        tx_sender_addr=base_sender):
         logout_msg = mk_logout_msg_signed(
             validator_index,
             concise_casper.current_epoch(),
             msg_signing_key
         )
-        casper.functions.logout(logout_msg).transact({'from': tx_sender_address})
+        casper.functions.logout(logout_msg).transact({'from': tx_sender_addr})
     return logout_validator_via_signed_msg
 
 
 @pytest.fixture
-def logout_validator_via_unsigned_msg(casper, mk_logout_msg_unsigned):
-    def logout_validator_via_unsigned_msg(validator_index, tx_sender_key):
-        logout_tx = mk_logout_msg_unsigned(validator_index, casper.current_epoch())
-        casper.logout(logout_tx, sender=tx_sender_key)
+def logout_validator_via_unsigned_msg(casper, concise_casper, mk_logout_msg_unsigned):
+    def logout_validator_via_unsigned_msg(validator_index, tx_sender_addr):
+        logout_tx = mk_logout_msg_unsigned(validator_index, concise_casper.current_epoch())
+        casper.functions.logout(logout_tx).transact({'from': tx_sender_addr})
     return logout_validator_via_unsigned_msg
 
 
