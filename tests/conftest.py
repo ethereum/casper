@@ -92,16 +92,6 @@ def base_sender(base_tester):
     return base_tester.get_accounts()[-1]
 
 
-# @pytest.fixture
-# def base_sender_privkey():
-    # return tester.k0
-
-
-# @pytest.fixture(params=FUNDED_PRIVKEYS[0:1])
-# def funded_privkey(request):
-    # return request.param
-
-
 @pytest.fixture
 def funded_accounts(base_tester):
     return base_tester.get_accounts()[0:5]
@@ -271,14 +261,6 @@ def tester(
     # NOTE: bytecode cannot be compiled before RLP Decoder is deployed to chain
     # otherwise, vyper compiler cannot properly embed RLP decoder address
     casper_bytecode = compiler.compile(casper_code)
-
-    # tx_hash = w3.eth.sendTransaction({
-    # 'from': base_sender,
-    # 'to': '',
-    # 'gas': 7000000,
-    # 'data': deploy_code
-    # })
-    # casper_address = w3.eth.getTransactionReceipt(tx_hash).contractAddress
 
     Casper = w3.eth.contract(abi=casper_abi, bytecode=casper_bytecode)
     tx_hash = Casper.constructor().transact({'from': base_sender})
@@ -633,29 +615,3 @@ def assert_tx_failed(base_tester):
             function_to_test()
         base_tester.revert_to_snapshot(snapshot_id)
     return assert_tx_failed
-
-
-@pytest.fixture
-def get_logs():
-    def get_logs(receipt, contract, event_name=None):
-        contract_log_ids = contract.translator.event_data.keys() # All the log ids contract has
-        # All logs originating from contract, and matching event_name (if specified)
-        logs = [log for log in receipt.logs \
-                if log.topics[0] in contract_log_ids and \
-                log.address == contract.address and \
-                (not event_name or \
-                 contract.translator.event_data[log.topics[0]]['name'] == event_name)]
-        assert len(logs) > 0, "No logs in last receipt"
-
-        # Return all events decoded in the receipt
-        return [contract.translator.decode_event(log.topics, log.data) for log in logs]
-    return get_logs
-
-
-@pytest.fixture
-def get_last_log(get_logs):
-    def get_last_log(casper_chain, contract, event_name=None):
-        receipt = casper_chain.head_state.receipts[-1] # Only the receipts for the last block
-        # Get last log event with correct name and return the decoded event
-        return get_logs(receipt, contract, event_name=event_name)[-1]
-    return get_last_log
