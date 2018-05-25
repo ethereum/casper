@@ -1,4 +1,5 @@
-rlp==0.6.0
-git+https://github.com/ethereum/pyethereum.git@cba5954a43a2db4df7504d9ced70c63530247e77
+rlp==1.0.1
+eth-tester[py-evm]==0.1.0b24
+web3>=4.2.1
 pytest==3.4.0
-git+https://github.com/ethereum/vyper.git@v0.0.4
+git+https://github.com/ethereum/vyper.git@248c723288e84899908048efff4c3e0b12f0b3dc

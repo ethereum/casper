@@ -7,7 +7,7 @@ Deposit: event({_from: indexed(address), _validator_index: indexed(int128), _val
 Vote: event({_from: indexed(address), _validator_index: indexed(int128), _target_hash: indexed(bytes32), _target_epoch: int128, _source_epoch: int128})
 Logout: event({_from: indexed(address), _validator_index: indexed(int128), _end_dyn: int128})
 Withdraw: event({_to: indexed(address), _validator_index: indexed(int128), _amount: int128(wei)})
-Slash: event({_from: indexed(address), _offender: indexed(address), _offender_index: indexed(int128), _bounty: int128(wei), _destroyed: int128(wei)})
+Slash: event({_from: indexed(address), _offender: indexed(address), _offender_index: indexed(int128), _bounty: int128(wei)})
 Epoch: event({_number: indexed(int128), _checkpoint_hash: indexed(bytes32), _is_justified: bool, _is_finalized: bool})
 
 validators: public({
@@ -123,11 +123,17 @@ SLASH_FRACTION_MULTIPLIER: int128
 
 
 @public
-def init(epoch_length: int128, warm_up_period: int128,
-         withdrawal_delay: int128, dynasty_logout_delay: int128,
-         msg_hasher: address, purity_checker: address,
-         base_interest_factor: decimal, base_penalty_factor: decimal,
-         min_deposit_size: wei_value):
+def init(
+        epoch_length: int128,
+        warm_up_period: int128,
+        withdrawal_delay: int128,
+        dynasty_logout_delay: int128,
+        msg_hasher: address,
+        purity_checker: address,
+        base_interest_factor: decimal,
+        base_penalty_factor: decimal,
+        min_deposit_size: wei_value
+        ):
 
     assert not self.initialized
     assert epoch_length > 0 and epoch_length < 256
@@ -194,7 +200,7 @@ def sqrt_of_total_deposits() -> decimal:
 @private
 @constant
 def deposit_exists() -> bool:
-    return self.total_curdyn_deposits > 0 and self.total_prevdyn_deposits > 0
+    return self.total_curdyn_deposits > 0.0 and self.total_prevdyn_deposits > 0.0
 
 
 # ***** Private *****
@@ -279,7 +285,7 @@ def delete_validator(validator_index: int128):
 # cannot be labeled @constant because of external call
 # even though the call is to a pure contract call
 @private
-def validate_signature(msg_hash: bytes32, sig: bytes <= 1024, validator_index: int128) -> bool:
+def validate_signature(msg_hash: bytes32, sig: bytes[1024], validator_index: int128) -> bool:
     return extract32(raw_call(self.validators[validator_index].addr, concat(msg_hash, sig), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
 
 
@@ -313,7 +319,7 @@ def total_prevdyn_deposits_in_wei() -> wei_value:
 @public
 # cannot be labeled @constant because of external call
 # even though the call is to a pure contract call
-def slashable(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024) -> bool:
+def slashable(vote_msg_1: bytes[1024], vote_msg_2: bytes[1024]) -> bool:
     # Message 1: Extract parameters
     msg_hash_1: bytes32 = extract32(
         raw_call(self.MSG_HASHER, vote_msg_1, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32),
@@ -323,7 +329,7 @@ def slashable(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024) -> bool:
     validator_index_1: int128 = values_1[0]
     target_epoch_1: int128 = values_1[2]
     source_epoch_1: int128 = values_1[3]
-    sig_1: bytes <= 1024 = values_1[4]
+    sig_1: bytes[1024] = values_1[4]
 
     # Message 2: Extract parameters
     msg_hash_2: bytes32 = extract32(
@@ -334,7 +340,7 @@ def slashable(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024) -> bool:
     validator_index_2: int128 = values_2[0]
     target_epoch_2: int128 = values_2[2]
     source_epoch_2: int128 = values_2[3]
-    sig_2: bytes <= 1024 = values_2[4]
+    sig_2: bytes[1024] = values_2[4]
 
     if not self.validate_signature(msg_hash_1, sig_1, validator_index_1):
         return False
@@ -447,7 +453,7 @@ def initialize_epoch(epoch: int128):
         adj_interest_base: decimal = self.BASE_INTEREST_FACTOR / self.sqrt_of_total_deposits()
         self.reward_factor = adj_interest_base + self.BASE_PENALTY_FACTOR * (self.esf() - 2)
         # ESF is only thing that is changing and reward_factor is being used above.
-        assert self.reward_factor > 0
+        assert self.reward_factor > 0.0
     else:
         # Before the first validator deposits, new epochs are finalized instantly.
         self.insta_finalize()
@@ -469,9 +475,10 @@ def deposit(validation_addr: address, withdrawal_addr: address):
     assert extract32(raw_call(self.PURITY_CHECKER, concat('\xa1\x90\x3e\xab', convert(validation_addr, 'bytes32')), gas=500000, outsize=32), 0) != convert(0, 'bytes32')
     assert not self.validator_indexes[withdrawal_addr]
     assert msg.value >= self.MIN_DEPOSIT_SIZE
+    validator_index: int128 = self.next_validator_index
     start_dynasty: int128 = self.dynasty + 2
     scaled_deposit: decimal(wei/m) = msg.value / self.deposit_scale_factor[self.current_epoch]
-    self.validators[self.next_validator_index] = {
+    self.validators[validator_index] = {
         deposit: scaled_deposit,
         start_dynasty: start_dynasty,
         end_dynasty: self.DEFAULT_END_DYNASTY,
@@ -480,15 +487,21 @@ def deposit(validation_addr: address, withdrawal_addr: address):
         addr: validation_addr,
         withdrawal_addr: withdrawal_addr
     }
-    self.validator_indexes[withdrawal_addr] = self.next_validator_index
+    self.validator_indexes[withdrawal_addr] = validator_index
     self.next_validator_index += 1
     self.dynasty_wei_delta[start_dynasty] += scaled_deposit
     # Log deposit event
-    log.Deposit(withdrawal_addr, self.validator_indexes[withdrawal_addr], validation_addr, self.validators[self.validator_indexes[withdrawal_addr]].start_dynasty, msg.value)
+    log.Deposit(
+        withdrawal_addr,
+        validator_index,
+        validation_addr,
+        start_dynasty,
+        msg.value
+    )
 
 
 @public
-def logout(logout_msg: bytes <= 1024):
+def logout(logout_msg: bytes[1024]):
     assert self.current_epoch == floor(block.number / self.EPOCH_LENGTH)
 
     # Get hash for signature, and implicitly assert that it is an RLP list
@@ -500,7 +513,7 @@ def logout(logout_msg: bytes <= 1024):
     values = RLPList(logout_msg, [int128, int128, bytes])
     validator_index: int128 = values[0]
     epoch: int128 = values[1]
-    sig: bytes <= 1024 = values[2]
+    sig: bytes[1024] = values[2]
 
     assert self.current_epoch >= epoch
     from_withdrawal: bool = msg.sender == self.validators[validator_index].withdrawal_addr
@@ -514,15 +527,21 @@ def logout(logout_msg: bytes <= 1024):
     self.validators[validator_index].total_deposits_at_logout = self.total_curdyn_deposits_in_wei()
     self.dynasty_wei_delta[end_dynasty] -= self.validators[validator_index].deposit
 
-    log.Logout(self.validators[validator_index].withdrawal_addr, validator_index, self.validators[validator_index].end_dynasty)
+    log.Logout(
+        self.validators[validator_index].withdrawal_addr,
+        validator_index,
+        self.validators[validator_index].end_dynasty
+    )
 
 
 # Withdraw deposited ether
 @public
 def withdraw(validator_index: int128):
     # Check that we can withdraw
-    assert self.dynasty > self.validators[validator_index].end_dynasty
-    end_epoch: int128 = self.dynasty_start_epoch[self.validators[validator_index].end_dynasty + 1]
+    end_dynasty: int128 = self.validators[validator_index].end_dynasty
+    assert self.dynasty > end_dynasty
+
+    end_epoch: int128 = self.dynasty_start_epoch[end_dynasty + 1]
     withdrawal_epoch: int128 = end_epoch + self.WITHDRAWAL_DELAY
     assert self.current_epoch >= withdrawal_epoch
 
@@ -539,15 +558,22 @@ def withdraw(validator_index: int128):
 
         deposit_size: int128(wei) = floor(self.validators[validator_index].deposit * self.deposit_scale_factor[withdrawal_epoch])
         withdraw_amount = floor(deposit_size * fraction_to_withdraw)
+
     send(self.validators[validator_index].withdrawal_addr, withdraw_amount)
+
     # Log withdraw event
-    log.Withdraw(self.validators[validator_index].withdrawal_addr, validator_index, withdraw_amount)
+    log.Withdraw(
+        self.validators[validator_index].withdrawal_addr,
+        validator_index,
+        withdraw_amount
+    )
+
     self.delete_validator(validator_index)
 
 
 # Process a vote message
 @public
-def vote(vote_msg: bytes <= 1024):
+def vote(vote_msg: bytes[1024]):
     # Get hash for signature, and implicitly assert that it is an RLP list
     # consisting solely of RLP elements
     msg_hash: bytes32 = extract32(
@@ -560,7 +586,7 @@ def vote(vote_msg: bytes <= 1024):
     target_hash: bytes32 = values[1]
     target_epoch: int128 = values[2]
     source_epoch: int128 = values[3]
-    sig: bytes <= 1024 = values[4]
+    sig: bytes[1024] = values[4]
 
     assert self.validate_signature(msg_hash, sig, validator_index)
     # Check that this vote has not yet been made
@@ -623,12 +649,18 @@ def vote(vote_msg: bytes <= 1024):
             log.Epoch(source_epoch, self.checkpoint_hashes[source_epoch], True, True)
 
     # Log vote event
-    log.Vote(self.validators[validator_index].withdrawal_addr, validator_index, target_hash, target_epoch, source_epoch)
+    log.Vote(
+        self.validators[validator_index].withdrawal_addr,
+        validator_index,
+        target_hash,
+        target_epoch,
+        source_epoch
+    )
 
 
 # Cannot sign two votes for same target_epoch; no surround vote.
 @public
-def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
+def slash(vote_msg_1: bytes[1024], vote_msg_2: bytes[1024]):
     assert self.slashable(vote_msg_1, vote_msg_2)
 
     # Extract validator_index
@@ -640,12 +672,16 @@ def slash(vote_msg_1: bytes <= 1024, vote_msg_2: bytes <= 1024):
     # Slash the offending validator, and give a 4% "finder's fee"
     validator_deposit: int128(wei) = self.deposit_size(validator_index)
     slashing_bounty: int128(wei) = floor(validator_deposit / 25)
-    deposit_destroyed: int128(wei) = validator_deposit - slashing_bounty
     self.total_slashed[self.current_epoch] += validator_deposit
     self.validators[validator_index].is_slashed = True
 
     # Log slashing
-    log.Slash(msg.sender, self.validators[validator_index].withdrawal_addr, validator_index, slashing_bounty, deposit_destroyed)
+    log.Slash(
+        msg.sender,
+        self.validators[validator_index].withdrawal_addr,
+        validator_index,
+        slashing_bounty,
+    )
 
     # if validator not logged out yet, remove total from next dynasty
     # and forcibly logout next dynasty
