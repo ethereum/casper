@@ -1,6 +1,6 @@
 from vyper import optimizer, compile_lll
 from vyper.parser.parser_utils import LLLnode
-from ethereum.utils import bytes_to_int
+from web3 import Web3
 
 
 # We must know a pure opcode so we can do control tests
@@ -24,7 +24,7 @@ def generate_pure_ecrecover_LLL_source(address):
                         0,
                         ['eq',
                             ['mload', 0],
-                            bytes_to_int(address)]],
+                            Web3.toInt(hexstr=address)]],
                     ['return', 0, 32]],
                 [0]]]
     ]
@@ -43,7 +43,7 @@ def format_LLL_source(address, expression):
                         0,
                         ['eq',
                             ['mload', 0],
-                            bytes_to_int(address)]],
+                            Web3.toInt(hexstr=address)]],
                     ['return', 0, 32]],
                 [0]]]
     ]
@@ -79,11 +79,14 @@ def format_ecrecover_bytecode(address, opcode):
     pure_ecrecover_bytecode = (
         "61003f56{start:02x}5060806000600037602060006080600060006001610"
         "bb8f15073{address}6000511460005260206000f35b61000461003f036100"
-        "0460003961000461003f036000f3")
+        "0460003961000461003f036000f3"
+    )
     return bytes.fromhex(
         pure_ecrecover_bytecode.format(
             start=opcode,
-            address=address.hex()))
+            address=address[2:]
+        )
+    )
 
 
 def generate_unused_opcodes_as_evm_bytecode(address):
@@ -123,7 +126,7 @@ def generate_all_valcodes(address):
 
 
 def all_known_valcode_types():
-    return generate_all_valcodes(b'\x00').keys()
+    return generate_all_valcodes('0x00').keys()
 
 
 def compile_valcode_to_evm_bytecode(valcode_type, address):
