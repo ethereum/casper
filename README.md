@@ -2,6 +2,8 @@
 
 [![Build Status](https://travis-ci.org/ethereum/casper.svg?branch=master)](https://travis-ci.org/ethereum/casper)
 
+> Implements Casper FFG (Casper the Friendly Finality Gadget, a Proof-of-Stake finality protocol on top of Proof-of-Work.
+
 ## Resources
 
 - [EIP-1011](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1011.md):
