@@ -50,7 +50,3 @@ Feel free to ask questions in our [Gitter room](https://gitter.im/ethereum/caspe
 ```bash
 pytest tests
 ```
-
-## Contribute
-
-Join the conversation here: [https://gitter.im/ethereum/casper](https://gitter.im/ethereum/casper)
