@@ -281,13 +281,18 @@ def delete_validator(validator_index: int128):
         withdrawal_addr: None
     }
 
+@private
+def hash_vote_msg(vote_msg: bytes[1024]) -> bytes32:
+    return extract32(
+        raw_call(self.MSG_HASHER, vote_msg, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32),
+        0
+    )
 
 # cannot be labeled @constant because of external call
 # even though the call is to a pure contract call
 @private
 def validate_signature(msg_hash: bytes32, sig: bytes[1024], validator_index: int128) -> bool:
     return extract32(raw_call(self.validators[validator_index].addr, concat(msg_hash, sig), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
-
 
 # ***** Public Constants *****
 
@@ -315,6 +320,17 @@ def total_curdyn_deposits_in_wei() -> wei_value:
 def total_prevdyn_deposits_in_wei() -> wei_value:
     return floor(self.total_prevdyn_deposits * self.deposit_scale_factor[self.current_epoch])
 
+
+
+@public
+def validate_vote_msg(vote_msg: bytes[1024]) -> bool:
+    msg_hash: bytes32 = self.hash_vote_msg(vote_msg)
+    # Extract parameters
+    values = RLPList(vote_msg, [int128, bytes32, int128, int128, bytes])
+    validator_index: int128 = values[0]
+    sig: bytes[1024] = values[4]
+
+    return self.validate_signature(msg_hash, sig, validator_index)
 
 @public
 # cannot be labeled @constant because of external call
@@ -427,6 +443,50 @@ def highest_finalized_epoch(min_total_deposits: wei_value) -> int128:
     # no finalized epochs found, use -1 as default
     # to signal not to locally finalize anything
     return -1
+
+
+@public
+@constant
+def havent_voted_and_source_target_right(
+        validator_index:int128,
+        target_hash:bytes32,
+        target_epoch:int128,
+        source_epoch:int128) -> bool:
+    # Check that this vote has not yet been made
+    if bitwise_and(self.checkpoints[target_epoch].vote_bitmap[floor(validator_index / 256)],
+                           shift(convert(1, 'uint256'), validator_index % 256)):
+        return False
+    # Check that the vote's target epoch and hash are correct
+    if target_hash != self.recommended_target_hash():
+        return False
+    if target_epoch != self.current_epoch:
+        return False
+    # Check that the vote source points to a justified epoch
+    return self.checkpoints[source_epoch].is_justified
+
+@public
+@constant
+def votable(vote_msg: bytes[1024]) -> bool:
+    # Extract parameters
+    values = RLPList(vote_msg, [int128, bytes32, int128, int128, bytes])
+    validator_index: int128 = values[0]
+    target_hash: bytes32 = values[1]
+    target_epoch: int128 = values[2]
+    source_epoch: int128 = values[3]
+
+    if not self.havent_voted_and_source_target_right(validator_index, target_hash, target_epoch, source_epoch):
+        return False
+
+    # ensure validator can vote for the target_epoch
+    start_dynasty: int128 = self.validators[validator_index].start_dynasty
+    end_dynasty: int128 = self.validators[validator_index].end_dynasty
+    current_dynasty: int128 = self.dynasty
+    past_dynasty: int128 = current_dynasty - 1
+    in_current_dynasty: bool = ((start_dynasty <= current_dynasty) and (current_dynasty < end_dynasty))
+    in_prev_dynasty: bool = ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty))
+
+    return in_current_dynasty or in_prev_dynasty
+
 
 # ***** Public *****
 
@@ -574,13 +634,6 @@ def withdraw(validator_index: int128):
 # Process a vote message
 @public
 def vote(vote_msg: bytes[1024]):
-    # Get hash for signature, and implicitly assert that it is an RLP list
-    # consisting solely of RLP elements
-    msg_hash: bytes32 = extract32(
-        raw_call(self.MSG_HASHER, vote_msg, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32),
-        0
-    )
-    # Extract parameters
     values = RLPList(vote_msg, [int128, bytes32, int128, int128, bytes])
     validator_index: int128 = values[0]
     target_hash: bytes32 = values[1]
@@ -588,24 +641,19 @@ def vote(vote_msg: bytes[1024]):
     source_epoch: int128 = values[3]
     sig: bytes[1024] = values[4]
 
-    assert self.validate_signature(msg_hash, sig, validator_index)
-    # Check that this vote has not yet been made
-    assert not bitwise_and(self.checkpoints[target_epoch].vote_bitmap[floor(validator_index / 256)],
-                           shift(convert(1, 'uint256'), validator_index % 256))
-    # Check that the vote's target epoch and hash are correct
-    assert target_hash == self.recommended_target_hash()
-    assert target_epoch == self.current_epoch
-    # Check that the vote source points to a justified epoch
-    assert self.checkpoints[source_epoch].is_justified
+    assert self.havent_voted_and_source_target_right(validator_index, target_hash, target_epoch, source_epoch)
 
-    # ensure validator can vote for the target_epoch
     start_dynasty: int128 = self.validators[validator_index].start_dynasty
     end_dynasty: int128 = self.validators[validator_index].end_dynasty
     current_dynasty: int128 = self.dynasty
     past_dynasty: int128 = current_dynasty - 1
     in_current_dynasty: bool = ((start_dynasty <= current_dynasty) and (current_dynasty < end_dynasty))
     in_prev_dynasty: bool = ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty))
+
     assert in_current_dynasty or in_prev_dynasty
+
+    msg_hash: bytes32 = self.hash_vote_msg(vote_msg)
+    assert self.validate_signature(msg_hash, sig, validator_index)
 
     # Record that the validator voted for this target epoch so they can't again
     self.checkpoints[target_epoch].vote_bitmap[floor(validator_index / 256)] = \
