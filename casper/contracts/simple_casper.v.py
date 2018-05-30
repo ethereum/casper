@@ -323,6 +323,7 @@ def total_prevdyn_deposits_in_wei() -> wei_value:
 
 
 @public
+# cannot be labeled @constant because of external call
 def validate_vote_msg(vote_msg: bytes[1024]) -> bool:
     msg_hash: bytes32 = self.hash_vote_msg(vote_msg)
     # Extract parameters
