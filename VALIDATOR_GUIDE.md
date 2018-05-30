@@ -152,7 +152,7 @@ Once a validator is logged in, they can use the following logic to determine whe
 
 NOTE: To check if a validator is logged in, one can use:
 ``` python
-return casper.validators__start_dynasty(validator_index) >= casper.dynasty()
+return casper.validators__start_dynasty(validator_index) <= casper.dynasty()
 ```
 
 #### [[See the current validator implementation for more information.]](https://github.com/karlfloersch/pyethapp/blob/dev_env/pyethapp/validator_service.py)
