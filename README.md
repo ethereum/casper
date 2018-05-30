@@ -1,7 +1,8 @@
 # Casper
 
 [![Build Status](https://travis-ci.org/ethereum/casper.svg?branch=master)](https://travis-ci.org/ethereum/casper)
-[![Casper](https://img.shields.io/badge/gitter-Casper-4AB495.svg)](https://gitter.im/ethereum/casper-scaling-and-protocol-economics)
+[![Casper](https://img.shields.io/badge/gitter-Casper-4AB495.svg)](https://gitter.im/ethereum/casper)
+[![Casper scaling and protocol economics](https://img.shields.io/badge/gitter-Casper-scaling-and-protocol-economics-4AB495.svg)](https://gitter.im/ethereum/casper-scaling-and-protocol-economics)
 [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
 
 > Implements Casper FFG (Casper the Friendly Finality Gadget, a Proof-of-Stake finality protocol on top of Proof-of-Work.
