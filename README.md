@@ -11,8 +11,7 @@
 ## Background
 
 - Implements a [Casper FFG](https://arxiv.org/abs/1710.09437) smart contract, written in [Vyper](https://github.com/ethereum/vyper).
-- See this [Casper the Friendly Finality Gadget](https://arxiv.org/abs/1710.09437): 
-  paper by Vitalik Buterin and Virgil Griffith introducing Casper FFG.
+- See this [Casper the Friendly Finality Gadget](https://arxiv.org/abs/1710.09437) paper by Vitalik Buterin and Virgil Griffith introducing Casper FFG.
 - [EIP-1011](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1011.md):
 specification of the Casper the Friendly Finality Gadget (FFG) PoW/PoS consensus model.
 
