@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/ethereum/casper.svg?branch=master)](https://travis-ci.org/ethereum/casper)
 [![Casper](https://img.shields.io/badge/gitter-Casper-4AB495.svg)](https://gitter.im/ethereum/casper)
-[![Casper scaling and protocol economics](https://img.shields.io/badge/gitter-Casper-scaling-and-protocol-economics-4AB495.svg)](https://gitter.im/ethereum/casper-scaling-and-protocol-economics)
+[![Casper scaling and protocol economics](https://img.shields.io/badge/gitter-Casper%20scaling%20and%20protocol%20economics-4AB495.svg)](https://gitter.im/ethereum/casper-scaling-and-protocol-economics)
 [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
 
 > Implements Casper FFG (Casper the Friendly Finality Gadget, a Proof-of-Stake finality protocol on top of Proof-of-Work.
@@ -39,7 +39,7 @@ information about implementing a Casper FFG validator.
 
 ## Contribute
 
-Feel free to ask questions in our [Gitter room](https://gitter.im/ethereum/casper-scaling-and-protocol-economics) or open an [issue](https://github.com/ethereum/casper/issues) for feature requests or bug reports. Feel free to make a PR!
+Feel free to ask questions in our [Gitter room](https://gitter.im/ethereum/casper) or open an [issue](https://github.com/ethereum/casper/issues) for feature requests or bug reports. Feel free to make a PR!
 
 ## License
 
