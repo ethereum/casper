@@ -203,6 +203,14 @@ def deposit_exists() -> bool:
     return self.total_curdyn_deposits > 0.0 and self.total_prevdyn_deposits > 0.0
 
 
+@private
+@constant
+def in_dynasty(validator_index:int128, _dynasty:int128) -> bool:
+    start_dynasty: int128 = self.validators[validator_index].start_dynasty
+    end_dynasty: int128 = self.validators[validator_index].end_dynasty
+    return (start_dynasty <= _dynasty) and (_dynasty < end_dynasty)
+
+
 # ***** Private *****
 
 # Increment dynasty when checkpoint is finalized.
@@ -443,15 +451,7 @@ def highest_finalized_epoch(min_total_deposits: wei_value) -> int128:
     return -1
 
 
-@public
-@constant
-def in_dynasty(validator_index:int128, _dynasty:int128) -> bool:
-    start_dynasty: int128 = self.validators[validator_index].start_dynasty
-    end_dynasty: int128 = self.validators[validator_index].end_dynasty
-    return (start_dynasty <= _dynasty) and (_dynasty < end_dynasty)
-
-
-@public
+@private
 @constant
 def _votable(
         validator_index:int128,
