@@ -64,7 +64,7 @@ def test_vote_single_validator(casper,
     for i in range(10):
         vote_msg = mk_suggested_vote(validator_index, validation_key)
         assert concise_casper.votable(vote_msg)
-        assert concise_casper.validate_vote_msg(vote_msg)
+        assert concise_casper.validate_vote_signature(vote_msg)
         casper.functions.vote(vote_msg).transact()
         assert concise_casper.main_hash_justified()
         assert concise_casper.checkpoints__is_finalized(concise_casper.recommended_source_epoch())
@@ -126,14 +126,14 @@ def test_vote_validate_signature_gas_limit(valcode_type,
 
     if not success:
         assert_tx_failed(
-            lambda: concise_casper.validate_vote_msg(vote_msg)
+            lambda: concise_casper.validate_vote_signature(vote_msg)
         )
         assert_tx_failed(
             lambda: casper.functions.vote(vote_msg).transact()
         )
         return
 
-    assert concise_casper.validate_vote_msg(vote_msg)
+    assert concise_casper.validate_vote_signature(vote_msg)
     casper.functions.vote(vote_msg).transact()
 
 

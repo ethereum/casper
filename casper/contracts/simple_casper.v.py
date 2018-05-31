@@ -281,18 +281,13 @@ def delete_validator(validator_index: int128):
         withdrawal_addr: None
     }
 
-@private
-def hash_vote_msg(vote_msg: bytes[1024]) -> bytes32:
-    return extract32(
-        raw_call(self.MSG_HASHER, vote_msg, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32),
-        0
-    )
 
 # cannot be labeled @constant because of external call
 # even though the call is to a pure contract call
 @private
 def validate_signature(msg_hash: bytes32, sig: bytes[1024], validator_index: int128) -> bool:
     return extract32(raw_call(self.validators[validator_index].addr, concat(msg_hash, sig), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
+
 
 # ***** Public Constants *****
 
@@ -321,11 +316,13 @@ def total_prevdyn_deposits_in_wei() -> wei_value:
     return floor(self.total_prevdyn_deposits * self.deposit_scale_factor[self.current_epoch])
 
 
-
 @public
 # cannot be labeled @constant because of external call
-def validate_vote_msg(vote_msg: bytes[1024]) -> bool:
-    msg_hash: bytes32 = self.hash_vote_msg(vote_msg)
+def validate_vote_signature(vote_msg: bytes[1024]) -> bool:
+    msg_hash: bytes32 = extract32(
+        raw_call(self.MSG_HASHER, vote_msg, gas=self.MSG_HASHER_GAS_LIMIT, outsize=32),
+        0
+    )
     # Extract parameters
     values = RLPList(vote_msg, [int128, bytes32, int128, int128, bytes])
     validator_index: int128 = values[0]
@@ -448,7 +445,15 @@ def highest_finalized_epoch(min_total_deposits: wei_value) -> int128:
 
 @public
 @constant
-def havent_voted_and_source_target_right(
+def in_dynasty(validator_index:int128, _dynasty:int128) -> bool:
+    start_dynasty: int128 = self.validators[validator_index].start_dynasty
+    end_dynasty: int128 = self.validators[validator_index].end_dynasty
+    return (start_dynasty <= _dynasty) and (_dynasty < end_dynasty)
+
+
+@public
+@constant
+def _votable(
         validator_index:int128,
         target_hash:bytes32,
         target_epoch:int128,
@@ -463,7 +468,14 @@ def havent_voted_and_source_target_right(
     if target_epoch != self.current_epoch:
         return False
     # Check that the vote source points to a justified epoch
-    return self.checkpoints[source_epoch].is_justified
+    if not self.checkpoints[source_epoch].is_justified:
+        return False
+
+    # ensure validator can vote for the target_epoch
+    in_current_dynasty: bool = self.in_dynasty(validator_index, self.dynasty)
+    in_prev_dynasty: bool = self.in_dynasty(validator_index, self.dynasty - 1)
+    return in_current_dynasty or in_prev_dynasty
+
 
 @public
 @constant
@@ -475,18 +487,7 @@ def votable(vote_msg: bytes[1024]) -> bool:
     target_epoch: int128 = values[2]
     source_epoch: int128 = values[3]
 
-    if not self.havent_voted_and_source_target_right(validator_index, target_hash, target_epoch, source_epoch):
-        return False
-
-    # ensure validator can vote for the target_epoch
-    start_dynasty: int128 = self.validators[validator_index].start_dynasty
-    end_dynasty: int128 = self.validators[validator_index].end_dynasty
-    current_dynasty: int128 = self.dynasty
-    past_dynasty: int128 = current_dynasty - 1
-    in_current_dynasty: bool = ((start_dynasty <= current_dynasty) and (current_dynasty < end_dynasty))
-    in_prev_dynasty: bool = ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty))
-
-    return in_current_dynasty or in_prev_dynasty
+    return self._votable(validator_index, target_hash, target_epoch, source_epoch)
 
 
 # ***** Public *****
@@ -642,19 +643,8 @@ def vote(vote_msg: bytes[1024]):
     source_epoch: int128 = values[3]
     sig: bytes[1024] = values[4]
 
-    assert self.havent_voted_and_source_target_right(validator_index, target_hash, target_epoch, source_epoch)
-
-    start_dynasty: int128 = self.validators[validator_index].start_dynasty
-    end_dynasty: int128 = self.validators[validator_index].end_dynasty
-    current_dynasty: int128 = self.dynasty
-    past_dynasty: int128 = current_dynasty - 1
-    in_current_dynasty: bool = ((start_dynasty <= current_dynasty) and (current_dynasty < end_dynasty))
-    in_prev_dynasty: bool = ((start_dynasty <= past_dynasty) and (past_dynasty < end_dynasty))
-
-    assert in_current_dynasty or in_prev_dynasty
-
-    msg_hash: bytes32 = self.hash_vote_msg(vote_msg)
-    assert self.validate_signature(msg_hash, sig, validator_index)
+    assert self._votable(validator_index, target_hash, target_epoch, source_epoch)
+    assert self.validate_vote_signature(vote_msg)
 
     # Record that the validator voted for this target epoch so they can't again
     self.checkpoints[target_epoch].vote_bitmap[floor(validator_index / 256)] = \
@@ -662,8 +652,11 @@ def vote(vote_msg: bytes[1024]):
                    shift(convert(1, 'uint256'), validator_index % 256))
 
     # Record that this vote took place
+    in_current_dynasty: bool = self.in_dynasty(validator_index, self.dynasty)
+    in_prev_dynasty: bool = self.in_dynasty(validator_index, self.dynasty - 1)
     current_dynasty_votes: decimal(wei/m) = self.checkpoints[target_epoch].cur_dyn_votes[source_epoch]
     previous_dynasty_votes: decimal(wei/m) = self.checkpoints[target_epoch].prev_dyn_votes[source_epoch]
+
     if in_current_dynasty:
         current_dynasty_votes += self.validators[validator_index].deposit
         self.checkpoints[target_epoch].cur_dyn_votes[source_epoch] = current_dynasty_votes
