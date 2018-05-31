@@ -6,7 +6,7 @@
 [![Casper scaling and protocol economics](https://img.shields.io/badge/gitter-Casper%20scaling%20and%20protocol%20economics-4AB495.svg)](https://gitter.im/ethereum/casper-scaling-and-protocol-economics)
 [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
 
-> Implements Casper FFG (the Friendly Finality Gadget), a Proof-of-Stake finality protocol on top of Proof-of-Work.
+> Implements Casper FFG (the Friendly Finality Gadget), a Proof-of-Stake finality protocol that can be layered on any block proposal mechanism.
 
 ## Background
 
