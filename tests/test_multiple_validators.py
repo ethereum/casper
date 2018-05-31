@@ -23,14 +23,13 @@ def test_deposits_on_staggered_dynasties(casper,
                                          new_epoch,
                                          induct_validator,
                                          deposit_validator,
+                                         send_vote,
                                          mk_suggested_vote):
     initial_validator = induct_validator(funded_accounts[0], validation_keys[0], deposit_amount)
 
     # finalize some epochs with just the one validator
     for i in range(3):
-        casper.functions.vote(
-            mk_suggested_vote(initial_validator, validation_keys[0])
-        ).transact()
+        send_vote(mk_suggested_vote(initial_validator, validation_keys[0]))
         new_epoch()
 
     # induct more validators
@@ -40,16 +39,12 @@ def test_deposits_on_staggered_dynasties(casper,
     assert concise_casper.deposit_size(initial_validator) == \
         concise_casper.total_curdyn_deposits_in_wei()
 
-    casper.functions.vote(
-        mk_suggested_vote(initial_validator, validation_keys[0])
-    ).transact()
+    send_vote(mk_suggested_vote(initial_validator, validation_keys[0]))
     new_epoch()
     assert concise_casper.deposit_size(initial_validator) == \
         concise_casper.total_curdyn_deposits_in_wei()
 
-    casper.functions.vote(
-        mk_suggested_vote(initial_validator, validation_keys[0])
-    ).transact()
+    send_vote(mk_suggested_vote(initial_validator, validation_keys[0]))
     new_epoch()
     assert concise_casper.deposit_size(initial_validator) == \
         concise_casper.total_prevdyn_deposits_in_wei()
@@ -62,6 +57,7 @@ def test_justification_and_finalization(casper,
                                         deposit_amount,
                                         new_epoch,
                                         induct_validators,
+                                        send_vote,
                                         mk_suggested_vote):
     validator_indexes = induct_validators(
         funded_accounts,
@@ -73,9 +69,7 @@ def test_justification_and_finalization(casper,
     prev_dynasty = concise_casper.dynasty()
     for _ in range(10):
         for key, validator_index in zip(validation_keys, validator_indexes):
-            casper.functions.vote(
-                mk_suggested_vote(validator_index, key)
-            ).transact()
+            send_vote(mk_suggested_vote(validator_index, key))
         assert concise_casper.main_hash_justified()
         assert concise_casper.checkpoints__is_finalized(concise_casper.recommended_source_epoch())
         new_epoch()
@@ -90,6 +84,7 @@ def test_voters_make_more(casper,
                           deposit_amount,
                           new_epoch,
                           induct_validators,
+                          send_vote,
                           mk_suggested_vote):
     validator_indexes = induct_validators(
         funded_accounts,
@@ -105,9 +100,7 @@ def test_voters_make_more(casper,
     prev_dynasty = concise_casper.dynasty()
     for _ in range(10):
         for key, validator_index in zip(voting_keys, voting_indexes):
-            casper.functions.vote(
-                mk_suggested_vote(validator_index, key)
-            ).transact()
+            send_vote(mk_suggested_vote(validator_index, key))
         assert concise_casper.main_hash_justified()
         assert concise_casper.checkpoints__is_finalized(concise_casper.recommended_source_epoch())
         new_epoch()
@@ -127,6 +120,7 @@ def test_partial_online(casper,
                         deposit_amount,
                         new_epoch,
                         induct_validators,
+                        send_vote,
                         mk_suggested_vote):
     validator_indexes = induct_validators(
         funded_accounts,
@@ -145,9 +139,7 @@ def test_partial_online(casper,
 
     for i in range(100):
         for key, validator_index in zip(online_keys, online_indexes):
-            casper.functions.vote(
-                mk_suggested_vote(validator_index, key)
-            ).transact()
+            send_vote(mk_suggested_vote(validator_index, key))
 
         total_online_deposits = sum(map(concise_casper.deposit_size, online_indexes))
         ovp = total_online_deposits / concise_casper.total_curdyn_deposits_in_wei()

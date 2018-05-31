@@ -51,14 +51,13 @@ def test_epoch_with_validator_logs(tester,
                                    funded_account,
                                    validation_key,
                                    deposit_amount,
+                                   send_vote,
                                    mk_suggested_vote):
     validator_index = induct_validator(funded_account, validation_key, deposit_amount)
 
     last_block_number = tester.get_block_by_number('latest')['number'] - 1
 
-    casper.functions.vote(
-        mk_suggested_vote(validator_index, validation_key)
-    ).transact()
+    send_vote(mk_suggested_vote(validator_index, validation_key))
 
     logs = casper_epoch_filter.get_new_entries()
     last_epoch_hash = tester.get_block_by_number(last_block_number - 1)['hash']
@@ -71,9 +70,7 @@ def test_epoch_with_validator_logs(tester,
 
     new_epoch()
     last_block_number = tester.get_block_by_number('latest')['number'] - 1
-    casper.functions.vote(
-        mk_suggested_vote(validator_index, validation_key)
-    ).transact()
+    send_vote(mk_suggested_vote(validator_index, validation_key))
 
     logs = casper_epoch_filter.get_new_entries()
     last_epoch_hash = tester.get_block_by_number(last_block_number - 1)['hash']
@@ -137,12 +134,11 @@ def test_vote_log(casper,
                   new_epoch,
                   induct_validator,
                   deposit_amount,
+                  send_vote,
                   mk_suggested_vote):
     validator_index = induct_validator(funded_account, validation_key, deposit_amount)
 
-    casper.functions.vote(
-        mk_suggested_vote(validator_index, validation_key)
-    ).transact()
+    send_vote(mk_suggested_vote(validator_index, validation_key))
 
     logs = casper_vote_filter.get_new_entries()
     assert len(logs) == 1
@@ -168,13 +164,12 @@ def test_logout_log(casper,
                     new_epoch,
                     induct_validator,
                     deposit_amount,
+                    send_vote,
                     mk_suggested_vote,
                     logout_validator_via_signed_msg):
     validator_index = induct_validator(funded_account, validation_key, deposit_amount)
 
-    casper.functions.vote(
-        mk_suggested_vote(validator_index, validation_key)
-    ).transact()
+    send_vote(mk_suggested_vote(validator_index, validation_key))
 
     logout_validator_via_signed_msg(validator_index, validation_key)
 
@@ -202,21 +197,18 @@ def test_withdraw_log(w3,
                       new_epoch,
                       induct_validator,
                       deposit_amount,
+                      send_vote,
                       mk_suggested_vote,
                       logout_validator_via_signed_msg):
     validator_index = induct_validator(funded_account, validation_key, deposit_amount)
 
-    casper.functions.vote(
-        mk_suggested_vote(validator_index, validation_key)
-    ).transact()
+    send_vote(mk_suggested_vote(validator_index, validation_key))
     new_epoch()
 
     logout_validator_via_signed_msg(validator_index, validation_key)
     # Logout delay
     for _ in range(concise_casper.DYNASTY_LOGOUT_DELAY() + 1):
-        casper.functions.vote(
-            mk_suggested_vote(validator_index, validation_key)
-        ).transact()
+        send_vote(mk_suggested_vote(validator_index, validation_key))
         new_epoch()
 
     # In the next dynasty after end_dynasty
