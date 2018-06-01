@@ -50,15 +50,15 @@ NOTE: this not needed if steps above followed
 ```bash
 git clone https://github.com/ethereum/vyper.git@248c723288e84899908048efff4c3e0b12f0b3dc
 ```
-[follow all other directions from](https://github.com/ethereum/vyper#installation)
+The guide on how to install Vyper can be found [here](https://github.com/ethereum/vyper#installation).
 
 
 ## How to Build and Deploy Casper Contract
 
-In this example we will be using eth-tester 
+In this example we will be using [eth-tester](https://github.com/ethereum/eth-tester).
 
 
-### Imports
+### Step 1: Imports
 ```bash
 import os
 import rlp
@@ -88,19 +88,21 @@ from vyper import (
 
 ```
 
-### Step 1: Set Your web3 Provider
+### Step 2: Raise the gas limit
 
 ```bash
 setattr(eth_tester.backends.pyevm.main, 'GENESIS_GAS_LIMIT', 10**9) ## it costs a lot of gas to deploy the casper contract, so set a high gas limit
-setattr(eth_tester.backends.pyevm.main, 'GENESIS_DIFFICULTY', 1)
+```
+### Step 3: Create an instance of Web3 (eth-tester)
 
+[Link to the web3.py documentation.](https://github.com/ethereum/web3.py)
+```bash
 base_tester = EthereumTester(PyEVMBackend())  ## instantiates the eth-test suite 
 w3 = Web3(EthereumTesterProvider(base_tester)) ## Create an instance of the web3 object
 w3.eth.setGasPriceStrategy(0)
 ```
-[Link to the web3.py documentation](https://github.com/ethereum/web3.py)
 
-### Step 2: Deploy Helper Contracts
+### Step 4: Deploy Helper Contracts
 NOTE: In addition to the two helper contracts `msg_hasher` and `purity_checker` you also need to deploy the `rlp_decoder` Contract. On a production chain, an `rlp_decoder` contract is already deployed and vyper’s standard internal library knows it’s address and gives vyper contracts access to some functionality at that address.
 **when using a test chain, these helper contract must be deployed before the casper contract**
 
@@ -145,7 +147,7 @@ purity_receipt = w3.eth.getTransactionReceipt(purity_tx_hash)
 purity_checker_address = purity_receipt.contractAddress
 ```
 
-#### Casper Parameters
+### Step 5: Casper Parameters
 [Detailed Explaination of Casper Parameters](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1011.md#casper-contract-params)
 
 ```bash
@@ -157,23 +159,22 @@ BASE_INTEREST_FACTOR = Decimal('0.02')
 BASE_PENALTY_FACTOR = Decimal('0.002')
 MIN_DEPOSIT_SIZE = 1000 * 10**18  # 1000 ether
 
-
 casper_args = [EPOCH_LENGTH, WARM_UP_PERIOD, WITHDRAWAL_DELAY, DYNASTY_LOGOUT_DELAY, msg_hasher_address, purity_checker_address, BASE_INTEREST_FACTOR, BASE_PENALTY_FACTOR, MIN_DEPOSIT_SIZE]
 ```
 
-#### Compiling and Deploying Casper
+### Step 6: Compiling and Deploying Casper
 ```bash
 
 file = open(os.getcwd()+('/casper/contracts/simple_casper.v.py')) #this will change depending on where the casper contract is located relative to your current working directory
 casper_code = file.read()
 
-casper_bytecode = compiler.compile(casper_code)
-casper_abi = compiler.mk_full_signature(casper_code)
-base_sender = base_tester.get_accounts()[-1] # make sure it has a lot of ether :)
+casper_bytecode = compiler.compile(casper_code) #using vyper
+casper_abi = compiler.mk_full_signature(casper_code) #using vyper
+base_sender = base_tester.get_accounts()[-1] #account created by eth-tester containing 1 million eth
 
 
-Casper = w3.eth.contract(abi=casper_abi, bytecode=casper_bytecode)
-tx_hash = Casper.constructor().transact({'from': base_sender})
+Casper = w3.eth.contract(abi=casper_abi, bytecode=casper_bytecode) #cteates casper contract object
+tx_hash = Casper.constructor().transact({'from': base_sender}) #deploy casper contract
 tx_receipt = w3.eth.getTransactionReceipt(tx_hash)
 
 casper_address = tx_receipt.contractAddress
@@ -184,9 +185,10 @@ casper_contract = w3.eth.contract(address=casper_address, abi=casper_abi)
 casper_contract.functions.init(*casper_args).transact()
 ```
 
-#### Interacting with the Casper Contract
+### Step 7: Interacting with the Casper Contract
 
 As an exampe that the deployment was successfull, we can check EPOCH_LENGTH. If you didn't change the initial parameters above, the following command should return 10.
+
 ```bash
 casper_contract.functions.EPOCH_LENGTH().call()
 ```
