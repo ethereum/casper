@@ -204,10 +204,40 @@ contract SimpleCasper {
         SLASH_FRACTION_MULTIPLIER = 3;
     }
 
-    // ****** Private Constants *****
+    /**
+     * @dev This function is original. The Solidity not have max(a, b) of global function.
+     */
     function max(Decimal.Data a, Decimal.Data b) private pure returns (Decimal.Data) {
         return a.comp(b) > 0 ? a : b;
     }
+
+    /**
+     * @dev This function is original. The Solidity not have min(a, b) of global function.
+     */
+    function min(Decimal.Data a, Decimal.Data b) private pure returns (Decimal.Data) {
+        return a.comp(b) > 0 ? b : a;
+    }
+
+    /**
+     * @dev original.
+     */
+    function concat(bytes32 a, bytes b) public pure returns (bytes result) {
+        uint blen = 32 + b.length;
+        uint blockLen = (blen / 32) * 32;
+        if (blen % 32 > 0) {
+            blockLen += 32;
+        }
+        assembly {
+            let freep := mload(0x40)
+            mstore(0x40, add(freep, blockLen))
+            mstore(freep, blen)
+            mstore(add(freep, 32), a)
+            calldatacopy(add(freep, 64), 100, sub(blen, 32))
+            result := freep
+        }
+    }
+
+    // ****** Private Constants *****
 
     // Returns number of epochs since finalization.
     function esf() private constant returns (uint128){
@@ -222,8 +252,8 @@ contract SimpleCasper {
         ether_deposited_as_number_decimal = ether_deposited_as_number_decimal.div(Decimal.fromUint(1 ether));
         uint128 ether_deposited_as_number = uint128(ether_deposited_as_number_decimal.toUint()) + 1;
         Decimal.Data memory sqrt = Decimal.Data({
-            num: ether_deposited_as_number,
-            den: 2
+            num : ether_deposited_as_number,
+            den : 2
             });
         for (uint i; i < 20; i++) {
             sqrt = sqrt.add(Decimal.fromUint(ether_deposited_as_number));
@@ -258,6 +288,7 @@ contract SimpleCasper {
         }
     }
 
+    // line:226
     function insta_finalize() private {
         uint128 epoch = current_epoch;
         main_hash_justified = true;
@@ -267,6 +298,80 @@ contract SimpleCasper {
         last_finalized_epoch = epoch - 1;
         // Log previous Epoch status update
         emit Epoch(epoch - 1, checkpoint_hashes[epoch - 1], true, true);
+    }
+
+    // Returns the current collective reward factor, which rewards the dynasty for high-voting levels.
+    // line:239
+    function collective_reward() private view returns (Decimal.Data) {
+        uint128 epoch = current_epoch;
+        bool live = esf() <= 2;
+        if (!deposit_exists() || !live) {
+            return Decimal.fromUint(0);
+        }
+        // Fraction that voted
+        Decimal.Data memory cur_vote_frac = checkpoints[epoch - 1].cur_dyn_votes[expected_source_epoch].div(total_curdyn_deposits);
+        Decimal.Data memory prev_vote_frac = checkpoints[epoch - 1].prev_dyn_votes[expected_source_epoch].div(total_prevdyn_deposits);
+        Decimal.Data memory vote_frac = min(cur_vote_frac, prev_vote_frac);
+        return vote_frac.mul(reward_factor).div(Decimal.fromUint(2));
+    }
+
+    // Reward the given validator & miner, and reflect this in total deposit figured
+    // line:253
+    function proc_reward(uint128 validator_index, uint128 reward) private {
+        // Reward validator
+        validators[validator_index].deposit = validators[validator_index].deposit.add(Decimal.fromUint(reward));
+        uint128 start_dynasty = validators[validator_index].start_dynasty;
+        uint128 end_dynasty = validators[validator_index].end_dynasty;
+        uint128 current_dynasty = dynasty;
+        uint128 past_dynasty = current_dynasty - 1;
+        if ((start_dynasty <= current_dynasty) && (current_dynasty < end_dynasty)) {
+            total_curdyn_deposits = total_curdyn_deposits.add(Decimal.fromUint(reward));
+        }
+        if ((start_dynasty <= past_dynasty) && (past_dynasty < end_dynasty)) {
+            total_prevdyn_deposits = total_prevdyn_deposits.add(Decimal.fromUint(reward));
+        }
+        if (end_dynasty < DEFAULT_END_DYNASTY) {// validator has submit `logout`
+            dynasty_wei_delta[end_dynasty] = dynasty_wei_delta[end_dynasty].sub(Decimal.fromUint(reward));
+        }
+        // Reward miner
+        Decimal.Data memory reward_decimal = Decimal.fromUint(reward);
+        reward_decimal = reward_decimal.mul(deposit_scale_factor[current_epoch]).div(Decimal.fromUint(8));
+        block.coinbase.transfer(reward_decimal.toUint());
+    }
+
+    // Removes a validator from the validator pool
+    // line:272
+    function delete_validator(uint128 validator_index) private {
+        validator_indexes[uint(validators[validator_index].withdrawal_addr)] = 0x00;
+        validators[validator_index] = Validator({
+            deposit : Decimal.fromUint(0),
+            start_dynasty : 0,
+            end_dynasty : 0,
+            is_slashed : false,
+            total_deposits_at_logout : 0,
+            addr : 0x00,
+            withdrawal_addr : 0x00
+            });
+    }
+
+    // cannot be labeled @constant because of external call
+    // even though the call is to a pure contract call
+    // line:288
+    function validate_signature(bytes32 msg_hash, bytes sig, uint256 validator_index) private returns (bool) {
+        //return extract32(raw_call(self.validators[validator_index].addr, concat(msg_hash, sig), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
+        // I do not have better idea of this convert.... i wait for The Oracle.
+        return true;
+    }
+
+    // ***** Public Constants *****
+
+    // line:296
+    function main_hash_voted_frac() public constant returns (Decimal.Data) {
+        Decimal.Data memory cur_dyn_vote = checkpoints[current_epoch].cur_dyn_votes[expected_source_epoch];
+        cur_dyn_vote = cur_dyn_vote.div(total_curdyn_deposits);
+        Decimal.Data memory prev_dyn_vote = checkpoints[current_epoch].prev_dyn_votes[expected_source_epoch];
+        prev_dyn_vote = prev_dyn_vote.div(total_prevdyn_deposits);
+        return min(cur_dyn_vote, prev_dyn_vote);
     }
 
 }
