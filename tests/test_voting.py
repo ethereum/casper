@@ -62,9 +62,10 @@ def test_vote_single_validator(casper,
 
     prev_dynasty = concise_casper.dynasty()
     for i in range(10):
-        casper.functions.vote(
-            mk_suggested_vote(validator_index, validation_key)
-        ).transact()
+        vote_msg = mk_suggested_vote(validator_index, validation_key)
+        assert concise_casper.votable(vote_msg)
+        assert concise_casper.validate_vote_signature(vote_msg)
+        casper.functions.vote(vote_msg).transact()
         assert concise_casper.main_hash_justified()
         assert concise_casper.checkpoints__is_finalized(concise_casper.recommended_source_epoch())
         new_epoch()
@@ -89,10 +90,10 @@ def test_vote_target_epoch_twice(casper,
     ).transact()
 
     # second vote on same target epoch fails
+    vote_msg = mk_suggested_vote(validator_index, validation_key)
+    assert not concise_casper.votable(vote_msg)
     assert_tx_failed(
-        lambda: casper.functions.vote(
-            mk_suggested_vote(validator_index, validation_key)
-        ).transact()
+        lambda: casper.functions.vote(vote_msg).transact()
     )
 
 
@@ -121,17 +122,19 @@ def test_vote_validate_signature_gas_limit(valcode_type,
     )
     assert concise_casper.total_curdyn_deposits_in_wei() == deposit_amount
 
+    vote_msg = mk_suggested_vote(validator_index, validation_key)
+
     if not success:
         assert_tx_failed(
-            lambda: casper.functions.vote(
-                mk_suggested_vote(validator_index, validation_key)
-            ).transact()
+            lambda: concise_casper.validate_vote_signature(vote_msg)
+        )
+        assert_tx_failed(
+            lambda: casper.functions.vote(vote_msg).transact()
         )
         return
 
-    casper.functions.vote(
-        mk_suggested_vote(validator_index, validation_key)
-    ).transact()
+    assert concise_casper.validate_vote_signature(vote_msg)
+    casper.functions.vote(vote_msg).transact()
 
 
 def test_non_finalization_loss(casper,
@@ -192,6 +195,7 @@ def test_mismatched_epoch_and_hash(casper,
         validation_key
     )
 
+    assert not concise_casper.votable(mismatched_vote)
     assert_tx_failed(
         lambda: casper.functions.vote(mismatched_vote).transact()
     )
