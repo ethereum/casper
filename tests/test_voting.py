@@ -99,9 +99,15 @@ def test_vote_single_validator(casper,
 
     prev_dynasty = concise_casper.dynasty()
     for i in range(10):
+        vote_msg = mk_suggested_vote(validator_index, validation_key)
+
+        assert concise_casper.votable(vote_msg)
+        assert concise_casper.validate_vote_signature(vote_msg)
         send_vote(mk_suggested_vote(validator_index, validation_key))
+
         assert concise_casper.main_hash_justified()
         assert concise_casper.checkpoints__is_finalized(concise_casper.recommended_source_epoch())
+
         new_epoch()
         assert concise_casper.dynasty() == prev_dynasty + 1
         prev_dynasty += 1
@@ -123,9 +129,9 @@ def test_vote_target_epoch_twice(casper,
     send_vote(mk_suggested_vote(validator_index, validation_key))
 
     # second vote on same target epoch fails
-    assert_tx_failed(
-        lambda: send_vote(mk_suggested_vote(validator_index, validation_key))
-    )
+    vote_msg = mk_suggested_vote(validator_index, validation_key)
+    assert not concise_casper.votable(vote_msg)
+    assert_tx_failed(lambda: send_vote(vote_msg))
 
 
 @pytest.mark.parametrize(
@@ -154,13 +160,18 @@ def test_vote_validate_signature_gas_limit(valcode_type,
     )
     assert concise_casper.total_curdyn_deposits_in_wei() == deposit_amount
 
+    vote_msg = mk_suggested_vote(validator_index, validation_key)
+
     if not success:
+        assert_tx_failed(
+            lambda: concise_casper.validate_vote_signature(vote_msg)
+        )
         assert_tx_failed(
             lambda: send_vote(mk_suggested_vote(validator_index, validation_key))
         )
         return
-
-    send_vote(mk_suggested_vote(validator_index, validation_key))
+    assert concise_casper.validate_vote_signature(vote_msg)
+    send_vote(vote_msg)
 
 
 def test_non_finalization_loss(casper,
@@ -219,6 +230,7 @@ def test_mismatched_epoch_and_hash(casper,
         validation_key
     )
 
+    assert not concise_casper.votable(mismatched_vote)
     assert_tx_failed(
         lambda: send_vote(mismatched_vote)
     )
