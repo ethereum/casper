@@ -137,6 +137,7 @@ def test_logout_with_multiple_validators(w3,
                                          deposit_amount,
                                          new_epoch,
                                          induct_validators,
+                                         send_vote,
                                          mk_suggested_vote,
                                          logout_validator_via_signed_msg):
     validator_indexes = induct_validators(
@@ -150,9 +151,7 @@ def test_logout_with_multiple_validators(w3,
     # finalize 3 epochs to get to a stable state
     for _ in range(3):
         for key, validator_index in zip(validation_keys, validator_indexes):
-            casper.functions.vote(
-               mk_suggested_vote(validator_index, key)
-            ).transact()
+            send_vote(mk_suggested_vote(validator_index, key))
         new_epoch()
 
     # 0th logs out
@@ -169,9 +168,7 @@ def test_logout_with_multiple_validators(w3,
     dynasty_logout_delay = concise_casper.DYNASTY_LOGOUT_DELAY()
     for _ in range(dynasty_logout_delay):
         for key, validator_index in zip(validation_keys, validator_indexes):
-            casper.functions.vote(
-                mk_suggested_vote(validator_index, key)
-            ).transact()
+            send_vote(mk_suggested_vote(validator_index, key))
         new_epoch()
     assert concise_casper.validators__end_dynasty(logged_out_index) == concise_casper.dynasty()
 
@@ -186,9 +183,7 @@ def test_logout_with_multiple_validators(w3,
 
     # validator no longer in prev or cur dyn
     for key, validator_index in zip(logged_in_keys, logged_in_indexes):
-        casper.functions.vote(
-            mk_suggested_vote(validator_index, key)
-        ).transact()
+        send_vote(mk_suggested_vote(validator_index, key))
     new_epoch()
 
     logged_in_deposit_size = sum(map(concise_casper.deposit_size, logged_in_indexes))
@@ -201,9 +196,7 @@ def test_logout_with_multiple_validators(w3,
     # validator can withdraw after delay
     for _ in range(concise_casper.WITHDRAWAL_DELAY()):
         for key, validator_index in zip(logged_in_keys, logged_in_indexes):
-            casper.functions.vote(
-                mk_suggested_vote(validator_index, key)
-            ).transact()
+            send_vote(mk_suggested_vote(validator_index, key))
         new_epoch()
 
     current_epoch = concise_casper.current_epoch()

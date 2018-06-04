@@ -182,6 +182,7 @@ def test_checkpoint_deposits(
         deposit_amount,
         deposit_validator,
         new_epoch,
+        send_vote,
         mk_suggested_vote):
     current_epoch = concise_casper.current_epoch()
     assert concise_casper.checkpoints__cur_dyn_deposits(current_epoch) == 0
@@ -211,9 +212,7 @@ def test_checkpoint_deposits(
     assert concise_casper.checkpoints__cur_dyn_deposits(current_epoch) == 0
     assert concise_casper.checkpoints__prev_dyn_deposits(current_epoch) == 0
 
-    casper.functions.vote(
-        mk_suggested_vote(initial_validator, validation_keys[0])
-    ).transact()
+    send_vote(mk_suggested_vote(initial_validator, validation_keys[0]))
     new_epoch()
     current_epoch = concise_casper.current_epoch()
 
@@ -224,9 +223,7 @@ def test_checkpoint_deposits(
 
     second_validator = deposit_validator(funded_accounts[1], validation_keys[1], deposit_amount)
 
-    casper.functions.vote(
-        mk_suggested_vote(initial_validator, validation_keys[0])
-    ).transact()
+    send_vote(mk_suggested_vote(initial_validator, validation_keys[0]))
     new_epoch()
     current_epoch = concise_casper.current_epoch()
 
@@ -238,9 +235,7 @@ def test_checkpoint_deposits(
     prev_curdyn_deposits = concise_casper.total_curdyn_deposits_in_wei()
     prev_prevdyn_deposits = concise_casper.total_prevdyn_deposits_in_wei()
 
-    casper.functions.vote(
-        mk_suggested_vote(initial_validator, validation_keys[0])
-    ).transact()
+    send_vote(mk_suggested_vote(initial_validator, validation_keys[0]))
     new_epoch()
     current_epoch = concise_casper.current_epoch()
 
@@ -255,12 +250,8 @@ def test_checkpoint_deposits(
         prev_curdyn_deposits = concise_casper.total_curdyn_deposits_in_wei()
         prev_prevdyn_deposits = concise_casper.total_prevdyn_deposits_in_wei()
 
-        casper.functions.vote(
-            mk_suggested_vote(initial_validator, validation_keys[0])
-        ).transact()
-        casper.functions.vote(
-            mk_suggested_vote(second_validator, validation_keys[1])
-        ).transact()
+        send_vote(mk_suggested_vote(initial_validator, validation_keys[0]))
+        send_vote(mk_suggested_vote(second_validator, validation_keys[1]))
         new_epoch()
         current_epoch = concise_casper.current_epoch()
 

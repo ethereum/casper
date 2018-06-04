@@ -114,6 +114,7 @@ def test_highest_justified_and_epoch(
         deposit_amount,
         new_epoch,
         induct_validator,
+        send_vote,
         mk_suggested_vote):
     start_epoch = concise_casper.START_EPOCH()
     validator_index = induct_validator(funded_account, validation_key, deposit_amount)
@@ -130,9 +131,7 @@ def test_highest_justified_and_epoch(
     assert concise_casper.highest_finalized_epoch(higher_deposit) == -1
 
     # justify current_epoch in contract
-    casper.functions.vote(
-        mk_suggested_vote(validator_index, validation_key)
-    ).transact()
+    send_vote(mk_suggested_vote(validator_index, validation_key))
 
     assert concise_casper.checkpoints__cur_dyn_deposits(start_epoch + 3) == 0
     assert concise_casper.checkpoints__prev_dyn_deposits(start_epoch + 3) == 0
@@ -147,9 +146,7 @@ def test_highest_justified_and_epoch(
     assert concise_casper.highest_finalized_epoch(higher_deposit) == -1
 
     new_epoch()
-    casper.functions.vote(
-        mk_suggested_vote(validator_index, validation_key)
-    ).transact()
+    send_vote(mk_suggested_vote(validator_index, validation_key))
 
     assert concise_casper.checkpoints__cur_dyn_deposits(start_epoch + 4) == deposit_amount
     assert concise_casper.checkpoints__prev_dyn_deposits(start_epoch + 4) == 0
@@ -164,9 +161,7 @@ def test_highest_justified_and_epoch(
     assert concise_casper.highest_finalized_epoch(higher_deposit) == -1
 
     new_epoch()
-    casper.functions.vote(
-        mk_suggested_vote(validator_index, validation_key)
-    ).transact()
+    send_vote(mk_suggested_vote(validator_index, validation_key))
 
     assert concise_casper.checkpoints__cur_dyn_deposits(start_epoch + 5) == deposit_amount
     assert concise_casper.checkpoints__prev_dyn_deposits(start_epoch + 5) == deposit_amount
@@ -183,9 +178,7 @@ def test_highest_justified_and_epoch(
     assert concise_casper.highest_finalized_epoch(higher_deposit) == -1
 
     new_epoch()
-    casper.functions.vote(
-        mk_suggested_vote(validator_index, validation_key)
-    ).transact()
+    send_vote(mk_suggested_vote(validator_index, validation_key))
 
     assert concise_casper.checkpoints__cur_dyn_deposits(start_epoch + 6) > deposit_amount
     assert concise_casper.checkpoints__prev_dyn_deposits(start_epoch + 6) > deposit_amount
@@ -216,9 +209,7 @@ def test_highest_justified_and_epoch(
     assert concise_casper.highest_finalized_epoch(higher_deposit) == -1
 
     new_epoch()
-    casper.functions.vote(
-        mk_suggested_vote(validator_index, validation_key)
-    ).transact()
+    send_vote(mk_suggested_vote(validator_index, validation_key))
 
     assert concise_casper.checkpoints__cur_dyn_deposits(start_epoch + 8) > deposit_amount
     assert concise_casper.checkpoints__prev_dyn_deposits(start_epoch + 8) > deposit_amount
@@ -235,9 +226,7 @@ def test_highest_justified_and_epoch(
     assert concise_casper.highest_finalized_epoch(higher_deposit) == -1
 
     new_epoch()
-    casper.functions.vote(
-        mk_suggested_vote(validator_index, validation_key)
-    ).transact()
+    send_vote(mk_suggested_vote(validator_index, validation_key))
 
     assert concise_casper.checkpoints__cur_dyn_deposits(9) > deposit_amount
     assert concise_casper.checkpoints__prev_dyn_deposits(9) > deposit_amount

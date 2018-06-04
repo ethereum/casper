@@ -112,10 +112,14 @@ MSG_HASHER: address
 # Purity checker library address
 PURITY_CHECKER: address
 
+NULL_SENDER: public(address)
 BASE_INTEREST_FACTOR: public(decimal)
 BASE_PENALTY_FACTOR: public(decimal)
 MIN_DEPOSIT_SIZE: public(wei_value)
 START_EPOCH: public(int128)
+
+# ****** Pre-defined Constants ******
+
 DEFAULT_END_DYNASTY: int128
 MSG_HASHER_GAS_LIMIT: int128
 VALIDATION_GAS_LIMIT: int128
@@ -130,6 +134,7 @@ def init(
         dynasty_logout_delay: int128,
         msg_hasher: address,
         purity_checker: address,
+        null_sender: address,
         base_interest_factor: decimal,
         base_penalty_factor: decimal,
         min_deposit_size: wei_value
@@ -159,6 +164,8 @@ def init(
     # helper contracts
     self.MSG_HASHER = msg_hasher
     self.PURITY_CHECKER = purity_checker
+
+    self.NULL_SENDER = null_sender
 
     # Start validator index counter at 1 because validator_indexes[] requires non-zero values
     self.next_validator_index = 1
@@ -636,6 +643,9 @@ def withdraw(validator_index: int128):
 # Process a vote message
 @public
 def vote(vote_msg: bytes[1024]):
+    assert msg.sender == self.NULL_SENDER
+
+    # Extract parameters
     values = RLPList(vote_msg, [int128, bytes32, int128, int128, bytes])
     validator_index: int128 = values[0]
     target_hash: bytes32 = values[1]

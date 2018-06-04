@@ -254,3 +254,13 @@ def test_init_min_deposit_size(
 
     casper.functions.init(*casper_args).transact()
     assert casper.functions.MIN_DEPOSIT_SIZE().call() == min_deposit_size
+
+
+def test_init_null_sender(
+        null_sender,
+        casper_args,
+        deploy_casper_contract):
+    casper = deploy_casper_contract(casper_args, initialize_contract=False)
+
+    casper.functions.init(*casper_args).transact()
+    assert casper.functions.NULL_SENDER().call() == null_sender
