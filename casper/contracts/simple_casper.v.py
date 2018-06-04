@@ -10,10 +10,14 @@ Withdraw: event({_to: indexed(address), _validator_index: indexed(int128), _amou
 Slash: event({_from: indexed(address), _offender: indexed(address), _offender_index: indexed(int128), _bounty: int128(wei)})
 Epoch: event({_number: indexed(int128), _checkpoint_hash: indexed(bytes32), _is_justified: bool, _is_finalized: bool})
 
+units: {
+    sf: "scale_factor"
+}
+
 validators: public({
     # Used to determine the amount of wei the validator holds. To get the actual
     # amount of wei, multiply this by the deposit_scale_factor.
-    deposit: decimal(wei/m),
+    deposit: decimal(wei/sf),
     start_dynasty: int128,
     end_dynasty: int128,
     is_slashed: bool,
@@ -37,13 +41,13 @@ validator_indexes: public(int128[address])
 dynasty: public(int128)
 
 # Map of the change to total deposits for specific dynasty
-dynasty_wei_delta: public(decimal(wei / m)[int128])
+dynasty_wei_delta: public(decimal(wei / sf)[int128])
 
 # Total scaled deposits in the current dynasty
-total_curdyn_deposits: decimal(wei / m)
+total_curdyn_deposits: decimal(wei / sf)
 
 # Total scaled deposits in the previous dynasty
-total_prevdyn_deposits: decimal(wei / m)
+total_prevdyn_deposits: decimal(wei / sf)
 
 # Mapping of dynasty to start epoch of that dynasty
 dynasty_start_epoch: public(int128[int128])
@@ -56,8 +60,8 @@ checkpoints: public({
     cur_dyn_deposits: wei_value,
     prev_dyn_deposits: wei_value,
     # track total votes for each dynasty
-    cur_dyn_votes: decimal(wei / m)[int128],
-    prev_dyn_votes: decimal(wei / m)[int128],
+    cur_dyn_votes: decimal(wei / sf)[int128],
+    prev_dyn_votes: decimal(wei / sf)[int128],
     # Bitmap of which validator IDs have already voted
     vote_bitmap: uint256[int128],
     # Is a vote referencing the given epoch justified?
@@ -70,7 +74,7 @@ checkpoints: public({
 main_hash_justified: public(bool)
 
 # Value used to calculate the per-epoch fee that validators should be charged
-deposit_scale_factor: public(decimal(m)[int128])
+deposit_scale_factor: public(decimal(sf)[int128])
 
 last_nonvoter_rescale: public(decimal)
 last_voter_rescale: public(decimal)
@@ -265,7 +269,7 @@ def collective_reward() -> decimal:
 
 # Reward the given validator & miner, and reflect this in total deposit figured
 @private
-def proc_reward(validator_index: int128, reward: int128(wei/m)):
+def proc_reward(validator_index: int128, reward: int128(wei/sf)):
     # Reward validator
     self.validators[validator_index].deposit += reward
     start_dynasty: int128 = self.validators[validator_index].start_dynasty
@@ -546,7 +550,7 @@ def deposit(validation_addr: address, withdrawal_addr: address):
     assert msg.value >= self.MIN_DEPOSIT_SIZE
     validator_index: int128 = self.next_validator_index
     start_dynasty: int128 = self.dynasty + 2
-    scaled_deposit: decimal(wei/m) = msg.value / self.deposit_scale_factor[self.current_epoch]
+    scaled_deposit: decimal(wei/sf) = msg.value / self.deposit_scale_factor[self.current_epoch]
     self.validators[validator_index] = {
         deposit: scaled_deposit,
         start_dynasty: start_dynasty,
@@ -664,8 +668,8 @@ def vote(vote_msg: bytes[1024]):
     # Record that this vote took place
     in_current_dynasty: bool = self.in_dynasty(validator_index, self.dynasty)
     in_prev_dynasty: bool = self.in_dynasty(validator_index, self.dynasty - 1)
-    current_dynasty_votes: decimal(wei/m) = self.checkpoints[target_epoch].cur_dyn_votes[source_epoch]
-    previous_dynasty_votes: decimal(wei/m) = self.checkpoints[target_epoch].prev_dyn_votes[source_epoch]
+    current_dynasty_votes: decimal(wei/sf) = self.checkpoints[target_epoch].cur_dyn_votes[source_epoch]
+    previous_dynasty_votes: decimal(wei/sf) = self.checkpoints[target_epoch].prev_dyn_votes[source_epoch]
 
     if in_current_dynasty:
         current_dynasty_votes += self.validators[validator_index].deposit
@@ -677,7 +681,7 @@ def vote(vote_msg: bytes[1024]):
     # Process rewards.
     # Pay the reward if the vote was submitted in time and the vote is voting the correct data
     if self.expected_source_epoch == source_epoch:
-        reward: int128(wei/m) = floor(self.validators[validator_index].deposit * self.reward_factor)
+        reward: int128(wei/sf) = floor(self.validators[validator_index].deposit * self.reward_factor)
         self.proc_reward(validator_index, reward)
 
     # If enough votes with the same source_epoch and hash are made,
@@ -739,7 +743,7 @@ def slash(vote_msg_1: bytes[1024], vote_msg_2: bytes[1024]):
     # and forcibly logout next dynasty
     end_dynasty: int128 = self.validators[validator_index].end_dynasty
     if self.dynasty < end_dynasty:
-        deposit: decimal(wei/m) = self.validators[validator_index].deposit
+        deposit: decimal(wei/sf) = self.validators[validator_index].deposit
         self.dynasty_wei_delta[self.dynasty + 1] -= deposit
         self.validators[validator_index].end_dynasty = self.dynasty + 1
 
