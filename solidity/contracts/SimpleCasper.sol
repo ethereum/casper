@@ -1,32 +1,37 @@
 pragma solidity ^0.4.23;
 pragma experimental ABIEncoderV2;
+
 import "./Decimal.sol";
+import "./RLP.sol";
 
 
 contract SimpleCasper {
     using Decimal for Decimal.Data;
+    using RLP for bytes;
+    using RLP for RLP.RLPItem;
+    using RLP for RLP.Iterator;
 
     event Deposit(address indexed _from,
-        uint128 _validator_index,
+        uint256 _validator_index,
         address _validation_address,
-        uint128 _start_dyn,
-        uint128 _amount);
+        uint256 _start_dyn,
+        uint256 _amount);
     event Vote(address indexed _from,
-        uint128 indexed _validator_index,
+        uint256 indexed _validator_index,
         bytes32 indexed _target_hash,
-        uint128 _target_epoch,
-        uint128 _source_epoch);
+        uint256 _target_epoch,
+        uint256 _source_epoch);
     event Logout(address indexed _from,
-        uint128 indexed _validator_index,
-        uint128 _end_dyn);
+        uint256 indexed _validator_index,
+        uint256 _end_dyn);
     event Withdraw(address indexed _to,
-        uint128 indexed _validator_index,
-        uint128 _amount);
+        uint256 indexed _validator_index,
+        uint256 _amount);
     event Slash(address indexed _from,
         address indexed _offender,
-        uint128 indexed _offender_index,
-        uint128 _bounty);
-    event Epoch(uint128 indexed _number,
+        uint256 indexed _offender_index,
+        uint256 _bounty);
+    event Epoch(uint256 indexed _number,
         bytes32 indexed _checkpoint_hash,
         bool _is_justified,
         bool _is_finalized);
@@ -35,8 +40,8 @@ contract SimpleCasper {
         // Used to determine the amount of wei the validator holds. To get the actual
         // amount of wei, multiply this by the deposit_scale_factor.
         Decimal.Data deposit; // : decimal(wei/m),
-        uint128 start_dynasty;
-        uint128 end_dynasty;
+        uint256 start_dynasty;
+        uint256 end_dynasty;
         bool is_slashed;
         uint total_deposits_at_logout; //: wei_value,
         // The address which the validator's signatures must verify against
@@ -47,17 +52,17 @@ contract SimpleCasper {
     Validator[] public validators;
 
     // Map of epoch number to checkpoint hash
-    mapping(uint128 => bytes32) public checkpoint_hashes;
+    mapping(uint256 => bytes32) public checkpoint_hashes;
 
     // Next available validator index
-    uint128 public next_validator_index;
+    uint256 public next_validator_index;
 
     // Mapping of validator's withdrawal address to their index number
     address[] public validator_indexes;
 
     // Current dynasty, it measures the number of finalized checkpoints
     // in the chain from root to the parent of current block
-    uint128 public dynasty;
+    uint256 public dynasty;
 
     // Map of the change to total deposits for specific dynasty public(decimal(wei / m)[int128])
     Decimal.Data[] public dynasty_wei_delta;
@@ -69,10 +74,10 @@ contract SimpleCasper {
     Decimal.Data total_prevdyn_deposits;
 
     // Mapping of dynasty to start epoch of that dynasty : public(int128[int128])
-    uint128[] public dynasty_start_epoch;
+    uint256[] public dynasty_start_epoch;
 
     // Mapping of epoch to what dynasty it is : public(int128[int128])
-    uint128[] public dynasty_in_epoch;
+    uint256[] public dynasty_in_epoch;
 
     struct Checkpoint {
         // track size of scaled deposits for use in client fork choice
@@ -82,7 +87,7 @@ contract SimpleCasper {
         Decimal.Data[] cur_dyn_votes; // : decimal(wei / m)[int128],
         Decimal.Data[] prev_dyn_votes; // : decimal(wei / m)[int128],
         // Bitmap of which validator IDs have already voted
-        uint[] vote_bitmap; // : uint128[int128],
+        uint[] vote_bitmap; // : uint256[int128],
         // Is a vote referencing the given epoch justified?
         bool is_justified; //: bool,
         // Is a vote referencing the given epoch finalized?
@@ -100,15 +105,15 @@ contract SimpleCasper {
     Decimal.Data public last_nonvoter_rescale; //: public(decimal)
     Decimal.Data public last_voter_rescale; //: public(decimal)
 
-    uint128 public current_epoch; //: public(int128)
-    uint128 public last_finalized_epoch; //: public(int128)
-    uint128 public last_justified_epoch; //: public(int128)
+    uint256 public current_epoch; //: public(int128)
+    uint256 public last_finalized_epoch; //: public(int128)
+    uint256 public last_justified_epoch; //: public(int128)
 
     // Reward for voting as fraction of deposit size
     Decimal.Data public reward_factor; //: public(decimal)
 
     // Expected source epoch for a vote
-    uint128 public expected_source_epoch; //: public(int128)
+    uint256 public expected_source_epoch; //: public(int128)
 
     // Running total of deposits slashed
     uint[] public total_slashed; //: public(wei_value[int128])
@@ -119,16 +124,16 @@ contract SimpleCasper {
     // ***** Parameters *****
 
     // Length of an epoch in blocks
-    uint128 public EPOCH_LENGTH; //: public(int128)
+    uint256 public EPOCH_LENGTH; //: public(int128)
 
     // Length of warm up period in blocks
-    uint128 public WARM_UP_PERIOD; //: public(int128)
+    uint256 public WARM_UP_PERIOD; //: public(int128)
 
     // Withdrawal delay in blocks
-    uint128 public WITHDRAWAL_DELAY; //: public(int128)
+    uint256 public WITHDRAWAL_DELAY; //: public(int128)
 
     // Logout delay in dynasties
-    uint128 public DYNASTY_LOGOUT_DELAY; //: public(int128)
+    uint256 public DYNASTY_LOGOUT_DELAY; //: public(int128)
 
     // MSG_HASHER calculator library address
     // Hashes message contents but not the signature
@@ -140,11 +145,11 @@ contract SimpleCasper {
     Decimal.Data public BASE_INTEREST_FACTOR; //: public(decimal)
     Decimal.Data public BASE_PENALTY_FACTOR; //: public(decimal)
     uint public MIN_DEPOSIT_SIZE; //: public(wei_value)
-    uint128 public START_EPOCH; //: public(int128)
-    uint128 DEFAULT_END_DYNASTY; //: int128
-    uint128 MSG_HASHER_GAS_LIMIT; //: int128
-    uint128 VALIDATION_GAS_LIMIT; //: int128
-    uint128 SLASH_FRACTION_MULTIPLIER; //: int128
+    uint256 public START_EPOCH; //: public(int128)
+    uint256 DEFAULT_END_DYNASTY; //: int128
+    uint256 MSG_HASHER_GAS_LIMIT; //: int128
+    uint256 VALIDATION_GAS_LIMIT; //: int128
+    uint256 SLASH_FRACTION_MULTIPLIER; //: int128
 
 
     constructor() public {
@@ -153,10 +158,10 @@ contract SimpleCasper {
 
     // @public
     function init(
-        uint128 epoch_length,
-        uint128 warm_up_period,
-        uint128 withdrawal_delay,
-        uint128 dynasty_logout_delay,
+        uint256 epoch_length,
+        uint256 warm_up_period,
+        uint256 withdrawal_delay,
+        uint256 dynasty_logout_delay,
         address msg_hasher,
         address purity_checker,
         Decimal.Data base_interest_factor,
@@ -183,7 +188,7 @@ contract SimpleCasper {
         BASE_PENALTY_FACTOR = base_penalty_factor;
         MIN_DEPOSIT_SIZE = min_deposit_size;
 
-        START_EPOCH = uint128((block.number + warm_up_period) / EPOCH_LENGTH);
+        START_EPOCH = uint256((block.number + warm_up_period) / EPOCH_LENGTH);
 
         // helper contracts
         MSG_HASHER = msg_hasher;
@@ -240,17 +245,17 @@ contract SimpleCasper {
     // ****** Private Constants *****
 
     // Returns number of epochs since finalization.
-    function esf() private constant returns (uint128){
+    function esf() private constant returns (uint256){
         return current_epoch - last_finalized_epoch;
     }
 
     // Compute square root factor
     function sqrt_of_total_deposits() private constant returns (Decimal.Data) {
-        uint128 epoch = current_epoch;
+        uint256 epoch = current_epoch;
         Decimal.Data memory ether_deposited_as_number_decimal = max(total_prevdyn_deposits, total_curdyn_deposits);
         ether_deposited_as_number_decimal = ether_deposited_as_number_decimal.mul(deposit_scale_factor[epoch - 1]);
         ether_deposited_as_number_decimal = ether_deposited_as_number_decimal.div(Decimal.fromUint(1 ether));
-        uint128 ether_deposited_as_number = uint128(ether_deposited_as_number_decimal.toUint()) + 1;
+        uint256 ether_deposited_as_number = uint256(ether_deposited_as_number_decimal.toUint()) + 1;
         Decimal.Data memory sqrt = Decimal.Data({
             num : ether_deposited_as_number,
             den : 2
@@ -273,7 +278,7 @@ contract SimpleCasper {
     // Increment dynasty when checkpoint is finalized.
     // TODO : Might want to split out the cases separately.
     function increment_dynasty() private {
-        uint128 epoch = current_epoch;
+        uint256 epoch = current_epoch;
         // Increment the dynasty if finalized
         if (checkpoints[epoch - 2].is_finalized) {
             dynasty += 1;
@@ -290,7 +295,7 @@ contract SimpleCasper {
 
     // line:226
     function insta_finalize() private {
-        uint128 epoch = current_epoch;
+        uint256 epoch = current_epoch;
         main_hash_justified = true;
         checkpoints[epoch - 1].is_justified = true;
         checkpoints[epoch - 1].is_finalized = true;
@@ -303,7 +308,7 @@ contract SimpleCasper {
     // Returns the current collective reward factor, which rewards the dynasty for high-voting levels.
     // line:239
     function collective_reward() private view returns (Decimal.Data) {
-        uint128 epoch = current_epoch;
+        uint256 epoch = current_epoch;
         bool live = esf() <= 2;
         if (!deposit_exists() || !live) {
             return Decimal.fromUint(0);
@@ -317,13 +322,13 @@ contract SimpleCasper {
 
     // Reward the given validator & miner, and reflect this in total deposit figured
     // line:253
-    function proc_reward(uint128 validator_index, uint128 reward) private {
+    function proc_reward(uint256 validator_index, uint256 reward) private {
         // Reward validator
         validators[validator_index].deposit = validators[validator_index].deposit.add(Decimal.fromUint(reward));
-        uint128 start_dynasty = validators[validator_index].start_dynasty;
-        uint128 end_dynasty = validators[validator_index].end_dynasty;
-        uint128 current_dynasty = dynasty;
-        uint128 past_dynasty = current_dynasty - 1;
+        uint256 start_dynasty = validators[validator_index].start_dynasty;
+        uint256 end_dynasty = validators[validator_index].end_dynasty;
+        uint256 current_dynasty = dynasty;
+        uint256 past_dynasty = current_dynasty - 1;
         if ((start_dynasty <= current_dynasty) && (current_dynasty < end_dynasty)) {
             total_curdyn_deposits = total_curdyn_deposits.add(Decimal.fromUint(reward));
         }
@@ -341,7 +346,7 @@ contract SimpleCasper {
 
     // Removes a validator from the validator pool
     // line:272
-    function delete_validator(uint128 validator_index) private {
+    function delete_validator(uint256 validator_index) private {
         validator_indexes[uint(validators[validator_index].withdrawal_addr)] = 0x00;
         validators[validator_index] = Validator({
             deposit : Decimal.fromUint(0),
@@ -358,9 +363,17 @@ contract SimpleCasper {
     // even though the call is to a pure contract call
     // line:288
     function validate_signature(bytes32 msg_hash, bytes sig, uint256 validator_index) private returns (bool) {
+        address addr = validators[validator_index].addr;
+        uint256 gas = VALIDATION_GAS_LIMIT;
+        bytes memory input = SimpleCasper(this).concat(msg_hash, sig);
+        uint inputSize = input.length + 32;
+        bytes32 result = 0x00;
+        uint res = 0;
+        assembly {
+            res := call(gas, addr, 0, input, inputSize, result, 32)
+        }
         //return extract32(raw_call(self.validators[validator_index].addr, concat(msg_hash, sig), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
-        // I do not have better idea of this convert.... i wait for The Oracle.
-        return true;
+        return res == 1 && result == bytes32(1);
     }
 
     // ***** Public Constants *****
@@ -372,6 +385,94 @@ contract SimpleCasper {
         Decimal.Data memory prev_dyn_vote = checkpoints[current_epoch].prev_dyn_votes[expected_source_epoch];
         prev_dyn_vote = prev_dyn_vote.div(total_prevdyn_deposits);
         return min(cur_dyn_vote, prev_dyn_vote);
+    }
+    // line:303
+    function deposit_size(uint256 validator_index) public constant returns (uint256) {
+        return validators[validator_index].deposit.mul(deposit_scale_factor[current_epoch]).toUint();
+    }
+
+    // line:309
+    function total_curdyn_deposits_in_wei() public constant returns (uint256) {
+        return total_curdyn_deposits.mul(deposit_scale_factor[current_epoch]).toUint();
+    }
+
+    // line:315
+    function total_prevdyn_deposits_in_wei() public constant returns (uint256) {
+        return total_prevdyn_deposits.mul(deposit_scale_factor[current_epoch]).toUint();
+    }
+
+    struct VoteMessage {
+        bytes32 msg_hash;
+        uint256 validator_index;
+        uint256 target_epoch;
+        uint256 source_epoch;
+        bytes sig;
+    }
+
+    function decodeSlashableRLP(bytes vote_msg) internal returns (VoteMessage memory) {
+        bytes32 msg_hash = 0x00;
+        uint res = 0;
+        uint inputSize = vote_msg.length + 32;
+        address addr = MSG_HASHER;
+        uint256 gas = MSG_HASHER_GAS_LIMIT;
+
+        //        extract32(
+        //    raw_call(self.MSG_HASHER, vote_msg_1, gas = self.MSG_HASHER_GAS_LIMIT, outsize = 32),
+        //    0
+        //    )
+        assembly {
+            let freep := mload(0x40)
+            mstore(0x40, add(freep, 32))
+            res := call(gas, addr, 0, vote_msg, inputSize, freep, 32)
+            msg_hash := mload(freep)
+        }
+
+        require(res == 1, "vote_msg HASHER call failed.");
+        //    values_1 = RLPList(vote_msg_1, [int128, bytes32, int128, int128, bytes])
+        RLP.Iterator memory values = vote_msg.toRLPItem().iterator();
+        VoteMessage memory decode;
+        decode.msg_hash = msg_hash;
+        decode.validator_index = values.next().toUint();
+        values.next();
+        decode.target_epoch = values.next().toUint();
+        decode.source_epoch = values.next().toUint();
+        decode.sig = values.next().toBytes();
+        return decode;
+    }
+
+    // cannot be labeled @constant because of external call
+    // even though the call is to a pure contract call
+    //line:322
+    function slashable(bytes vote_msg_1, bytes vote_msg_2) public returns (bool) {
+        // Message 1: Extract parameters
+        //    values_1 = RLPList(vote_msg_1, [int128, bytes32, int128, int128, bytes])
+        VoteMessage memory vm1 = decodeSlashableRLP(vote_msg_1);
+        // Message 2: Extract parameters
+        VoteMessage memory vm2 = decodeSlashableRLP(vote_msg_2);
+
+        if (!validate_signature(vm1.msg_hash, vm1.sig, vm1.validator_index)) {
+            return false;
+        }
+        if (!validate_signature(vm2.msg_hash, vm2.sig, vm2.validator_index)) {
+            return false;
+        }
+        if (vm1.validator_index != vm2.validator_index) {
+            return false;
+        }
+        if (vm1.msg_hash == vm2.msg_hash) {
+            return false;
+        }
+        if (validators[vm1.validator_index].is_slashed) {
+            return false;
+        }
+
+        bool double_vote = vm1.target_epoch == vm2.target_epoch;
+        bool surround_vote = (
+        vm1.target_epoch > vm2.target_epoch && vm1.source_epoch < vm2.source_epoch ||
+        vm2.target_epoch > vm1.target_epoch && vm2.source_epoch < vm1.source_epoch
+        );
+
+        return double_vote || surround_vote;
     }
 
 }
