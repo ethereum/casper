@@ -20,7 +20,8 @@ specification of the Casper the Friendly Finality Gadget (FFG) PoW/PoS consensus
 For macOS, with [brew](https://brew.sh/) installed:
 
 ```bash
-brew install pandoc # required for a python dependency
+brew install　pandoc # required for a python dependency
+brew install leveldb
 ```
 
 For all systems:
