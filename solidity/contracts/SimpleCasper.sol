@@ -364,13 +364,13 @@ contract SimpleCasper {
     // line:288
     function validate_signature(bytes32 msg_hash, bytes sig, uint256 validator_index) private returns (bool) {
         address addr = validators[validator_index].addr;
-        uint256 gas = VALIDATION_GAS_LIMIT;
+        uint256 vgaslimit = VALIDATION_GAS_LIMIT;
         bytes memory input = SimpleCasper(this).concat(msg_hash, sig);
         uint inputSize = input.length + 32;
         bytes32 result = 0x00;
         uint res = 0;
         assembly {
-            res := call(gas, addr, 0, input, inputSize, result, 32)
+            res := call(vgaslimit, addr, 0, input, inputSize, result, 32)
         }
         //return extract32(raw_call(self.validators[validator_index].addr, concat(msg_hash, sig), gas=self.VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
         return res == 1 && result == bytes32(1);
@@ -414,7 +414,7 @@ contract SimpleCasper {
         uint res = 0;
         uint inputSize = vote_msg.length + 32;
         address addr = MSG_HASHER;
-        uint256 gas = MSG_HASHER_GAS_LIMIT;
+        uint256 vgaslimit = MSG_HASHER_GAS_LIMIT;
 
         //        extract32(
         //    raw_call(self.MSG_HASHER, vote_msg_1, gas = self.MSG_HASHER_GAS_LIMIT, outsize = 32),
@@ -423,7 +423,7 @@ contract SimpleCasper {
         assembly {
             let freep := mload(0x40)
             mstore(0x40, add(freep, 32))
-            res := call(gas, addr, 0, vote_msg, inputSize, freep, 32)
+            res := call(vgaslimit, addr, 0, vote_msg, inputSize, freep, 32)
             msg_hash := mload(freep)
         }
 
