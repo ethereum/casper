@@ -1,6 +1,12 @@
 import pytest
 
 from decimal import Decimal
+import web3
+import eth_tester
+
+
+TRANSACTION_FAILED = eth_tester.exceptions.TransactionFailed
+VALIDATION_ERROR = web3.exceptions.ValidationError
 
 
 def test_no_double_init(
@@ -50,27 +56,28 @@ def test_start_epoch(
 
 
 @pytest.mark.parametrize(
-    'epoch_length, success',
+    'epoch_length, error',
     [
-        (-1, False),
-        (0, False),
-        (10, True),
-        (250, True),
-        (256, False),
-        (500, False),
+        (-1, VALIDATION_ERROR),
+        (0, TRANSACTION_FAILED),
+        (10, None),
+        (250, None),
+        (256, TRANSACTION_FAILED),
+        (500, TRANSACTION_FAILED),
     ]
 )
 def test_init_epoch_length(
         epoch_length,
-        success,
+        error,
         casper_args,
         deploy_casper_contract,
         assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
-    if not success:
+    if error:
         assert_tx_failed(
-            lambda: casper.functions.init(*casper_args).transact()
+            lambda: casper.functions.init(*casper_args).transact(),
+            error
         )
         return
 
@@ -79,56 +86,55 @@ def test_init_epoch_length(
 
 
 @pytest.mark.parametrize(
-    'warm_up_period, success',
+    'warm_up_period, error',
     [
-        (-1, False),
-        (0, True),
-        (10, True),
-        (256, True),
-        (50000, True),
+        (-1, VALIDATION_ERROR),
+        (0, None),
+        (10, None),
+        (256, None),
+        (50000, None),
     ]
 )
-def test_init_warm_up_period(
-        warm_up_period,
-        success,
-        casper_args,
-        deploy_casper_contract,
-        assert_tx_failed):
+def test_init_warm_up_period(warm_up_period,
+                             error,
+                             casper_args,
+                             deploy_casper_contract,
+                             assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
-    if not success:
+    if error:
         assert_tx_failed(
-            lambda: casper.functions.init(*casper_args).transact()
+            lambda: casper.functions.init(*casper_args).transact(),
+            error
         )
         return
 
     casper.functions.init(*casper_args).transact()
     assert casper.functions.WARM_UP_PERIOD().call() == warm_up_period
 
-
 @pytest.mark.parametrize(
-    'withdrawal_delay, success',
+    'withdrawal_delay, error',
     [
-        (-42, False),
-        (-1, False),
-        (0, True),
-        (1, True),
-        (10, True),
-        (10000, True),
-        (500000000, True),
+        (-42, VALIDATION_ERROR),
+        (-1, VALIDATION_ERROR),
+        (0, None),
+        (1, None),
+        (10, None),
+        (10000, None),
+        (500000000, None),
     ]
 )
-def test_init_withdrawal_delay(
-        withdrawal_delay,
-        success,
-        casper_args,
-        deploy_casper_contract,
-        assert_tx_failed):
+def test_init_withdrawal_delay(withdrawal_delay,
+                               error,
+                               casper_args,
+                               deploy_casper_contract,
+                               assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
-    if not success:
+    if error:
         assert_tx_failed(
-            lambda: casper.functions.init(*casper_args).transact()
+            lambda: casper.functions.init(*casper_args).transact(),
+            error
         )
         return
 
@@ -137,29 +143,29 @@ def test_init_withdrawal_delay(
 
 
 @pytest.mark.parametrize(
-    'dynasty_logout_delay, success',
+    'dynasty_logout_delay, error',
     [
-        (-42, False),
-        (-1, False),
-        (0, False),
-        (1, False),
-        (2, True),
-        (3, True),
-        (100, True),
-        (3000000, True),
+        (-42, VALIDATION_ERROR),
+        (-1, VALIDATION_ERROR),
+        (0, TRANSACTION_FAILED),
+        (1, TRANSACTION_FAILED),
+        (2, None),
+        (3, None),
+        (100, None),
+        (3000000, None),
     ]
 )
-def test_init_dynasty_logout_delay(
-        dynasty_logout_delay,
-        success,
-        casper_args,
-        deploy_casper_contract,
-        assert_tx_failed):
+def test_init_dynasty_logout_delay(dynasty_logout_delay,
+                                   error,
+                                   casper_args,
+                                   deploy_casper_contract,
+                                   assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
-    if not success:
+    if error:
         assert_tx_failed(
-            lambda: casper.functions.init(*casper_args).transact()
+            lambda: casper.functions.init(*casper_args).transact(),
+            error
         )
         return
 
@@ -168,27 +174,27 @@ def test_init_dynasty_logout_delay(
 
 
 @pytest.mark.parametrize(
-    'base_interest_factor, success',
+    'base_interest_factor, error',
     [
-        (-10, False),
-        (Decimal('-0.001'), False),
-        (0, True),
-        (Decimal('7e-3'), True),
-        (Decimal('0.1'), True),
-        (Decimal('1.5'), True),
+        (-10, TRANSACTION_FAILED),
+        (Decimal('-0.001'), TRANSACTION_FAILED),
+        (0, None),
+        (Decimal('7e-3'), None),
+        (Decimal('0.1'), None),
+        (Decimal('1.5'), None),
     ]
 )
-def test_init_base_interest_factor(
-        base_interest_factor,
-        success,
-        casper_args,
-        deploy_casper_contract,
-        assert_tx_failed):
+def test_init_base_interest_factor(base_interest_factor,
+                                   error,
+                                   casper_args,
+                                   deploy_casper_contract,
+                                   assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
-    if not success:
+    if error:
         assert_tx_failed(
-            lambda: casper.functions.init(*casper_args).transact()
+            lambda: casper.functions.init(*casper_args).transact(),
+            error
         )
         return
 
@@ -197,27 +203,27 @@ def test_init_base_interest_factor(
 
 
 @pytest.mark.parametrize(
-    'base_penalty_factor, success',
+    'base_penalty_factor, error',
     [
-        (-10, False),
-        (Decimal('-0.001'), False),
-        (0, True),
-        (Decimal('7e-3'), True),
-        (Decimal('0.1'), True),
-        (Decimal('1.5'), True),
+        (-10, TRANSACTION_FAILED),
+        (Decimal('-0.001'), TRANSACTION_FAILED),
+        (0, None),
+        (Decimal('7e-3'), None),
+        (Decimal('0.1'), None),
+        (Decimal('1.5'), None),
     ]
 )
-def test_init_base_penalty_factor(
-        base_penalty_factor,
-        success,
-        casper_args,
-        deploy_casper_contract,
-        assert_tx_failed):
+def test_init_base_penalty_factor(base_penalty_factor,
+                                  error,
+                                  casper_args,
+                                  deploy_casper_contract,
+                                  assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
-    if not success:
+    if error:
         assert_tx_failed(
-            lambda: casper.functions.init(*casper_args).transact()
+            lambda: casper.functions.init(*casper_args).transact(),
+            error
         )
         return
 
@@ -226,29 +232,29 @@ def test_init_base_penalty_factor(
 
 
 @pytest.mark.parametrize(
-    'min_deposit_size, success',
+    'min_deposit_size, error',
     [
-        (int(-1e10), False),
-        (-1, False),
-        (0, False),
-        (1, True),
-        (42, True),
-        (int(1e4), True),
-        (int(2.5e20), True),
-        (int(5e30), True),
+        (int(-1e10), VALIDATION_ERROR),
+        (-1, VALIDATION_ERROR),
+        (0, TRANSACTION_FAILED),
+        (1, None),
+        (42, None),
+        (int(1e4), None),
+        (int(2.5e20), None),
+        (int(5e30), None),
     ]
 )
-def test_init_min_deposit_size(
-        min_deposit_size,
-        success,
-        casper_args,
-        deploy_casper_contract,
-        assert_tx_failed):
+def test_init_min_deposit_size(min_deposit_size,
+                               error,
+                               casper_args,
+                               deploy_casper_contract,
+                               assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
-    if not success:
+    if error:
         assert_tx_failed(
-            lambda: casper.functions.init(*casper_args).transact()
+            lambda: casper.functions.init(*casper_args).transact(),
+            error
         )
         return
 
@@ -256,10 +262,9 @@ def test_init_min_deposit_size(
     assert casper.functions.MIN_DEPOSIT_SIZE().call() == min_deposit_size
 
 
-def test_init_null_sender(
-        null_sender,
-        casper_args,
-        deploy_casper_contract):
+def test_init_null_sender(null_sender,
+                          casper_args,
+                          deploy_casper_contract):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
     casper.functions.init(*casper_args).transact()

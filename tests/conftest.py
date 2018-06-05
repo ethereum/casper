@@ -293,6 +293,9 @@ def tester(w3,
     new_header = chain.header.copy(state_root=new_state_root)
     chain.header = new_header
 
+    # mine block to ensure we don't have mismatched state
+    base_tester.mine_block()
+
     # Casper contract needs money for its activity
     w3.eth.sendTransaction({
         'to': casper_address,
