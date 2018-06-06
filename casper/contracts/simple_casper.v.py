@@ -655,7 +655,14 @@ def withdraw(validator_index: uint256):
             "uint256"
         )
     else:
-        recently_slashed: wei_value = self.total_slashed[withdrawal_epoch] - self.total_slashed[withdrawal_epoch - 2 * self.WITHDRAWAL_DELAY]
+        # prevent a negative lookup in total_slashed
+        base_epoch: uint256
+        if 2 * self.WITHDRAWAL_DELAY > withdrawal_epoch:
+            base_epoch = 0
+        else:
+            base_epoch = withdrawal_epoch - 2 * self.WITHDRAWAL_DELAY
+
+        recently_slashed: wei_value = self.total_slashed[withdrawal_epoch] - self.total_slashed[base_epoch]
         fraction_to_slash: decimal = convert(convert(recently_slashed * self.SLASH_FRACTION_MULTIPLIER, "int128"), "decimal") / \
                                      convert(convert(self.validators[validator_index].total_deposits_at_logout, "int128"), "decimal")
 

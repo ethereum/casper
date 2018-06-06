@@ -391,6 +391,7 @@ def test_withdraw_after_slash(w3,
         new_epoch()
 
     end_dynasty = concise_casper.validators__end_dynasty(slashed_index)
+    assert concise_casper.dynasty() > end_dynasty
     end_epoch = concise_casper.dynasty_start_epoch(end_dynasty + 1)
     withdrawal_epoch = end_epoch + concise_casper.WITHDRAWAL_DELAY()
     assert concise_casper.current_epoch() == withdrawal_epoch
