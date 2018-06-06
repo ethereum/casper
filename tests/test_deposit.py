@@ -96,6 +96,7 @@ def test_deposit_updates_total_deposits(casper,
                                         deposit_amount,
                                         induct_validator,
                                         mk_suggested_vote,
+                                        send_vote,
                                         new_epoch):
     assert concise_casper.total_curdyn_deposits_in_wei() == 0
     assert concise_casper.total_prevdyn_deposits_in_wei() == 0
@@ -106,9 +107,7 @@ def test_deposit_updates_total_deposits(casper,
     assert concise_casper.total_curdyn_deposits_in_wei() == deposit_amount
     assert concise_casper.total_prevdyn_deposits_in_wei() == 0
 
-    casper.functions.vote(
-        mk_suggested_vote(validator_index, validation_key)
-    ).transact()
+    send_vote(mk_suggested_vote(validator_index, validation_key))
     new_epoch()
 
     assert concise_casper.total_curdyn_deposits_in_wei() == deposit_amount

@@ -227,6 +227,7 @@ def test_slash_after_logout_delay(casper,
                                   validation_key,
                                   deposit_amount,
                                   induct_validator,
+                                  send_vote,
                                   mk_suggested_vote,
                                   mk_slash_votes,
                                   new_epoch,
@@ -246,9 +247,7 @@ def test_slash_after_logout_delay(casper,
     # step past validator's end_dynasty
     dynasty_logout_delay = concise_casper.DYNASTY_LOGOUT_DELAY()
     for _ in range(dynasty_logout_delay + 1):
-        casper.functions.vote(
-            mk_suggested_vote(validator_index, validation_key)
-        ).transact()
+        send_vote(mk_suggested_vote(validator_index, validation_key))
         new_epoch()
 
     new_deposit_size = concise_casper.deposit_size(validator_index)
@@ -281,6 +280,7 @@ def test_slash_after_logout_before_logout_delay(casper,
                                                 validation_key,
                                                 deposit_amount,
                                                 induct_validator,
+                                                send_vote,
                                                 mk_suggested_vote,
                                                 mk_slash_votes,
                                                 new_epoch,
@@ -297,7 +297,7 @@ def test_slash_after_logout_before_logout_delay(casper,
     assert concise_casper.dynasty_wei_delta(end_dynasty) == -scaled_deposit_size
 
     # step forward but not up to end_dynasty
-    casper.functions.vote(mk_suggested_vote(validator_index, validation_key)).transact()
+    send_vote(mk_suggested_vote(validator_index, validation_key))
     new_epoch()
 
     new_deposit_size = concise_casper.deposit_size(validator_index)
@@ -330,6 +330,7 @@ def test_total_slashed(casper,
                        deposit_amount,
                        new_epoch,
                        induct_validator,
+                       send_vote,
                        mk_suggested_vote,
                        mk_slash_votes):
     validator_index = induct_validator(funded_account, validation_key, deposit_amount)
@@ -342,7 +343,7 @@ def test_total_slashed(casper,
     assert concise_casper.total_slashed(current_epoch + 1) == 0
 
     # step forwrd
-    casper.functions.vote(mk_suggested_vote(validator_index, validation_key)).transact()
+    send_vote(mk_suggested_vote(validator_index, validation_key))
     new_epoch()
 
     current_epoch = concise_casper.current_epoch()
@@ -358,6 +359,7 @@ def test_withdraw_after_slash(w3,
                               deposit_amount,
                               new_epoch,
                               induct_validators,
+                              send_vote,
                               mk_suggested_vote,
                               mk_slash_votes):
     validator_indexes = induct_validators(
@@ -385,9 +387,7 @@ def test_withdraw_after_slash(w3,
     # slashed validator can withdraw after end_dynasty plus delay
     for _ in range(concise_casper.WITHDRAWAL_DELAY() + 2):
         for i, validator_index in enumerate(logged_in_indexes):
-            casper.functions.vote(
-                mk_suggested_vote(validator_index, logged_in_keys[i])
-            ).transact()
+            send_vote(mk_suggested_vote(validator_index, logged_in_keys[i]))
         new_epoch()
 
     end_dynasty = concise_casper.validators__end_dynasty(slashed_index)
@@ -423,6 +423,7 @@ def test_withdraw_after_majority_slash(w3,
                                        deposit_amount,
                                        new_epoch,
                                        induct_validators,
+                                       send_vote,
                                        mk_suggested_vote,
                                        mk_slash_votes):
     validator_indexes = induct_validators(
@@ -453,16 +454,12 @@ def test_withdraw_after_majority_slash(w3,
     # normally if this occured, the validators would likely stop
     # voting and their deposits would have to bleed out.
     for i, validator_index in enumerate(validator_indexes):
-        casper.functions.vote(
-            mk_suggested_vote(validator_index, validation_keys[i])
-        ).transact()
+        send_vote(mk_suggested_vote(validator_index, validation_keys[i]))
     new_epoch()
 
     # slashed validators can withdraw after end_dynasty plus delay
     for _ in range(concise_casper.WITHDRAWAL_DELAY() + 1):
-        casper.functions.vote(
-            mk_suggested_vote(logged_in_index, logged_in_key)
-        ).transact()
+        send_vote(mk_suggested_vote(logged_in_index, logged_in_key))
         new_epoch()
 
     assert concise_casper.dynasty() > concise_casper.validators__end_dynasty(slashed_indexes[0])
