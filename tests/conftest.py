@@ -57,6 +57,10 @@ DEPOSIT_AMOUNTS = [
 ]
 
 
+setattr(eth_tester.backends.pyevm.main, 'GENESIS_GAS_LIMIT', 10**9)
+setattr(eth_tester.backends.pyevm.main, 'GENESIS_DIFFICULTY', 1)
+
+
 @pytest.fixture
 def next_contract_address(w3, base_tester, fake_contract_code):
     def next_contract_address(sender):
@@ -238,18 +242,9 @@ def casper_args(casper_config,
     ]
 
 
-setattr(eth_tester.backends.pyevm.main, 'GENESIS_GAS_LIMIT', 10**9)
-setattr(eth_tester.backends.pyevm.main, 'GENESIS_DIFFICULTY', 1)
-
-
 @pytest.fixture
-def backend():
-    return PyEVMBackend()
-
-
-@pytest.fixture
-def base_tester(backend):
-    return EthereumTester(backend)
+def base_tester():
+    return EthereumTester(PyEVMBackend())
 
 
 def zero_gas_price_strategy(web3, transaction_params=None):
