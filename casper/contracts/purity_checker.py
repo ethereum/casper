@@ -48,6 +48,7 @@ banned_opcodes = map(find_opcode_hex,[
     0x4f,
     'SLOAD',
     'SSTORE',
+    'GAS',
     'CREATE',
     'SELFDESTRUCT'
 ])
