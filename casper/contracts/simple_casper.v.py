@@ -373,6 +373,7 @@ def validate_vote_signature(vote_msg: bytes[1024]) -> bool:
 
     return self.validate_signature(msg_hash, sig, validator_index)
 
+
 @public
 # cannot be labeled @constant because of external call
 # even though the call is to a pure contract call
@@ -404,6 +405,8 @@ def slashable(vote_msg_1: bytes[1024], vote_msg_2: bytes[1024]) -> bool:
     if not self.validate_signature(msg_hash_2, sig_2, validator_index_2):
         return False
     if validator_index_1 != validator_index_2:
+        return False
+    if self.validators[validator_index_1].start_dynasty > self.dynasty:
         return False
     if msg_hash_1 == msg_hash_2:
         return False
