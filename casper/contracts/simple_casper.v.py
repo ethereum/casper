@@ -521,8 +521,6 @@ def initialize_epoch(epoch: int128):
         # Set the reward factor for the next epoch.
         adj_interest_base: decimal = self.BASE_INTEREST_FACTOR / self.sqrt_of_total_deposits()
         self.reward_factor = adj_interest_base + self.BASE_PENALTY_FACTOR * (self.esf() - 2)
-        # ESF is only thing that is changing and reward_factor is being used above.
-        assert self.reward_factor > 0.0
     else:
         # Before the first validator deposits, new epochs are finalized instantly.
         self.insta_finalize()
