@@ -1,18 +1,21 @@
-import pytest
 import os
-import rlp
-
 from decimal import (
     Decimal,
 )
 
 import eth_tester
+import pytest
+import rlp
 from eth_tester import (
     EthereumTester,
     PyEVMBackend
 )
-from web3.providers.eth_tester import (
-    EthereumTesterProvider,
+from solc import compile_standard
+from utils.utils import encode_int32
+from utils.valcodes import compile_valcode_to_evm_bytecode
+from vyper import (
+    compiler,
+    utils as vyper_utils,
 )
 from web3 import (
     Web3,
@@ -20,17 +23,13 @@ from web3 import (
 from web3.contract import (
     ConciseContract,
 )
-from vyper import (
-    compiler,
-    utils as vyper_utils,
+from web3.providers.eth_tester import (
+    EthereumTesterProvider,
 )
-
-from utils.utils import encode_int32
-from utils.valcodes import compile_valcode_to_evm_bytecode
 
 OWN_DIR = os.path.dirname(os.path.realpath(__file__))
 
-GAS_PRICE = 25 * 10**9
+GAS_PRICE = 25 * 10 ** 9
 
 VYPER_RLP_DECODER_TX_HEX = "0xf9035b808506fc23ac0083045f788080b903486103305660006109ac5260006109cc527f0100000000000000000000000000000000000000000000000000000000000000600035046109ec526000610a0c5260006109005260c06109ec51101515585760f86109ec51101561006e5760bf6109ec510336141558576001610a0c52610098565b60013560f76109ec51036020035260005160f66109ec510301361415585760f66109ec5103610a0c525b61022060016064818352015b36610a0c511015156100b557610291565b7f0100000000000000000000000000000000000000000000000000000000000000610a0c5135046109ec526109cc5160206109ac51026040015260016109ac51016109ac5260806109ec51101561013b5760016109cc5161044001526001610a0c516109cc5161046001376001610a0c5101610a0c5260216109cc51016109cc52610281565b60b86109ec5110156101d15760806109ec51036109cc51610440015260806109ec51036001610a0c51016109cc51610460013760816109ec5114156101ac5760807f01000000000000000000000000000000000000000000000000000000000000006001610a0c5101350410151558575b607f6109ec5103610a0c5101610a0c5260606109ec51036109cc51016109cc52610280565b60c06109ec51101561027d576001610a0c51013560b76109ec510360200352600051610a2c526038610a2c5110157f01000000000000000000000000000000000000000000000000000000000000006001610a0c5101350402155857610a2c516109cc516104400152610a2c5160b66109ec5103610a0c51016109cc516104600137610a2c5160b66109ec5103610a0c510101610a0c526020610a2c51016109cc51016109cc5261027f565bfe5b5b5b81516001018083528114156100a4575b5050601f6109ac511115155857602060206109ac5102016109005260206109005103610a0c5261022060016064818352015b6000610a0c5112156102d45761030a565b61090051610a0c516040015101610a0c51610900516104400301526020610a0c5103610a0c5281516001018083528114156102c3575b50506109cc516109005101610420526109cc5161090051016109005161044003f35b61000461033003610004600039610004610330036000f31b2d4f"  # NOQA
 VYPER_RLP_DECODER_TX_SENDER = "0x39ba083c30fCe59883775Fc729bBE1f9dE4DEe11"
@@ -38,7 +37,11 @@ MSG_HASHER_TX_HEX = "0xf9016d808506fc23ac0083026a508080b9015a6101488061000e60003
 MSG_HASHER_TX_SENDER = "0xD7a3BD6C9eA32efF147d067f907AE6b22d436F91"
 PURITY_CHECKER_TX_HEX = "0xf90467808506fc23ac00830583c88080b904546104428061000e60003961045056600061033f537c0100000000000000000000000000000000000000000000000000000000600035047f80010000000000000000000000000000000000000030ffff1c0e00000000000060205263a1903eab8114156103f7573659905901600090523660048237600435608052506080513b806020015990590160009052818152602081019050905060a0526080513b600060a0516080513c6080513b8060200260200159905901600090528181526020810190509050610100526080513b806020026020015990590160009052818152602081019050905061016052600060005b602060a05103518212156103c957610100601f8360a051010351066020518160020a161561010a57fe5b80606013151561011e57607f811315610121565b60005b1561014f5780607f036101000a60018460a0510101510482602002610160510152605e8103830192506103b2565b60f18114801561015f5780610164565b60f282145b905080156101725780610177565b60f482145b9050156103aa5760028212151561019e5760606001830360200261010051015112156101a1565b60005b156101bc57607f6001830360200261010051015113156101bf565b60005b156101d157600282036102605261031e565b6004821215156101f057600360018303602002610100510151146101f3565b60005b1561020d57605a6002830360200261010051015114610210565b60005b1561022b57606060038303602002610100510151121561022e565b60005b1561024957607f60038303602002610100510151131561024c565b60005b1561025e57600482036102605261031d565b60028212151561027d57605a6001830360200261010051015114610280565b60005b1561029257600282036102605261031c565b6002821215156102b157609060018303602002610100510151146102b4565b60005b156102c657600282036102605261031b565b6002821215156102e65760806001830360200261010051015112156102e9565b60005b156103035760906001830360200261010051015112610306565b60005b1561031857600282036102605261031a565bfe5b5b5b5b5b604060405990590160009052600081526102605160200261016051015181602001528090502054156103555760016102a052610393565b60306102605160200261010051015114156103755760016102a052610392565b60606102605160200261010051015114156103915760016102a0525b5b5b6102a051151561039f57fe5b6001830192506103b1565b6001830192505b5b8082602002610100510152600182019150506100e0565b50506001604060405990590160009052600081526080518160200152809050205560016102e05260206102e0f35b63c23697a8811415610440573659905901600090523660048237600435608052506040604059905901600090526000815260805181602001528090502054610300526020610300f35b505b6000f31b2d4f"  # NOQA
 PURITY_CHECKER_TX_SENDER = "0xeA0f0D55EE82Edf248eD648A9A8d213FBa8b5081"
-PURITY_CHECKER_ABI = [{'name': 'check', 'type': 'function', 'constant': True, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}, {'name': 'submit', 'type': 'function', 'constant': False, 'inputs': [{'name': 'addr', 'type': 'address'}], 'outputs': [{'name': 'out', 'type': 'bool'}]}]  # NOQA
+PURITY_CHECKER_ABI = [
+    {'name': 'check', 'type': 'function', 'constant': True, 'inputs': [{'name': 'addr', 'type': 'address'}],
+     'outputs': [{'name': 'out', 'type': 'bool'}]},
+    {'name': 'submit', 'type': 'function', 'constant': False, 'inputs': [{'name': 'addr', 'type': 'address'}],
+     'outputs': [{'name': 'out', 'type': 'bool'}]}]  # NOQA
 
 EPOCH_LENGTH = 10
 WARM_UP_PERIOD = 20
@@ -46,12 +49,24 @@ DYNASTY_LOGOUT_DELAY = 5
 WITHDRAWAL_DELAY = 8
 BASE_INTEREST_FACTOR = Decimal('0.02')
 BASE_PENALTY_FACTOR = Decimal('0.002')
-MIN_DEPOSIT_SIZE = 1000 * 10**18  # 1000 ether
+MIN_DEPOSIT_SIZE = 1000 * 10 ** 18  # 1000 ether
 
 DEPOSIT_AMOUNTS = [
-    2000 * 10**18,
+    2000 * 10 ** 18,
     # 1000 * 10**18,
 ]
+
+
+# adding solidity test trigger option.
+def pytest_addoption(parser):
+    """add commandline options"""
+    parser.addoption('--sol', action='store_true',
+                     help='run solidity casper code test.')
+
+
+@pytest.fixture
+def is_sol(request):
+    return request.config.getoption('--sol')
 
 
 @pytest.fixture
@@ -70,6 +85,7 @@ def next_contract_address(w3, base_tester, fake_contract_code):
 
         base_tester.revert_to_snapshot(snapshot_id)
         return contract_address
+
     return next_contract_address
 
 
@@ -221,7 +237,7 @@ def casper_args(casper_config, msg_hasher_address, purity_checker_address):
     ]
 
 
-setattr(eth_tester.backends.pyevm.main, 'GENESIS_GAS_LIMIT', 10**9)
+setattr(eth_tester.backends.pyevm.main, 'GENESIS_GAS_LIMIT', 10 ** 9)
 setattr(eth_tester.backends.pyevm.main, 'GENESIS_DIFFICULTY', 1)
 
 
@@ -262,6 +278,10 @@ def tester(
     # otherwise, vyper compiler cannot properly embed RLP decoder address
     casper_bytecode = compiler.compile(casper_code)
 
+    # for solidity
+    sol_output = casper_sol_output()
+    casper_bytecode = Web3.toBytes(hexstr=casper_sol_bytecode(sol_output))
+
     Casper = w3.eth.contract(abi=casper_abi, bytecode=casper_bytecode)
     tx_hash = Casper.constructor().transact({'from': base_sender})
     tx_receipt = w3.eth.getTransactionReceipt(tx_hash)
@@ -271,7 +291,7 @@ def tester(
     # Casper contract needs money for its activity
     w3.eth.sendTransaction({
         'to': casper_address,
-        'value': 10**21
+        'value': 10 ** 21
     })
 
     if initialize_contract:
@@ -286,7 +306,7 @@ def deploy_rlp_decoder(w3):
     def deploy_rlp_decoder():
         w3.eth.sendTransaction({
             'to': VYPER_RLP_DECODER_TX_SENDER,
-            'value': 10**17
+            'value': 10 ** 17
         })
         tx_hash = w3.eth.sendRawTransaction(VYPER_RLP_DECODER_TX_HEX)
 
@@ -294,6 +314,7 @@ def deploy_rlp_decoder(w3):
         contract_address = receipt.contractAddress
         assert vyper_utils.RLP_DECODER_ADDRESS == w3.toInt(hexstr=contract_address)
         return contract_address
+
     return deploy_rlp_decoder
 
 
@@ -302,12 +323,13 @@ def deploy_msg_hasher(w3):
     def deploy_msg_hasher():
         w3.eth.sendTransaction({
             'to': MSG_HASHER_TX_SENDER,
-            'value': 10**17
+            'value': 10 ** 17
         })
         tx_hash = w3.eth.sendRawTransaction(MSG_HASHER_TX_HEX)
 
         receipt = w3.eth.getTransactionReceipt(tx_hash)
         return receipt.contractAddress
+
     return deploy_msg_hasher
 
 
@@ -316,12 +338,13 @@ def deploy_purity_checker(w3):
     def deploy_purity_checker():
         w3.eth.sendTransaction({
             'to': PURITY_CHECKER_TX_SENDER,
-            'value': 10**17
+            'value': 10 ** 17
         })
         tx_hash = w3.eth.sendRawTransaction(PURITY_CHECKER_TX_HEX)
 
         receipt = w3.eth.getTransactionReceipt(tx_hash)
         return receipt.contractAddress
+
     return deploy_purity_checker
 
 
@@ -333,7 +356,8 @@ def casper_code():
 
 @pytest.fixture
 def casper_abi(casper_code):
-    return compiler.mk_full_signature(casper_code)
+     return compiler.mk_full_signature(casper_code)
+    # return casper_sol_abi(casper_sol_output())
 
 
 @pytest.fixture
@@ -403,6 +427,7 @@ def deploy_casper_contract(
             base_sender, initialize_contract
         )
         return casper(w3, t, casper_abi, casper_address)
+
     return deploy_casper_contract
 
 
@@ -412,6 +437,51 @@ def get_dirs(path):
     extra_args = ' '.join(['{}={}'.format(d.split('/')[-1], d) for d in sub_dirs])
     path = '{}/{}'.format(abs_contract_path, path)
     return path, extra_args
+
+
+def get_sol_dirs(path):
+    abs_contract_path = os.path.realpath(os.path.join(OWN_DIR, '..', 'solidity', 'contracts'))
+    sub_dirs = [x[0] for x in os.walk(abs_contract_path)]
+    extra_args = ' '.join(['{}={}'.format(d.split('/')[-1], d) for d in sub_dirs])
+    path = '{}/{}'.format(abs_contract_path, path)
+    return path, extra_args[len("contracts="):]
+
+
+def casper_sol_compile():
+    paths = get_sol_dirs("SimpleCasper.sol")
+    return compile_standard({
+        'language': 'Solidity',
+        'sources': {
+            'SimpleCasper.sol': {
+                'urls': [
+                    paths[0]
+                ]
+            },
+            'RLP.sol': {
+                'urls': [
+                    get_sol_dirs("RLP.sol")[0]
+                ]
+            },
+            'Decimal.sol': {
+                'urls': [
+                    get_sol_dirs("Decimal.sol")[0]
+                ]
+            },
+            'SafeMath.sol': {
+                'urls': [
+                    get_sol_dirs("SafeMath.sol")[0]
+                ]
+            }
+        },
+        "settings": {
+            "evmVersion": "byzantium",
+            "outputSelection": {
+                "SimpleCasper.sol": {
+                    "*": ["abi", "evm.bytecode", "evm.gasEstimates"]
+                }
+            }
+        }
+    }, allow_paths=paths[1])
 
 
 # Note: If called during "warm_up-period", new_epoch mines all the way through
@@ -434,6 +504,7 @@ def new_epoch(tester, casper, epoch_length):
 def mk_validation_code():
     def mk_validation_code(address, valcode_type):
         return compile_valcode_to_evm_bytecode(valcode_type, address)
+
     return mk_validation_code
 
 
@@ -446,6 +517,7 @@ def mk_vote(w3):
         signed = w3.eth.account.signHash(msg_hash, validation_key)
         sig = encode_int32(signed.v) + encode_int32(signed.r) + encode_int32(signed.s)
         return rlp.encode([validator_index, target_hash, target_epoch, source_epoch, sig])
+
     return mk_vote
 
 
@@ -456,6 +528,7 @@ def mk_suggested_vote(concise_casper, mk_vote):
         target_epoch = concise_casper.current_epoch()
         source_epoch = concise_casper.recommended_source_epoch()
         return mk_vote(validator_index, target_hash, target_epoch, source_epoch, validation_key)
+
     return mk_suggested_vote
 
 
@@ -477,6 +550,7 @@ def mk_slash_votes(concise_casper, mk_vote, fake_hash):
             validation_key
         )
         return vote_1, vote_2
+
     return mk_slash_votes
 
 
@@ -487,6 +561,7 @@ def mk_logout_msg_signed(w3):
         signed = w3.eth.account.signHash(msg_hash, validation_key)
         sig = encode_int32(signed.v) + encode_int32(signed.r) + encode_int32(signed.s)
         return rlp.encode([validator_index, epoch, sig])
+
     return mk_logout_msg_signed
 
 
@@ -496,6 +571,7 @@ def mk_logout_msg_unsigned():
         v, r, s = (0, 0, 0)
         sig = encode_int32(v) + encode_int32(r) + encode_int32(s)
         return rlp.encode([validator_index, epoch, sig])
+
     return mk_logout_msg_unsigned
 
 
@@ -510,6 +586,7 @@ def logout_validator_via_signed_msg(casper, concise_casper, mk_logout_msg_signed
             msg_signing_key
         )
         casper.functions.logout(logout_msg).transact({'from': tx_sender_addr})
+
     return logout_validator_via_signed_msg
 
 
@@ -518,6 +595,7 @@ def logout_validator_via_unsigned_msg(casper, concise_casper, mk_logout_msg_unsi
     def logout_validator_via_unsigned_msg(validator_index, tx_sender_addr):
         logout_tx = mk_logout_msg_unsigned(validator_index, concise_casper.current_epoch())
         casper.functions.logout(logout_tx).transact({'from': tx_sender_addr})
+
     return logout_validator_via_unsigned_msg
 
 
@@ -530,6 +608,7 @@ def deploy_validation_contract(w3, casper, mk_validation_code):
         })
         contract_address = w3.eth.getTransactionReceipt(tx_hash).contractAddress
         return contract_address
+
     return deploy_validation_contract
 
 
@@ -540,7 +619,6 @@ def deposit_validator(w3, tester, casper, deploy_validation_contract):
             validation_key,
             value,
             valcode_type="pure_ecrecover"):
-
         validation_addr = w3.eth.account.privateKeyToAccount(validation_key).address
         validation_contract_addr = deploy_validation_contract(validation_addr, valcode_type)
 
@@ -552,6 +630,7 @@ def deposit_validator(w3, tester, casper, deploy_validation_contract):
         })
 
         return casper.functions.validator_indexes(withdrawal_addr).call()
+
     return deposit_validator
 
 
@@ -567,7 +646,6 @@ def induct_validator(w3, tester, casper, deposit_validator, new_epoch):
             validation_key,
             value,
             valcode_type="pure_ecrecover"):
-
         validator_index = deposit_validator(
             withdrawal_addr,
             validation_key,
@@ -578,6 +656,7 @@ def induct_validator(w3, tester, casper, deposit_validator, new_epoch):
         new_epoch()  # finalize and increment dynasty
         new_epoch()  # finalize and increment dynasty
         return validator_index
+
     return induct_validator
 
 
@@ -596,6 +675,7 @@ def induct_validators(tester, casper, deposit_validator, new_epoch):
         new_epoch()  # finalize and increment dynasty
         new_epoch()  # finalize and increment dynasty
         return list(range(start_index, start_index + len(accounts)))
+
     return induct_validators
 
 
@@ -604,6 +684,7 @@ def assert_failed():
     def assert_failed(function_to_test, exception):
         with pytest.raises(exception):
             function_to_test()
+
     return assert_failed
 
 
@@ -614,4 +695,58 @@ def assert_tx_failed(base_tester):
         with pytest.raises(exception):
             function_to_test()
         base_tester.revert_to_snapshot(snapshot_id)
+
     return assert_tx_failed
+
+
+# for Solidity
+
+def casper_sol_output():
+    paths = get_sol_dirs("SimpleCasper.sol")
+    return compile_standard({
+        'language': 'Solidity',
+        'sources': {
+            'SimpleCasper.sol': {
+                'urls': [
+                    paths[0]
+                ]
+            },
+            'RLP.sol': {
+                'urls': [
+                    get_sol_dirs("RLP.sol")[0]
+                ]
+            },
+            'Decimal.sol': {
+                'urls': [
+                    get_sol_dirs("Decimal.sol")[0]
+                ]
+            },
+            'SafeMath.sol': {
+                'urls': [
+                    get_sol_dirs("SafeMath.sol")[0]
+                ]
+            }
+        },
+        "settings": {
+            "evmVersion": "byzantium",
+            "outputSelection": {
+                "SimpleCasper.sol": {
+                    "*": ["abi", "evm.bytecode"]
+                }
+            },
+            "optimizer": {
+                # disabled by default
+                "enabled": True,
+                # Optimize for how many times you intend to run the code.
+                # Lower values will optimize more for initial deployment cost, higher values will optimize more for high-frequency usage.
+                "runs": 200
+            },
+        }
+    }, allow_paths=paths[1])
+
+
+def casper_sol_bytecode(casper_sol_output):
+    return '0x' + casper_sol_output["contracts"]["SimpleCasper.sol"]["SimpleCasper"]["evm"]["bytecode"]["object"]
+
+def casper_sol_abi(casper_sol_output):
+    return casper_sol_output["contracts"]["SimpleCasper.sol"]["SimpleCasper"]["abi"]
