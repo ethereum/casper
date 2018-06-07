@@ -3,11 +3,11 @@
 # Withdrawal address used always in _from and _to as it's unique
 # and validator index is removed after some events
 #
-Deposit: event({_from: indexed(address), _validator_index: indexed(uint256), _validation_address: address, _start_dyn: uint256, _amount: uint256(wei)})
+Deposit: event({_from: indexed(address), _validator_index: indexed(uint256), _validation_address: address, _start_dyn: uint256, _amount: wei_value})
 Vote: event({_from: indexed(address), _validator_index: indexed(uint256), _target_hash: indexed(bytes32), _target_epoch: uint256, _source_epoch: uint256})
 Logout: event({_from: indexed(address), _validator_index: indexed(uint256), _end_dyn: uint256})
-Withdraw: event({_to: indexed(address), _validator_index: indexed(uint256), _amount: uint256(wei)})
-Slash: event({_from: indexed(address), _offender: indexed(address), _offender_index: indexed(uint256), _bounty: uint256(wei)})
+Withdraw: event({_to: indexed(address), _validator_index: indexed(uint256), _amount: wei_value})
+Slash: event({_from: indexed(address), _offender: indexed(address), _offender_index: indexed(uint256), _bounty: wei_value})
 Epoch: event({_number: indexed(uint256), _checkpoint_hash: indexed(bytes32), _is_justified: bool, _is_finalized: bool})
 
 units: {
@@ -334,7 +334,7 @@ def main_hash_voted_frac() -> decimal:
 
 @public
 @constant
-def deposit_size(validator_index: uint256) -> uint256(wei):
+def deposit_size(validator_index: uint256) -> wei_value:
     return self.ONE_WEI_UINT256 * convert(
         floor(self.validators[validator_index].deposit * self.deposit_scale_factor[self.current_epoch]),
         "uint256"
@@ -646,7 +646,7 @@ def withdraw(validator_index: uint256):
     assert self.current_epoch >= withdrawal_epoch
 
     # Withdraw
-    withdraw_amount: uint256(wei)
+    withdraw_amount: wei_value
     if not self.validators[validator_index].is_slashed:
         withdraw_amount = self.ONE_WEI_UINT256 * convert(
             floor(
@@ -669,7 +669,7 @@ def withdraw(validator_index: uint256):
         # can't withdraw a negative amount
         fraction_to_withdraw: decimal = max((1.0 - fraction_to_slash), 0.0)
 
-        deposit_size: uint256(wei) = self.ONE_WEI_UINT256 * convert(
+        deposit_size: wei_value = self.ONE_WEI_UINT256 * convert(
             floor(self.validators[validator_index].deposit * self.deposit_scale_factor[withdrawal_epoch]),
             "uint256"
         )
@@ -776,8 +776,8 @@ def slash(vote_msg_1: bytes[1024], vote_msg_2: bytes[1024]):
     validator_index: uint256 = values[0]
 
     # Slash the offending validator, and give a 4% "finder's fee"
-    validator_deposit: uint256(wei) = self.deposit_size(validator_index)
-    slashing_bounty: uint256(wei) = validator_deposit / 25
+    validator_deposit: wei_value = self.deposit_size(validator_index)
+    slashing_bounty: wei_value = validator_deposit / 25
     self.total_slashed[self.current_epoch] += validator_deposit
     self.validators[validator_index].is_slashed = True
 
