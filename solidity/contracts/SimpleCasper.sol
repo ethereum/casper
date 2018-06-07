@@ -201,8 +201,8 @@ contract SimpleCasper {
         int128 dynasty_logout_delay,
         address msg_hasher,
         address purity_checker,
-        Decimal.Data base_interest_factor,
-        Decimal.Data base_penalty_factor,
+        uint256 base_interest_factor,
+        uint256 base_penalty_factor,
         uint min_deposit_size // wei_value
     ) public {
 
@@ -211,8 +211,8 @@ contract SimpleCasper {
         require(warm_up_period >= 0);
         require(withdrawal_delay >= 0);
         require(dynasty_logout_delay >= 2);
-        require(base_interest_factor.compZero() > 0);
-        require(base_penalty_factor.compZero() > 0);
+        require(uint168(base_interest_factor) > 0);
+        require(uint168(base_penalty_factor)> 0);
         require(min_deposit_size > 0);
 
         initialized = true;
@@ -221,8 +221,8 @@ contract SimpleCasper {
         WARM_UP_PERIOD = warm_up_period;
         WITHDRAWAL_DELAY = withdrawal_delay;
         DYNASTY_LOGOUT_DELAY = dynasty_logout_delay;
-        BASE_INTEREST_FACTOR = base_interest_factor;
-        BASE_PENALTY_FACTOR = base_penalty_factor;
+        BASE_INTEREST_FACTOR = Decimal.fromDecimal(base_interest_factor);
+        BASE_PENALTY_FACTOR = Decimal.fromDecimal(base_penalty_factor);
         MIN_DEPOSIT_SIZE = min_deposit_size;
 
         START_EPOCH = int128((block.number + uint(warm_up_period)) / uint(EPOCH_LENGTH));
@@ -415,13 +415,13 @@ contract SimpleCasper {
 
     // ***** Public Constants *****
 
-    // line:296
-    function main_hash_voted_frac() public constant returns (Decimal.Data) {
+    // line:296 wanna return decimal but solidity not defined it type.....
+    function main_hash_voted_frac() public constant returns (uint256) {
         Decimal.Data memory cur_dyn_vote = checkpoints[uint256(current_epoch)].cur_dyn_votes[uint256(expected_source_epoch)];
         cur_dyn_vote = cur_dyn_vote.div(total_curdyn_deposits);
         Decimal.Data memory prev_dyn_vote = checkpoints[uint256(current_epoch)].prev_dyn_votes[uint256(expected_source_epoch)];
         prev_dyn_vote = prev_dyn_vote.div(total_prevdyn_deposits);
-        return min(cur_dyn_vote, prev_dyn_vote);
+        return min(cur_dyn_vote, prev_dyn_vote).toDecimal();
     }
     // line:303
     function deposit_size(int128 validator_index) public constant returns (int128) {

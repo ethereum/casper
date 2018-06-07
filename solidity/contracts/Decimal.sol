@@ -34,6 +34,9 @@ library Decimal {
         uint den; // denomenator
     }
 
+    // A decimal value can store multiples of 1/DECIMAL_DIVISOR
+    uint64 constant DECIMAL_DIVISOR = 10 ** 10;
+
     /** Creates a Decimal Data from a uint. */
     function fromUint(uint num) internal pure returns (Data) {
         return Data({
@@ -42,9 +45,22 @@ library Decimal {
             });
     }
 
+    /** Creates a Decimal Data from a Decimal bytes. */
+    function fromDecimal(uint256 num) internal pure returns (Data) {
+        return Data({
+            num : num,
+            den : DECIMAL_DIVISOR
+            });
+    }
+
     /** Converts a Decimal to a uint (effectively flooring the value). **/
     function toUint(Data decimal) internal pure returns (uint) {
         return decimal.num.div(decimal.den);
+    }
+
+    /** Converts to decimal by increasing up 10 digitsnum. the decimal is fi168x10 **/
+    function toDecimal(Data decimal) internal pure returns (uint256) {
+        return decimal.num.mul(DECIMAL_DIVISOR).div(decimal.den);
     }
 
     /** Adds two Decimals without loss of precision. */
