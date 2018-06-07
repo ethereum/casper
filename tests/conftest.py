@@ -33,6 +33,7 @@ OWN_DIR = os.path.dirname(os.path.realpath(__file__))
 GAS_PRICE = 25 * 10**9
 
 NULL_SENDER = '0xffffffffffffffffffffffffffffffffffffffff'
+CASPER_ADDRESS = "0x0000000000000000000000000000000000000042"
 
 VYPER_RLP_DECODER_TX_HEX = "0xf9035b808506fc23ac0083045f788080b903486103305660006109ac5260006109cc527f0100000000000000000000000000000000000000000000000000000000000000600035046109ec526000610a0c5260006109005260c06109ec51101515585760f86109ec51101561006e5760bf6109ec510336141558576001610a0c52610098565b60013560f76109ec51036020035260005160f66109ec510301361415585760f66109ec5103610a0c525b61022060016064818352015b36610a0c511015156100b557610291565b7f0100000000000000000000000000000000000000000000000000000000000000610a0c5135046109ec526109cc5160206109ac51026040015260016109ac51016109ac5260806109ec51101561013b5760016109cc5161044001526001610a0c516109cc5161046001376001610a0c5101610a0c5260216109cc51016109cc52610281565b60b86109ec5110156101d15760806109ec51036109cc51610440015260806109ec51036001610a0c51016109cc51610460013760816109ec5114156101ac5760807f01000000000000000000000000000000000000000000000000000000000000006001610a0c5101350410151558575b607f6109ec5103610a0c5101610a0c5260606109ec51036109cc51016109cc52610280565b60c06109ec51101561027d576001610a0c51013560b76109ec510360200352600051610a2c526038610a2c5110157f01000000000000000000000000000000000000000000000000000000000000006001610a0c5101350402155857610a2c516109cc516104400152610a2c5160b66109ec5103610a0c51016109cc516104600137610a2c5160b66109ec5103610a0c510101610a0c526020610a2c51016109cc51016109cc5261027f565bfe5b5b5b81516001018083528114156100a4575b5050601f6109ac511115155857602060206109ac5102016109005260206109005103610a0c5261022060016064818352015b6000610a0c5112156102d45761030a565b61090051610a0c516040015101610a0c51610900516104400301526020610a0c5103610a0c5281516001018083528114156102c3575b50506109cc516109005101610420526109cc5161090051016109005161044003f35b61000461033003610004600039610004610330036000f31b2d4f"  # NOQA
 VYPER_RLP_DECODER_TX_SENDER = "0x39ba083c30fCe59883775Fc729bBE1f9dE4DEe11"
@@ -54,6 +55,10 @@ DEPOSIT_AMOUNTS = [
     2000 * 10**18,
     # 1000 * 10**18,
 ]
+
+
+setattr(eth_tester.backends.pyevm.main, 'GENESIS_GAS_LIMIT', 10**9)
+setattr(eth_tester.backends.pyevm.main, 'GENESIS_DIFFICULTY', 1)
 
 
 @pytest.fixture
@@ -237,10 +242,6 @@ def casper_args(casper_config,
     ]
 
 
-setattr(eth_tester.backends.pyevm.main, 'GENESIS_GAS_LIMIT', 10**9)
-setattr(eth_tester.backends.pyevm.main, 'GENESIS_DIFFICULTY', 1)
-
-
 @pytest.fixture
 def base_tester():
     return EthereumTester(PyEVMBackend())
@@ -258,31 +259,37 @@ def w3(base_tester):
 
 
 @pytest.fixture
-def tester(
-        w3,
-        base_tester,
-        casper_args,
-        casper_code,
-        casper_abi,
-        casper_address,
-        deploy_rlp_decoder,
-        deploy_msg_hasher,
-        deploy_purity_checker,
-        base_sender,
-        initialize_contract=True):
+def tester(w3,
+           base_tester,
+           casper_args,
+           casper_code,
+           casper_abi,
+           casper_address,
+           deploy_rlp_decoder,
+           deploy_msg_hasher,
+           deploy_purity_checker,
+           base_sender,
+           initialize_contract=True):
     deploy_rlp_decoder()
     deploy_msg_hasher()
     deploy_purity_checker()
 
     # NOTE: bytecode cannot be compiled before RLP Decoder is deployed to chain
     # otherwise, vyper compiler cannot properly embed RLP decoder address
-    casper_bytecode = compiler.compile(casper_code)
+    casper_bytecode = compiler.compile(casper_code, bytecode_runtime=True)
 
-    Casper = w3.eth.contract(abi=casper_abi, bytecode=casper_bytecode)
-    tx_hash = Casper.constructor().transact({'from': base_sender})
-    tx_receipt = w3.eth.getTransactionReceipt(tx_hash)
+    chain = base_tester.backend.chain
+    vm = chain.get_vm()
 
-    assert tx_receipt.contractAddress == casper_address
+    vm.state.account_db.set_code(Web3.toBytes(hexstr=casper_address), casper_bytecode)
+    vm.state.account_db.persist()
+    new_state_root = vm.state.account_db.state_root
+
+    new_header = chain.header.copy(state_root=new_state_root)
+    chain.header = new_header
+
+    # mine block to ensure we don't have mismatched state
+    base_tester.mine_block()
 
     # Casper contract needs money for its activity
     w3.eth.sendTransaction({
@@ -353,8 +360,8 @@ def casper_abi(casper_code):
 
 
 @pytest.fixture
-def casper_address(next_contract_address, base_sender):
-    return next_contract_address(base_sender)
+def casper_address():
+    return CASPER_ADDRESS
 
 
 @pytest.fixture
