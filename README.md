@@ -90,6 +90,9 @@ from vyper import (
 
 ### Step 2: Raise the Gas Limit
 
+The casper contract costs alot of gas for all its tasks. When you deploy the contract via a normal create transaction, make sure that the block gas limit is high enough. 
+
+
 ```bash
 setattr(eth_tester.backends.pyevm.main, 'GENESIS_GAS_LIMIT', 10**9) ## it costs a lot of gas to deploy the casper contract, so set a high gas limit
 ```
@@ -106,7 +109,7 @@ w3.eth.setGasPriceStrategy(0)
 NOTE: In addition to the two helper contracts `msg_hasher` and `purity_checker` you also need to deploy the `rlp_decoder` Contract. On a production chain, an `rlp_decoder` contract is already deployed and vyper’s standard internal library knows it’s address and gives vyper contracts access to some functionality at that address.
 **When using a test chain, these helper contract must be deployed before the casper contract.**
 
-NOTE: these helper contracts are currently written in serpenat, so until they are converted to Vyper it is best to use the hardcoded transaction hex below. 
+NOTE: These helper contracts can be deployed via the below pre-signed txs. Instructions for compiling and deploying via other methods will soon be available.
 
 #### Define Address & Transaction Hex
 ```bash  
