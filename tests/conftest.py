@@ -28,6 +28,8 @@ from web3.providers.eth_tester import (
     EthereumTesterProvider,
 )
 
+IS_SOL_TEST = 0
+
 OWN_DIR = os.path.dirname(os.path.realpath(__file__))
 
 GAS_PRICE = 25 * 10 ** 9
@@ -280,8 +282,9 @@ def tester(
     casper_bytecode = compiler.compile(casper_code)
 
     # for solidity
-    sol_output = casper_sol_output()
-    casper_bytecode = Web3.toBytes(hexstr=casper_sol_bytecode(sol_output))
+    if IS_SOL_TEST:
+        sol_output = casper_sol_output()
+        casper_bytecode = Web3.toBytes(hexstr=casper_sol_bytecode(sol_output))
 
     Casper = w3.eth.contract(abi=casper_abi, bytecode=casper_bytecode)
     tx_hash = Casper.constructor().transact({'from': base_sender})
@@ -297,15 +300,18 @@ def tester(
 
     if initialize_contract:
         casper_contract = casper(w3, base_tester, casper_abi, casper_address)
-        # casper_contract.functions.init(*casper_args).transact()
 
         # for sol casper.
-        tx = casper_contract.functions.init(*casper_args).buildTransaction()
-        sol_func_id = function_id("init(int128,int128,int128,int128,address,address,uint256,uint256,uint256)")
-        tx["data"] = sol_func_id + tx["data"][10:] # replace sol funcid.
-        tx["gas"] = 30000000 # buildTransaction return defaul gas is 30000. it is far from enougth!!!!!
-        print(tx)
-        w3.eth.sendTransaction(tx)
+        if IS_SOL_TEST:
+            tx = casper_contract.functions.init(*casper_args).buildTransaction()
+            sol_func_id = function_id("init(int128,int128,int128,int128,address,address,uint256,uint256,uint256)")
+            tx["data"] = sol_func_id + tx["data"][10:] # replace sol funcid.
+            tx["gas"] = 30000000 # buildTransaction return defaul gas is 30000. it is far from enougth!!!!!
+            print(tx)
+            w3.eth.sendTransaction(tx)
+        else:
+            casper_contract.functions.init(*casper_args).transact()
+
     return base_tester
 
 
@@ -364,8 +370,8 @@ def casper_code():
 
 @pytest.fixture
 def casper_abi(casper_code):
-     return compiler.mk_full_signature(casper_code)
-    # return casper_sol_abi(casper_sol_output())
+    return compiler.mk_full_signature(casper_code)
+
 
 
 @pytest.fixture
@@ -453,43 +459,6 @@ def get_sol_dirs(path):
     extra_args = ' '.join(['{}={}'.format(d.split('/')[-1], d) for d in sub_dirs])
     path = '{}/{}'.format(abs_contract_path, path)
     return path, extra_args[len("contracts="):]
-
-
-def casper_sol_compile():
-    paths = get_sol_dirs("SimpleCasper.sol")
-    return compile_standard({
-        'language': 'Solidity',
-        'sources': {
-            'SimpleCasper.sol': {
-                'urls': [
-                    paths[0]
-                ]
-            },
-            'RLP.sol': {
-                'urls': [
-                    get_sol_dirs("RLP.sol")[0]
-                ]
-            },
-            'Decimal.sol': {
-                'urls': [
-                    get_sol_dirs("Decimal.sol")[0]
-                ]
-            },
-            'SafeMath.sol': {
-                'urls': [
-                    get_sol_dirs("SafeMath.sol")[0]
-                ]
-            }
-        },
-        "settings": {
-            "evmVersion": "byzantium",
-            "outputSelection": {
-                "SimpleCasper.sol": {
-                    "*": ["abi", "evm.bytecode", "evm.gasEstimates"]
-                }
-            }
-        }
-    }, allow_paths=paths[1])
 
 
 # Note: If called during "warm_up-period", new_epoch mines all the way through
