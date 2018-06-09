@@ -84,8 +84,8 @@ contract SimpleCasper {
         uint cur_dyn_deposits; // : wei_value,
         uint prev_dyn_deposits; // : wei_value,
         // track total votes for each dynasty
-        Decimal.Data[] cur_dyn_votes; // : decimal(wei / m)[int128],
-        Decimal.Data[] prev_dyn_votes; // : decimal(wei / m)[int128],
+        uint256[] cur_dyn_votes; // : decimal(wei / m)[int128],
+        uint256[] prev_dyn_votes; // : decimal(wei / m)[int128],
         // Bitmap of which validator IDs have already voted
         int128[] vote_bitmap; // : int128[int128],
         // Is a vote referencing the given epoch justified?
@@ -161,12 +161,8 @@ contract SimpleCasper {
     }
 
     // To avoid tuple, and it produce same code of vyper compiler.
-    function validators__deposite_num(int128 arg0) public view returns (uint) {
-        return _validators[uint256(arg0)].deposit.num;
-    }
-
-    function validators__deposite_den(int128 arg0) public view returns (uint) {
-        return _validators[uint256(arg0)].deposit.den;
+    function validators__deposit(int128 arg0) public view returns (uint) {
+        return _validators[uint256(arg0)].deposit.toDecimal();
     }
 
     function validators__start_dynasty(int128 arg0) public view returns (int128) {
@@ -212,7 +208,7 @@ contract SimpleCasper {
         require(withdrawal_delay >= 0);
         require(dynasty_logout_delay >= 2);
         require(uint168(base_interest_factor) > 0);
-        require(uint168(base_penalty_factor)> 0);
+        require(uint168(base_penalty_factor) > 0);
         require(min_deposit_size > 0);
 
         initialized = true;
@@ -351,8 +347,8 @@ contract SimpleCasper {
             return Decimal.fromUint(0);
         }
         // Fraction that voted
-        Decimal.Data memory cur_vote_frac = checkpoints[epoch - 1].cur_dyn_votes[uint256(expected_source_epoch)].div(total_curdyn_deposits);
-        Decimal.Data memory prev_vote_frac = checkpoints[epoch - 1].prev_dyn_votes[uint256(expected_source_epoch)].div(total_prevdyn_deposits);
+        Decimal.Data memory cur_vote_frac = Decimal.fromDecimal(checkpoints[epoch - 1].cur_dyn_votes[uint256(expected_source_epoch)]).div(total_curdyn_deposits);
+        Decimal.Data memory prev_vote_frac = Decimal.fromDecimal(checkpoints[epoch - 1].prev_dyn_votes[uint256(expected_source_epoch)]).div(total_prevdyn_deposits);
         Decimal.Data memory vote_frac = min(cur_vote_frac, prev_vote_frac);
         return vote_frac.mul(reward_factor).div(Decimal.fromUint(2));
     }
@@ -417,9 +413,9 @@ contract SimpleCasper {
 
     // line:296 wanna return decimal but solidity not defined it type.....
     function main_hash_voted_frac() public constant returns (uint256) {
-        Decimal.Data memory cur_dyn_vote = checkpoints[uint256(current_epoch)].cur_dyn_votes[uint256(expected_source_epoch)];
+        Decimal.Data memory cur_dyn_vote = Decimal.fromDecimal(checkpoints[uint256(current_epoch)].cur_dyn_votes[uint256(expected_source_epoch)]);
         cur_dyn_vote = cur_dyn_vote.div(total_curdyn_deposits);
-        Decimal.Data memory prev_dyn_vote = checkpoints[uint256(current_epoch)].prev_dyn_votes[uint256(expected_source_epoch)];
+        Decimal.Data memory prev_dyn_vote = Decimal.fromDecimal(checkpoints[uint256(current_epoch)].prev_dyn_votes[uint256(expected_source_epoch)]);
         prev_dyn_vote = prev_dyn_vote.div(total_prevdyn_deposits);
         return min(cur_dyn_vote, prev_dyn_vote).toDecimal();
     }
@@ -777,15 +773,15 @@ contract SimpleCasper {
         shift(int128(1), int128(vm.validator_index % 256)));
 
         // Record that this vote took place
-        Decimal.Data memory current_dynasty_votes = checkpoints[uint256(vm.target_epoch)].cur_dyn_votes[uint256(vm.source_epoch)];
-        Decimal.Data memory previous_dynasty_votes = checkpoints[uint256(vm.target_epoch)].prev_dyn_votes[uint256(vm.source_epoch)];
+        Decimal.Data memory current_dynasty_votes = Decimal.fromDecimal(checkpoints[uint256(vm.target_epoch)].cur_dyn_votes[uint256(vm.source_epoch)]);
+        Decimal.Data memory previous_dynasty_votes = Decimal.fromDecimal(checkpoints[uint256(vm.target_epoch)].prev_dyn_votes[uint256(vm.source_epoch)]);
         if (in_current_dynasty) {
             current_dynasty_votes = current_dynasty_votes.add(_validators[uint256(vm.validator_index)].deposit);
-            checkpoints[uint256(vm.target_epoch)].cur_dyn_votes[uint256(vm.source_epoch)] = current_dynasty_votes;
+            checkpoints[uint256(vm.target_epoch)].cur_dyn_votes[uint256(vm.source_epoch)] = current_dynasty_votes.toDecimal();
         }
         if (in_prev_dynasty) {
             previous_dynasty_votes = previous_dynasty_votes.add(_validators[uint256(vm.validator_index)].deposit);
-            checkpoints[uint256(vm.target_epoch)].prev_dyn_votes[uint256(vm.source_epoch)] = previous_dynasty_votes;
+            checkpoints[uint256(vm.target_epoch)].prev_dyn_votes[uint256(vm.source_epoch)] = previous_dynasty_votes.toDecimal();
         }
         // Process rewards.
         // Pay the reward if the vote was submitted in time and the vote is voting the correct data
