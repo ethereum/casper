@@ -35,10 +35,10 @@ library Decimal {
     }
 
     // A decimal value can store multiples of 1/DECIMAL_DIVISOR
-    uint64 constant DECIMAL_DIVISOR = 10 ** 10;
+    uint256 public constant DECIMAL_DIVISOR = 10 ** 10;
 
     /** Creates a Decimal Data from a uint. */
-    function fromUint(uint num) internal pure returns (Data) {
+    function fromUint(uint256 num) internal pure returns (Data memory) {
         return Data({
             num : num,
             den : 1
@@ -46,7 +46,7 @@ library Decimal {
     }
 
     /** Creates a Decimal Data from a Decimal bytes. */
-    function fromDecimal(uint256 num) internal pure returns (Data) {
+    function fromDecimal(uint256 num) internal pure returns (Data memory) {
         return Data({
             num : num,
             den : DECIMAL_DIVISOR
@@ -54,17 +54,19 @@ library Decimal {
     }
 
     /** Converts a Decimal to a uint (effectively flooring the value). **/
-    function toUint(Data decimal) internal pure returns (uint) {
-        return decimal.num.div(decimal.den);
+    function toUint(Data memory self) internal pure returns (uint256) {
+        require(self.den > 0, "invalid zero divide.");
+        return self.num.div(self.den);
     }
 
     /** Converts to decimal by increasing up 10 digitsnum. the decimal is fi168x10 **/
-    function toDecimal(Data decimal) internal pure returns (uint256) {
-        return decimal.num.mul(DECIMAL_DIVISOR).div(decimal.den);
+    function toDecimal(Data memory self) internal pure returns (uint168) {
+        require(self.den > 0, "invalid zero divide.");
+        return uint168(self.num.mul(DECIMAL_DIVISOR).div(self.den));
     }
 
     /** Adds two Decimals without loss of precision. */
-    function add(Data a, Data b) internal pure returns (Data) {
+    function add(Data memory a, Data memory b) internal pure returns (Data memory) {
 
         return a.den == b.den ?
         // if same denomenator, use b.num as-is
@@ -81,8 +83,7 @@ library Decimal {
     }
 
     /** Subtracts two Decimals without loss of precision. */
-    function sub(Data a, Data b) internal pure returns (Data) {
-
+    function sub(Data memory a, Data memory b) internal pure returns (Data memory) {
         return a.den == b.den ?
         // if same denomenator, use b.num as-is
         Data({
@@ -98,7 +99,7 @@ library Decimal {
     }
 
     /** Multiplies two Decimals without loss of precision. */
-    function mul(Data a, Data b) internal pure returns (Data) {
+    function mul(Data memory a, Data memory b) internal pure returns (Data memory) {
         return Data({
             num : a.num.mul(b.num),
             den : a.den.mul(b.den)
@@ -106,7 +107,7 @@ library Decimal {
     }
 
     /** Divides two Decimals without loss of precision. */
-    function div(Data a, Data b) internal pure returns (Data) {
+    function div(Data memory a, Data memory b) internal pure returns (Data memory) {
         return Data({
             num : a.num.mul(b.den),
             den : b.num.mul(a.den)
@@ -119,7 +120,7 @@ library Decimal {
      *         1 is a = b
      *         2 is a > b
      */
-    function comp(Data a, Data b) internal pure returns (uint8) {
+    function comp(Data memory a, Data memory b) internal pure returns (uint8) {
         uint a_num = a.num * b.den;
         uint b_num = b.num * a.den;
         if (a_num < b_num) {
@@ -137,7 +138,7 @@ library Decimal {
      *         1 is a = 0
      *         2 is a > 0
      */
-    function compZero(Data a) internal pure returns (uint8) {
+    function compZero(Data memory a) internal pure returns (uint8) {
         if (a.num < 0) {
             return 0;
         } else if (a.num == 0) {

@@ -6,6 +6,7 @@ from decimal import (
 import eth_tester
 import pytest
 import rlp
+import sha3
 from eth_tester import (
     EthereumTester,
     PyEVMBackend
@@ -296,8 +297,15 @@ def tester(
 
     if initialize_contract:
         casper_contract = casper(w3, base_tester, casper_abi, casper_address)
-        casper_contract.functions.init(*casper_args).transact()
+        # casper_contract.functions.init(*casper_args).transact()
 
+        # for sol casper.
+        tx = casper_contract.functions.init(*casper_args).buildTransaction()
+        sol_func_id = function_id("init(int128,int128,int128,int128,address,address,uint256,uint256,uint256)")
+        tx["data"] = sol_func_id + tx["data"][10:] # replace sol funcid.
+        tx["gas"] = 30000000 # buildTransaction return defaul gas is 30000. it is far from enougth!!!!!
+        print(tx)
+        w3.eth.sendTransaction(tx)
     return base_tester
 
 
@@ -750,3 +758,9 @@ def casper_sol_bytecode(casper_sol_output):
 
 def casper_sol_abi(casper_sol_output):
     return casper_sol_output["contracts"]["SimpleCasper.sol"]["SimpleCasper"]["abi"]
+
+def function_id(signature):
+    k = sha3.keccak_256()
+    k.update(signature.encode("utf8"))
+    return '0x' + k.hexdigest()[:8]
+

@@ -6,6 +6,7 @@ import "./RLP.sol";
 
 
 contract SimpleCasper {
+    using SafeMath for uint;
     using Decimal for Decimal.Data;
     using RLP for bytes;
     using RLP for RLP.RLPItem;
@@ -100,7 +101,7 @@ contract SimpleCasper {
     bool public main_hash_justified; //: public(bool)
 
     // Value used to calculate the per-epoch fee that validators should be charged
-    Decimal.Data[] public deposit_scale_factor;// : public(decimal(m)[int128])
+    uint168[] public deposit_scale_factor;// : public(decimal(m)[int128])
 
     Decimal.Data public last_nonvoter_rescale; //: public(decimal)
     Decimal.Data public last_voter_rescale; //: public(decimal)
@@ -116,7 +117,7 @@ contract SimpleCasper {
     int128 public expected_source_epoch; //: public(int128)
 
     // Running total of deposits slashed
-    uint[] public total_slashed; //: public(wei_value[int128])
+    int128[] _total_slashed; //: public(wei_value[int128])
 
     // Flag that only allows contract initialization to happen once
     bool initialized; //: bool
@@ -153,11 +154,16 @@ contract SimpleCasper {
 
 
     constructor() public {
-
+        reward_factor = Decimal.fromUint(1);
     }
 
     function() public payable {
         // needs for deposit and initial wei value.
+    }
+
+    // need define the getter.
+    function total_slashed(int128 arg0) public view returns (int128) {
+        return _total_slashed[uint(arg0)];
     }
 
     // To avoid tuple, and it produce same code of vyper compiler.
@@ -233,7 +239,11 @@ contract SimpleCasper {
         dynasty = 0;
         current_epoch = START_EPOCH;
         // TODO: test deposit_scale_factor when deploying when current_epoch > 0
-        deposit_scale_factor[uint256(current_epoch)] = Decimal.fromUint(10000000000);
+        // allocation
+        while (deposit_scale_factor.length < uint(current_epoch + 1)) {
+            deposit_scale_factor.push(0);
+        }
+        deposit_scale_factor[uint256(current_epoch)] = Decimal.fromUint(10000000000).toDecimal();
         total_curdyn_deposits = Decimal.fromUint(0);
         total_prevdyn_deposits = Decimal.fromUint(0);
         DEFAULT_END_DYNASTY = 1000000000000000000000000000000;
@@ -286,7 +296,7 @@ contract SimpleCasper {
     function sqrt_of_total_deposits() private constant returns (Decimal.Data) {
         int128 epoch = current_epoch;
         Decimal.Data memory ether_deposited_as_number_decimal = max(total_prevdyn_deposits, total_curdyn_deposits);
-        ether_deposited_as_number_decimal = ether_deposited_as_number_decimal.mul(deposit_scale_factor[uint(epoch - 1)]);
+        ether_deposited_as_number_decimal = ether_deposited_as_number_decimal.mul(Decimal.fromDecimal(deposit_scale_factor[uint(epoch - 1)]));
         ether_deposited_as_number_decimal = ether_deposited_as_number_decimal.div(Decimal.fromUint(1 ether));
         uint ether_deposited_as_number = ether_deposited_as_number_decimal.toUint() + 1;
         Decimal.Data memory sqrt = Decimal.Data({
@@ -311,13 +321,17 @@ contract SimpleCasper {
     // Increment dynasty when checkpoint is finalized.
     // TODO : Might want to split out the cases separately.
     function increment_dynasty() private {
-        uint epoch = uint(current_epoch);
+        uint256 epoch = uint256(current_epoch);
         // Increment the dynasty if finalized
         if (checkpoints[epoch - 2].is_finalized) {
             dynasty += 1;
             total_prevdyn_deposits = total_curdyn_deposits;
             total_curdyn_deposits = total_curdyn_deposits.add(dynasty_wei_delta[uint256(dynasty)]);
             dynasty_start_epoch[uint256(dynasty)] = int128(epoch);
+        }
+        while (dynasty_in_epoch.length < epoch + 1) {
+            // TODO: allocate .... nosey....
+            dynasty_in_epoch.push(0);
         }
         dynasty_in_epoch[epoch] = dynasty;
         if (main_hash_justified) {
@@ -373,7 +387,7 @@ contract SimpleCasper {
             dynasty_wei_delta[uint256(end_dynasty)] = dynasty_wei_delta[uint256(end_dynasty)].sub(reward_decimal);
         }
         // Reward miner
-        reward_decimal = reward_decimal.mul(deposit_scale_factor[uint256(current_epoch)]).div(Decimal.fromUint(8));
+        reward_decimal = reward_decimal.mul(Decimal.fromDecimal(deposit_scale_factor[uint256(current_epoch)])).div(Decimal.fromUint(8));
         block.coinbase.transfer(reward_decimal.toUint());
     }
 
@@ -421,17 +435,17 @@ contract SimpleCasper {
     }
     // line:303
     function deposit_size(int128 validator_index) public constant returns (int128) {
-        return int128(_validators[uint256(validator_index)].deposit.mul(deposit_scale_factor[uint256(current_epoch)]).toUint());
+        return int128(_validators[uint256(validator_index)].deposit.mul(Decimal.fromDecimal(deposit_scale_factor[uint256(current_epoch)])).toUint());
     }
 
     // line:309
     function total_curdyn_deposits_in_wei() public constant returns (uint) {
-        return total_curdyn_deposits.mul(deposit_scale_factor[uint256(current_epoch)]).toUint();
+        return total_curdyn_deposits.mul(Decimal.fromDecimal(deposit_scale_factor[uint256(current_epoch)])).toUint();
     }
 
     // line:315
     function total_prevdyn_deposits_in_wei() public constant returns (uint) {
-        return total_prevdyn_deposits.mul(deposit_scale_factor[uint256(current_epoch)]).toUint();
+        return total_prevdyn_deposits.mul(Decimal.fromDecimal(deposit_scale_factor[uint256(current_epoch)])).toUint();
     }
 
     // original struct. Resolve over stack size.
@@ -592,15 +606,34 @@ contract SimpleCasper {
         require(uint256(epoch) <= computed_current_epoch && epoch == current_epoch + 1);
 
         // must track the deposits related to the checkpoint _before_ updating current_epoch
+        // TODO: allocation process tedious
+        Checkpoint memory cp;
+        while (checkpoints.length < uint256(epoch + 1)) {
+            //allocate
+            checkpoints.push(cp);
+        }
+        while (deposit_scale_factor.length < uint256(epoch + 1)) {
+            //allocate
+            deposit_scale_factor.push(0);
+        }
+        while (_total_slashed.length < uint256(epoch + 1)) {
+            //allocate
+            _total_slashed.push(0);
+        }
+
         checkpoints[uint256(epoch)].cur_dyn_deposits = total_curdyn_deposits_in_wei();
         checkpoints[uint256(epoch)].prev_dyn_deposits = total_prevdyn_deposits_in_wei();
 
         current_epoch = epoch;
 
         last_voter_rescale = Decimal.fromUint(1).add(collective_reward());
-        last_nonvoter_rescale = last_voter_rescale.div(Decimal.fromUint(1).add(reward_factor));
-        deposit_scale_factor[uint256(epoch)] = deposit_scale_factor[uint(epoch - 1)].mul(last_nonvoter_rescale);
-        total_slashed[uint256(epoch)] = total_slashed[uint(epoch - 1)];
+        Decimal.Data memory dividor = reward_factor.add(Decimal.fromUint(1));
+        last_nonvoter_rescale = last_voter_rescale.div(dividor);
+        require(last_nonvoter_rescale.den > 0);
+        Decimal.Data memory factor_decimal = Decimal.fromDecimal(deposit_scale_factor[uint(epoch - 1)]);
+        factor_decimal = factor_decimal.mul(last_nonvoter_rescale);
+        deposit_scale_factor[uint256(epoch)] = factor_decimal.toDecimal();
+        _total_slashed[uint256(epoch)] = _total_slashed[uint(epoch - 1)];
 
         if (deposit_exists()) {
             // Set the reward factor for the next epoch.
@@ -633,7 +666,7 @@ contract SimpleCasper {
         require(msg.value >= MIN_DEPOSIT_SIZE);
         int128 validator_index = next_validator_index;
         int128 start_dynasty = dynasty + 2;
-        Decimal.Data memory scaled_deposit = Decimal.fromUint(msg.value).div(deposit_scale_factor[uint256(current_epoch)]);
+        Decimal.Data memory scaled_deposit = Decimal.fromUint(msg.value).div(Decimal.fromDecimal(deposit_scale_factor[uint256(current_epoch)]));
         _validators[uint256(validator_index)] = Validator({
             deposit : scaled_deposit,
             start_dynasty : start_dynasty,
@@ -706,9 +739,9 @@ contract SimpleCasper {
         // Withdraw
         uint withdraw_amount = 0;
         if (!_validators[uint256(validator_index)].is_slashed) {
-            withdraw_amount = _validators[uint256(validator_index)].deposit.mul(deposit_scale_factor[uint256(end_epoch)]).toUint();
+            withdraw_amount = _validators[uint256(validator_index)].deposit.mul(Decimal.fromDecimal(deposit_scale_factor[uint256(end_epoch)])).toUint();
         } else {
-            uint recently_slashed = total_slashed[uint256(withdrawal_epoch)] - total_slashed[uint256(withdrawal_epoch - 2 * WITHDRAWAL_DELAY)];
+            uint recently_slashed = uint256(_total_slashed[uint256(withdrawal_epoch)]) - uint256(_total_slashed[uint256(withdrawal_epoch - 2 * WITHDRAWAL_DELAY)]);
             Decimal.Data memory fraction_to_slash = Decimal.Data({
                 num : recently_slashed * uint256(SLASH_FRACTION_MULTIPLIER),
                 den : _validators[uint256(validator_index)].total_deposits_at_logout
@@ -717,7 +750,7 @@ contract SimpleCasper {
             // can't withdraw a negative amount
             Decimal.Data memory fraction_to_withdraw = max((Decimal.fromUint(1).sub(fraction_to_slash)), Decimal.fromUint(0));
 
-            Decimal.Data memory deposit_size_decimal = _validators[uint256(validator_index)].deposit.mul(deposit_scale_factor[uint256(withdrawal_epoch)]);
+            Decimal.Data memory deposit_size_decimal = _validators[uint256(validator_index)].deposit.mul(Decimal.fromDecimal(deposit_scale_factor[uint256(withdrawal_epoch)]));
             withdraw_amount = deposit_size_decimal.mul(fraction_to_withdraw).toUint();
         }
         _validators[uint256(validator_index)].withdrawal_addr.transfer(withdraw_amount);
@@ -836,7 +869,7 @@ contract SimpleCasper {
         // Slash the offending validator, and give a 4% "finder's fee"
         int128 validator_deposit = deposit_size(validator_index);
         uint256 slashing_bounty = uint256(validator_deposit / 25);
-        total_slashed[uint256(current_epoch)] += uint256(validator_deposit);
+        _total_slashed[uint256(current_epoch)] += validator_deposit;
         _validators[uint256(validator_index)].is_slashed = true;
 
         // Log slashing
