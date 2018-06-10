@@ -28,7 +28,7 @@ from web3.providers.eth_tester import (
     EthereumTesterProvider,
 )
 
-IS_SOL_TEST = 0
+IS_SOL_TEST = 1
 
 OWN_DIR = os.path.dirname(os.path.realpath(__file__))
 

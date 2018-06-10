@@ -59,14 +59,14 @@ contract SimpleCasper {
     int128 public next_validator_index;
 
     // Mapping of validator's withdrawal address to their index number
-    address[] public validator_indexes;
+    mapping(address => int128) public validator_indexes;
 
     // Current dynasty, it measures the number of finalized checkpoints
     // in the chain from root to the parent of current block
     int128 public dynasty;
 
     // Map of the change to total deposits for specific dynasty public(decimal(wei / m)[int128])
-    Decimal.Data[] public dynasty_wei_delta;
+    Decimal.Data[] _dynasty_wei_delta;
 
     // Total scaled deposits in the current dynasty decimal(wei / m)
     Decimal.Data total_curdyn_deposits;
@@ -101,7 +101,7 @@ contract SimpleCasper {
     bool public main_hash_justified; //: public(bool)
 
     // Value used to calculate the per-epoch fee that validators should be charged
-    uint168[] public deposit_scale_factor;// : public(decimal(m)[int128])
+    Decimal.Data[] _deposit_scale_factor;// : public(decimal(m)[int128])
 
     Decimal.Data public last_nonvoter_rescale; //: public(decimal)
     Decimal.Data public last_voter_rescale; //: public(decimal)
@@ -164,6 +164,17 @@ contract SimpleCasper {
     // need define the getter.
     function total_slashed(int128 arg0) public view returns (int128) {
         return _total_slashed[uint(arg0)];
+    }
+
+    function dynasty_wei_delta(int128 arg0) public view returns(uint168) {
+        if(_dynasty_wei_delta.length <= uint(arg0)) {
+            return 0;
+        }
+        return _dynasty_wei_delta[uint(arg0)].toDecimal();
+    }
+
+    function deposit_scale_factor(int128 arg0) public view returns(uint168) {
+        return _deposit_scale_factor[uint(arg0)].toDecimal();
     }
 
     // To avoid tuple, and it produce same code of vyper compiler.
@@ -240,10 +251,10 @@ contract SimpleCasper {
         current_epoch = START_EPOCH;
         // TODO: test deposit_scale_factor when deploying when current_epoch > 0
         // allocation
-        while (deposit_scale_factor.length < uint(current_epoch + 1)) {
-            deposit_scale_factor.push(0);
+        if (_deposit_scale_factor.length < uint(current_epoch + 1)) {
+            _deposit_scale_factor.length = uint(current_epoch + 1);
         }
-        deposit_scale_factor[uint256(current_epoch)] = Decimal.fromUint(10000000000).toDecimal();
+        _deposit_scale_factor[uint256(current_epoch)] = Decimal.fromUint(10000000000);
         total_curdyn_deposits = Decimal.fromUint(0);
         total_prevdyn_deposits = Decimal.fromUint(0);
         DEFAULT_END_DYNASTY = 1000000000000000000000000000000;
@@ -296,7 +307,7 @@ contract SimpleCasper {
     function sqrt_of_total_deposits() private constant returns (Decimal.Data) {
         int128 epoch = current_epoch;
         Decimal.Data memory ether_deposited_as_number_decimal = max(total_prevdyn_deposits, total_curdyn_deposits);
-        ether_deposited_as_number_decimal = ether_deposited_as_number_decimal.mul(Decimal.fromDecimal(deposit_scale_factor[uint(epoch - 1)]));
+        ether_deposited_as_number_decimal = ether_deposited_as_number_decimal.mul(_deposit_scale_factor[uint(epoch - 1)]);
         ether_deposited_as_number_decimal = ether_deposited_as_number_decimal.div(Decimal.fromUint(1 ether));
         uint ether_deposited_as_number = ether_deposited_as_number_decimal.toUint() + 1;
         Decimal.Data memory sqrt = Decimal.Data({
@@ -326,7 +337,7 @@ contract SimpleCasper {
         if (checkpoints[epoch - 2].is_finalized) {
             dynasty += 1;
             total_prevdyn_deposits = total_curdyn_deposits;
-            total_curdyn_deposits = total_curdyn_deposits.add(dynasty_wei_delta[uint256(dynasty)]);
+            total_curdyn_deposits = total_curdyn_deposits.add(_dynasty_wei_delta[uint256(dynasty)]);
             dynasty_start_epoch[uint256(dynasty)] = int128(epoch);
         }
         while (dynasty_in_epoch.length < epoch + 1) {
@@ -384,17 +395,17 @@ contract SimpleCasper {
             total_prevdyn_deposits = total_prevdyn_deposits.add(reward_decimal);
         }
         if (end_dynasty < DEFAULT_END_DYNASTY) {// validator has submit `logout`
-            dynasty_wei_delta[uint256(end_dynasty)] = dynasty_wei_delta[uint256(end_dynasty)].sub(reward_decimal);
+            _dynasty_wei_delta[uint256(end_dynasty)] = _dynasty_wei_delta[uint256(end_dynasty)].sub(reward_decimal);
         }
         // Reward miner
-        reward_decimal = reward_decimal.mul(Decimal.fromDecimal(deposit_scale_factor[uint256(current_epoch)])).div(Decimal.fromUint(8));
+        reward_decimal = reward_decimal.mul(_deposit_scale_factor[uint256(current_epoch)]).div(Decimal.fromUint(8));
         block.coinbase.transfer(reward_decimal.toUint());
     }
 
     // Removes a validator from the validator pool
     // line:272
     function delete_validator(int128 validator_index) private {
-        validator_indexes[uint(_validators[uint256(validator_index)].withdrawal_addr)] = 0x00;
+        validator_indexes[_validators[uint256(validator_index)].withdrawal_addr] = 0x00;
         _validators[uint256(validator_index)] = Validator({
             deposit : Decimal.fromUint(0),
             start_dynasty : 0,
@@ -435,17 +446,17 @@ contract SimpleCasper {
     }
     // line:303
     function deposit_size(int128 validator_index) public constant returns (int128) {
-        return int128(_validators[uint256(validator_index)].deposit.mul(Decimal.fromDecimal(deposit_scale_factor[uint256(current_epoch)])).toUint());
+        return int128(_validators[uint256(validator_index)].deposit.mul(_deposit_scale_factor[uint256(current_epoch)]).toUint());
     }
 
     // line:309
     function total_curdyn_deposits_in_wei() public constant returns (uint) {
-        return total_curdyn_deposits.mul(Decimal.fromDecimal(deposit_scale_factor[uint256(current_epoch)])).toUint();
+        return total_curdyn_deposits.mul(_deposit_scale_factor[uint256(current_epoch)]).toUint();
     }
 
     // line:315
     function total_prevdyn_deposits_in_wei() public constant returns (uint) {
-        return total_prevdyn_deposits.mul(Decimal.fromDecimal(deposit_scale_factor[uint256(current_epoch)])).toUint();
+        return total_prevdyn_deposits.mul(_deposit_scale_factor[uint256(current_epoch)]).toUint();
     }
 
     // original struct. Resolve over stack size.
@@ -612,9 +623,9 @@ contract SimpleCasper {
             //allocate
             checkpoints.push(cp);
         }
-        while (deposit_scale_factor.length < uint256(epoch + 1)) {
+        if (_deposit_scale_factor.length < uint256(epoch + 1)) {
             //allocate
-            deposit_scale_factor.push(0);
+            _deposit_scale_factor.length = uint256(epoch + 1);
         }
         while (_total_slashed.length < uint256(epoch + 1)) {
             //allocate
@@ -630,9 +641,9 @@ contract SimpleCasper {
         Decimal.Data memory dividor = reward_factor.add(Decimal.fromUint(1));
         last_nonvoter_rescale = last_voter_rescale.div(dividor);
         require(last_nonvoter_rescale.den > 0);
-        Decimal.Data memory factor_decimal = Decimal.fromDecimal(deposit_scale_factor[uint(epoch - 1)]);
+        Decimal.Data memory factor_decimal = _deposit_scale_factor[uint(epoch - 1)];
         factor_decimal = factor_decimal.mul(last_nonvoter_rescale);
-        deposit_scale_factor[uint256(epoch)] = factor_decimal.toDecimal();
+        _deposit_scale_factor[uint256(epoch)] = factor_decimal;
         _total_slashed[uint256(epoch)] = _total_slashed[uint(epoch - 1)];
 
         if (deposit_exists()) {
@@ -662,11 +673,14 @@ contract SimpleCasper {
     function deposit(address validation_addr, address withdrawal_addr) public payable {
         //assert extract32(raw_call(PURITY_CHECKER, concat('\xa1\x90\x3e\xab', convert(validation_addr, 'bytes32')), gas=500000, outsize=32), 0) != convert(0, 'bytes32')
         require(PURITY_CHECKER.call.gas(500000)(bytes4(keccak256("submit(address)")), bytes32(validation_addr)));
-        require(validator_indexes[uint256(withdrawal_addr)] != 0x00);
+        require(validator_indexes[withdrawal_addr] == 0);
         require(msg.value >= MIN_DEPOSIT_SIZE);
         int128 validator_index = next_validator_index;
         int128 start_dynasty = dynasty + 2;
-        Decimal.Data memory scaled_deposit = Decimal.fromUint(msg.value).div(Decimal.fromDecimal(deposit_scale_factor[uint256(current_epoch)]));
+        Decimal.Data memory scaled_deposit = Decimal.fromUint(msg.value).div(_deposit_scale_factor[uint256(current_epoch)]);
+        if (_validators.length < uint256(validator_index + 1)) {
+            _validators.length = uint256(validator_index + 1);
+        }
         _validators[uint256(validator_index)] = Validator({
             deposit : scaled_deposit,
             start_dynasty : start_dynasty,
@@ -676,9 +690,14 @@ contract SimpleCasper {
             addr : validation_addr,
             withdrawal_addr : withdrawal_addr
             });
-        validator_indexes[uint256(withdrawal_addr)] = address(validator_index);
+        validator_indexes[withdrawal_addr] = validator_index;
         next_validator_index += 1;
-        dynasty_wei_delta[uint256(start_dynasty)] = dynasty_wei_delta[uint256(start_dynasty)].add(scaled_deposit);
+        if(_dynasty_wei_delta.length < uint(start_dynasty+1)) {
+            _dynasty_wei_delta.length = uint(start_dynasty+1);
+            _dynasty_wei_delta[uint256(start_dynasty)].den = 1;
+        }
+        Decimal.Data memory tmpdeci = _dynasty_wei_delta[uint256(start_dynasty)];
+        _dynasty_wei_delta[uint256(start_dynasty)] = _dynasty_wei_delta[uint256(start_dynasty)].add(scaled_deposit);
         // Log deposit event
         emit Deposit(
             withdrawal_addr,
@@ -716,7 +735,7 @@ contract SimpleCasper {
 
         _validators[uint256(validator_index)].end_dynasty = end_dynasty;
         _validators[uint256(validator_index)].total_deposits_at_logout = total_curdyn_deposits_in_wei();
-        dynasty_wei_delta[uint256(end_dynasty)] = dynasty_wei_delta[uint256(end_dynasty)].sub(_validators[uint256(validator_index)].deposit);
+        _dynasty_wei_delta[uint256(end_dynasty)] = _dynasty_wei_delta[uint256(end_dynasty)].sub(_validators[uint256(validator_index)].deposit);
 
         emit Logout(
             _validators[uint256(validator_index)].withdrawal_addr,
@@ -739,7 +758,7 @@ contract SimpleCasper {
         // Withdraw
         uint withdraw_amount = 0;
         if (!_validators[uint256(validator_index)].is_slashed) {
-            withdraw_amount = _validators[uint256(validator_index)].deposit.mul(Decimal.fromDecimal(deposit_scale_factor[uint256(end_epoch)])).toUint();
+            withdraw_amount = _validators[uint256(validator_index)].deposit.mul(_deposit_scale_factor[uint256(end_epoch)]).toUint();
         } else {
             uint recently_slashed = uint256(_total_slashed[uint256(withdrawal_epoch)]) - uint256(_total_slashed[uint256(withdrawal_epoch - 2 * WITHDRAWAL_DELAY)]);
             Decimal.Data memory fraction_to_slash = Decimal.Data({
@@ -750,7 +769,7 @@ contract SimpleCasper {
             // can't withdraw a negative amount
             Decimal.Data memory fraction_to_withdraw = max((Decimal.fromUint(1).sub(fraction_to_slash)), Decimal.fromUint(0));
 
-            Decimal.Data memory deposit_size_decimal = _validators[uint256(validator_index)].deposit.mul(Decimal.fromDecimal(deposit_scale_factor[uint256(withdrawal_epoch)]));
+            Decimal.Data memory deposit_size_decimal = _validators[uint256(validator_index)].deposit.mul(_deposit_scale_factor[uint256(withdrawal_epoch)]);
             withdraw_amount = deposit_size_decimal.mul(fraction_to_withdraw).toUint();
         }
         _validators[uint256(validator_index)].withdrawal_addr.transfer(withdraw_amount);
@@ -885,13 +904,13 @@ contract SimpleCasper {
         int128 end_dynasty = _validators[uint256(validator_index)].end_dynasty;
         if (dynasty < end_dynasty) {
             Decimal.Data memory deposit_decimal = _validators[uint256(validator_index)].deposit;
-            dynasty_wei_delta[uint256(dynasty) + 1] = dynasty_wei_delta[uint256(dynasty) + 1].sub(deposit_decimal);
+            _dynasty_wei_delta[uint256(dynasty) + 1] = _dynasty_wei_delta[uint256(dynasty) + 1].sub(deposit_decimal);
             _validators[uint256(validator_index)].end_dynasty = dynasty + 1;
 
             // if validator was already staged for logout at end_dynasty,
             // ensure that we don't doubly remove from total
             if (end_dynasty < DEFAULT_END_DYNASTY) {
-                dynasty_wei_delta[uint256(end_dynasty)] = dynasty_wei_delta[uint256(end_dynasty)].add(deposit_decimal);
+                _dynasty_wei_delta[uint256(end_dynasty)] = _dynasty_wei_delta[uint256(end_dynasty)].add(deposit_decimal);
                 // if no previously logged out, remember the total deposits at logout
             } else {
                 _validators[uint256(validator_index)].total_deposits_at_logout = total_curdyn_deposits_in_wei();
