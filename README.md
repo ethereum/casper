@@ -23,15 +23,19 @@ For macOS, with [brew](https://brew.sh/) installed:
 brew install pandoc # required for a python dependency
 ```
 
+NOTE: we suggest using virtualenv to sandbox your setup.
+
+```bash
+virtualenv venv
+. /venv/bin/activate
+```
+
 For all systems:
 
 ```bash
 pip3 install -r requirements.txt
 ```
-
 NOTE: pip3 is a version of pip using python version 3.
-
-NOTE: we suggest using virtualenv to sandbox your setup.
 
 ## Usage
 
@@ -43,13 +47,13 @@ NOTE: we suggest using virtualenv to sandbox your setup.
 pytest tests
 ```
 
-## Version of Vyper to Compile Casper
+## Vyper Version to Compile Casper
 
-We recommend using the vyper version installed as a dependency from requirements.txt. 
+We recommend using the Vyper version installed as a dependency from requirements.txt.
 
-NOTE: The latest version of Vyper throws an error (line 16) when compiling the Casper contract due to a syntax change of "units".
+NOTE: The latest version of Vyper throws an error when compiling the Casper contract due to syntax changes.
 
-NOTE: This not needed if steps above followed
+Installing this version separately is not necessary if the steps above are followed.
 
 ```bash
 git clone https://github.com/ethereum/vyper.git@248c723288e84899908048efff4c3e0b12f0b3dc
@@ -59,36 +63,24 @@ The guide on how to install Vyper can be found [here](https://github.com/ethereu
 
 ## How to Build and Deploy Casper Contract
 
-In this example we will be using [eth-tester](https://github.com/ethereum/eth-tester).
-
-#### Step 1: Requirements
-
-Specifics (imports, web3 Instance) Deploying the contract depends on the framework. Make sure to import all necessary packages (decimal, web3, vyper, eth_tester, ...). 
-
-We assume, you already set-up the environment and that you are able to connect to a runnning node via web3.
-
-#### Create an Instance of Web3 (eth-tester)
-
 You need a running web3 instance to connect to the Ethereum network. The web3 object is required to interact with the network. More information:
 [Link to the web3.py documentation.](https://github.com/ethereum/web3.py)
 
-We will later refer to the Web3 instance `w3`: 
-```bash
-w3 = Web3(PUT_YOUR_PROVIDER_HERE) ## Create an instance of the web3 object
-```
+We will later refer to the Web3 instance as `w3`.
 
-### Step 2: Raise the Gas Limit
+NOTE: The Examples are given using web3.py, so some commands will be slightly different in other web3 versions.
 
-The casper contract costs alot of gas for all its tasks. When you deploy the contract via a normal create transaction, make sure that the block gas limit is high enough. We initially set the limit to 1GW(`10**9 wei`)
+### Step 1: Raise the Gas Limit
 
+The Casper contract is very large and uses a lot of gas to be deployed. When you deploy the contract via a normal create transaction, make sure that the block gas limit is high enough. It is recommended to set the block gas limit to `10**9 wei`.
 
-### Step 4: Deploy Helper Contracts
+### Step 2: Deploy Helper Contracts
 
-NOTE: In addition to the two helper contracts `msg_hasher` and `purity_checker` you also need to deploy the `rlp_decoder` Contract. On a production chain, an `rlp_decoder` contract is already deployed and vyper’s standard internal library knows it’s address and gives vyper contracts access to some functionality at that address. 
+NOTE: In addition to the two helper contracts `msg_hasher` and `purity_checker` you also need to deploy the `rlp_decoder` contract. On a production chain, the `rlp_decoder` contract is already deployed and Vyper’s standard internal library knows its address and gives Vyper contracts access to some functionality at that address.
 
-**When using a test chain, these helper contract must be deployed before the casper contract. `rlp_decoder` must be deployed before compiling the casper contract**
+**When using a test chain, these helper contracts must ALL be deployed before the Casper contract. The `rlp_decoder` should be deployed first.**
 
-NOTE: These helper contracts can be deployed via the below pre-signed txs. Instructions for compiling and deploying via other methods will soon be available.
+NOTE: These helper contracts can be deployed via the pre-signed txs below. Instructions for compiling and deploying via other methods will soon be available, as these contracts are currently written in Serpent, and are in the process of being rewritten in Vyper LLL.
 
 #### Define Address & Transaction Hex
 
@@ -110,6 +102,8 @@ PURITY_CHECKER_TX_HEX = "0xf90467808506fc23ac00830583c88080b904546104428061000e6
 
 #### Fund Senders of Contract With 0.1 Ether to Deploy TXs
 
+You need to fund the accounts defined above to deploy the helper contracts byte-code, as the transactions are already signed by those accounts defined above. You may also choose to re-sign the contracts with your own account(s).
+
 ```bash
 w3.eth.sendTransaction({'to': VYPER_RLP_DECODER_TX_SENDER, 'value': 10**17})
 w3.eth.sendTransaction({'to': PURITY_CHECKER_TX_SENDER, 'value': 10**17})
@@ -117,6 +111,9 @@ w3.eth.sendTransaction({'to': MSG_HASHER_TX_SENDER, 'value': 10**17})
 ```
 
 #### Deploy Dependency Contracts
+
+Once the accounts are funded, the transactions are deployed as follows:
+First you *sendRawTransaction*, then *getTransactionReceipt*, and finally get the addresses the contracts are deployed at. Theses addresses are necessary for the Casper contract.
 
 ```bash
 rlp_tx_hash = w3.eth.sendRawTransaction(VYPER_RLP_DECODER_TX_HEX)
@@ -132,8 +129,7 @@ purity_receipt = w3.eth.getTransactionReceipt(purity_tx_hash)
 purity_checker_address = purity_receipt.contractAddress
 ```
 
-### Step 5: Casper Parameters
-
+### Step 3: Defining Casper Parameters
 
 [Detailed Explaination of Casper Parameters](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1011.md#casper-contract-params)
 
@@ -147,58 +143,80 @@ BASE_PENALTY_FACTOR = Decimal('0.002')
 MIN_DEPOSIT_SIZE = 1000 * 10**18  # 1000 ether
 ```
 
-### Step 6: Compiling and Deploying Casper
+### Step 4: Compile the Capser Contract
 
-Before deploying the contract, we need to compile it and retrieve the bytecode as well as the abi. 
+Before deploying the contract, we need to compile it and retrieve the byte-code as well as the abi.
 
-NOTE: You need the specific version of vyper in order to compile the current contract without errors (see above)
+NOTE: You need the specific version of Vyper in order to compile the current contract without errors (see above).
 
-move to the directory where the `simple_casper` contract is stored.
+Navigate to the directory where the `simple_casper.v.py` contract is stored (inside /casper/casper/contracts).
 
-Command to get the `casper_bytecode`
-```console
-vyper simple_casper.v.py
-```
-Command to get the `casper_abi`
+Generate the `casper_bytecode`:
 
 ```console
-vyper -f abi simple_casper.v.py
+$ vyper simple_casper.v.py
+```
+Generate the `casper_abi`:
+
+```console
+$ vyper -f abi simple_casper.v.py
 ```
 
-Now you can create the Casper contract 
+NOTE: The output from these commands must be stored somewhere in order to deploy.
+
+### Step 5: Deploy the Casper Contract
+
+First you need to make sure you have sufficient funds in your `base_sender` account to deploy the Casper contract.
+
+You must also define the null_sender. In [EIP1011](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1011.md) null_sender is defined as `2**160-1` converted into HEX. But for testing purposes it may be sufficient to use a preexisting known address as the null_sender.
+
+```bash
+base_sender = ADDRESS_TO_DEPLOY_CASPER_CONTRACT #ensure account has enough Ether
+null_sender = '0xffffffffffffffffffffffffffffffffffffffff'
+#for testing purposes you may need to set the null_sender address to one of your own addresses
+```
+Create the contract object with the abi, and the byte-code generated in step 4.
 
 ```bash
 Casper = w3.eth.contract(abi=casper_abi, bytecode=casper_bytecode)
 ```
 
-Deploy the contract and make sure you send enough gas along. We recommend to set the gas limit to `10**7` gas. Make sure that your `base_sender` address has enough ether. 
-
-```console
-Casper.constructor().transact({'from': base_sender, 'gas': 10**7}) #deploy casper contract
-```
+Deploy the contract and make sure you send enough gas. We recommend to set the gas limit to `10**7`. This will return the transaction hash of the Casper contract.
 
 ```bash
+tx_hash = Casper.constructor().transact({'from': base_sender, 'gas': 10**7}) #deploy Casper contract
+```
+Use the transaction hash to retrieve the transaction receipt.
 
-casper_bytecode = compiler.compile(casper_code) #using vyper
-casper_abi = compiler.mk_full_signature(casper_code) #using vyper
-base_sender = base_tester.get_accounts()[-1] #account created by eth-tester containing 1 million eth
-null_sender = base_tester.get_accounts()[-2]
-
-Casper = w3.eth.contract(abi=casper_abi, bytecode=casper_bytecode) #cteates casper contract object
-tx_hash = Casper.constructor().transact({'from': base_sender}) #deploy casper contract
+```bash
 tx_receipt = w3.eth.getTransactionReceipt(tx_hash)
+```
+Use the transaction receipt object to get the address of the deployed Casper contract.
 
+```bash
 casper_address = tx_receipt.contractAddress
-
-w3.eth.sendTransaction({'to': casper_address, 'value': 10**21})
-
-casper_contract = w3.eth.contract(address=casper_address, abi=casper_abi)
-
-casper_args = [EPOCH_LENGTH, WARM_UP_PERIOD, WITHDRAWAL_DELAY, DYNASTY_LOGOUT_DELAY, msg_hasher_address, purity_checker_address, null_sender, BASE_INTEREST_FACTOR, BASE_PENALTY_FACTOR, MIN_DEPOSIT_SIZE]
-
-casper_contract.functions.init(*casper_args).transact()
 ```
 
+### Step 6: Init Casper Contract
+
+Fund the Casper Contract.
+
+```bash
+w3.eth.sendTransaction({'to': casper_address, 'value': 10**21}) # funds the Casper contract with 1000 Ether
+```
+Retrieve the deployed Casper object from your network.
+
+```bash
+casper_contract = w3.eth.contract(address=casper_address, abi=casper_abi)
+```
+
+Pass in the Casper parameters and call the init function.
+
+```bash
+casper_args = [EPOCH_LENGTH, WARM_UP_PERIOD, WITHDRAWAL_DELAY, DYNASTY_LOGOUT_DELAY, msg_hasher_address, purity_checker_address, null_sender, BASE_INTEREST_FACTOR, BASE_PENALTY_FACTOR, MIN_DEPOSIT_SIZE]
+
+casper_contract.functions.init(*casper_args).transact() # initialize the Casper contract with the previously defined Casper parameters
+```
 
 ## Contribute
 
