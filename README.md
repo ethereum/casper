@@ -30,12 +30,12 @@ pip3 install -r requirements.txt
 ```
 
 NOTE: pip3 is a version of pip using python version 3.
+
 NOTE: we suggest using virtualenv to sandbox your setup.
 
 ## Usage
 
-- [VALIDATOR_GUIDE.md](https://github.com/ethereum/casper/blob/master/VALIDATOR_GUIDE.md):
-information about implementing a Casper FFG validator.
+- [VALIDATOR_GUIDE.md](https://github.com/ethereum/casper/blob/master/VALIDATOR_GUIDE.md) : Information about implementing a Casper FFG validator.
 
 ## Tests
 
@@ -44,21 +44,25 @@ pytest tests
 ```
 
 ## Version of Vyper to Compile Casper
+
 We recommend using the vyper version installed as a dependency from requirements.txt. 
+
 NOTE: The latest version of Vyper throws an error (line 16) when compiling the Casper contract due to a syntax change of "units".
-NOTE: this not needed if steps above followed
+
+NOTE: This not needed if steps above followed
+
 ```bash
 git clone https://github.com/ethereum/vyper.git@248c723288e84899908048efff4c3e0b12f0b3dc
 ```
-The guide on how to install Vyper can be found [here](https://github.com/ethereum/vyper#installation).
 
+The guide on how to install Vyper can be found [here](https://github.com/ethereum/vyper#installation).
 
 ## How to Build and Deploy Casper Contract
 
 In this example we will be using [eth-tester](https://github.com/ethereum/eth-tester).
 
-
 ### Step 1: Imports
+
 ```bash
 import os
 import rlp
@@ -94,11 +98,12 @@ The casper contract costs alot of gas for all its tasks. When you deploy the con
 
 
 ```bash
-setattr(eth_tester.backends.pyevm.main, 'GENESIS_GAS_LIMIT', 10**9) ## it costs a lot of gas to deploy the casper contract, so set a high gas limit
+setattr(eth_tester.backends.pyevm.main, 'GENESIS_GAS_LIMIT', 10**9)
 ```
 ### Step 3: Create an Instance of Web3 (eth-tester)
 
 [Link to the web3.py documentation.](https://github.com/ethereum/web3.py)
+
 ```bash
 base_tester = EthereumTester(PyEVMBackend())  ## instantiates the eth-test suite 
 w3 = Web3(EthereumTesterProvider(base_tester)) ## Create an instance of the web3 object
@@ -106,12 +111,15 @@ w3.eth.setGasPriceStrategy(0)
 ```
 
 ### Step 4: Deploy Helper Contracts
+
 NOTE: In addition to the two helper contracts `msg_hasher` and `purity_checker` you also need to deploy the `rlp_decoder` Contract. On a production chain, an `rlp_decoder` contract is already deployed and vyper’s standard internal library knows it’s address and gives vyper contracts access to some functionality at that address.
+
 **When using a test chain, these helper contract must be deployed before the casper contract.**
 
 NOTE: These helper contracts can be deployed via the below pre-signed txs. Instructions for compiling and deploying via other methods will soon be available.
 
 #### Define Address & Transaction Hex
+
 ```bash  
 VYPER_RLP_DECODER_TX_SENDER = "0x39ba083c30fCe59883775Fc729bBE1f9dE4DEe11"
 
@@ -129,6 +137,7 @@ PURITY_CHECKER_TX_HEX = "0xf90467808506fc23ac00830583c88080b904546104428061000e6
 ```
 
 #### Fund Senders of Contract With 0.1 Ether to Deploy TXs
+
 ```bash
 w3.eth.sendTransaction({'to': VYPER_RLP_DECODER_TX_SENDER, 'value': 10**17})
 w3.eth.sendTransaction({'to': PURITY_CHECKER_TX_SENDER, 'value': 10**17})
@@ -136,6 +145,7 @@ w3.eth.sendTransaction({'to': MSG_HASHER_TX_SENDER, 'value': 10**17})
 ```
 
 #### Deploy Dependency Contracts
+
 ```bash
 rlp_tx_hash = w3.eth.sendRawTransaction(VYPER_RLP_DECODER_TX_HEX)
 rlp_receipt = w3.eth.getTransactionReceipt(rlp_tx_hash)
@@ -151,6 +161,7 @@ purity_checker_address = purity_receipt.contractAddress
 ```
 
 ### Step 5: Casper Parameters
+
 [Detailed Explaination of Casper Parameters](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1011.md#casper-contract-params)
 
 ```bash
@@ -161,11 +172,10 @@ DYNASTY_LOGOUT_DELAY = 5
 BASE_INTEREST_FACTOR = Decimal('0.02')
 BASE_PENALTY_FACTOR = Decimal('0.002')
 MIN_DEPOSIT_SIZE = 1000 * 10**18  # 1000 ether
-
-casper_args = [EPOCH_LENGTH, WARM_UP_PERIOD, WITHDRAWAL_DELAY, DYNASTY_LOGOUT_DELAY, msg_hasher_address, purity_checker_address, BASE_INTEREST_FACTOR, BASE_PENALTY_FACTOR, MIN_DEPOSIT_SIZE]
 ```
 
 ### Step 6: Compiling and Deploying Casper
+
 ```bash
 
 file = open(os.getcwd()+('/casper/contracts/simple_casper.v.py')) #this will change depending on where the casper contract is located relative to your current working directory
@@ -174,7 +184,7 @@ casper_code = file.read()
 casper_bytecode = compiler.compile(casper_code) #using vyper
 casper_abi = compiler.mk_full_signature(casper_code) #using vyper
 base_sender = base_tester.get_accounts()[-1] #account created by eth-tester containing 1 million eth
-
+null_sender = base_tester.get_accounts()[-2]
 
 Casper = w3.eth.contract(abi=casper_abi, bytecode=casper_bytecode) #cteates casper contract object
 tx_hash = Casper.constructor().transact({'from': base_sender}) #deploy casper contract
@@ -185,6 +195,9 @@ casper_address = tx_receipt.contractAddress
 w3.eth.sendTransaction({'to': casper_address, 'value': 10**21})
 
 casper_contract = w3.eth.contract(address=casper_address, abi=casper_abi)
+
+casper_args = [EPOCH_LENGTH, WARM_UP_PERIOD, WITHDRAWAL_DELAY, DYNASTY_LOGOUT_DELAY, msg_hasher_address, purity_checker_address, null_sender, BASE_INTEREST_FACTOR, BASE_PENALTY_FACTOR, MIN_DEPOSIT_SIZE]
+
 casper_contract.functions.init(*casper_args).transact()
 ```
 
