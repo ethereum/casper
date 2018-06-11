@@ -154,26 +154,31 @@ contract SimpleCasper {
 
 
     constructor() public {
-        reward_factor = Decimal.fromUint(1);
+        reward_factor = Decimal.fromUint(0);
     }
 
     function() public payable {
         // needs for deposit and initial wei value.
     }
 
+    function _initDecimalAt(Decimal.Data[] storage ds, uint _index) private {
+        while (ds.length < _index + 1) {
+            ds.push(Decimal.fromUint(0));
+        }
+    }
     // need define the getter.
     function total_slashed(int128 arg0) public view returns (int128) {
         return _total_slashed[uint(arg0)];
     }
 
-    function dynasty_wei_delta(int128 arg0) public view returns(uint168) {
-        if(_dynasty_wei_delta.length <= uint(arg0)) {
+    function dynasty_wei_delta(int128 arg0) public view returns (uint168) {
+        if (_dynasty_wei_delta.length <= uint(arg0)) {
             return 0;
         }
         return _dynasty_wei_delta[uint(arg0)].toDecimal();
     }
 
-    function deposit_scale_factor(int128 arg0) public view returns(uint168) {
+    function deposit_scale_factor(int128 arg0) public view returns (uint168) {
         return _deposit_scale_factor[uint(arg0)].toDecimal();
     }
 
@@ -204,6 +209,13 @@ contract SimpleCasper {
 
     function validators__withdrawal_addr(int128 arg0) public view returns (address) {
         return _validators[uint256(arg0)].withdrawal_addr;
+    }
+
+    function checkpoints__cur_dyn_deposits(int128 arg0) public view returns(int128) {
+        return int128(checkpoints[uint(arg0)].cur_dyn_deposits);
+    }
+    function checkpoints__prev_dyn_deposits(int128 arg0) public view returns(int128) {
+        return int128(checkpoints[uint(arg0)].prev_dyn_deposits);
     }
 
     // @public
@@ -251,10 +263,8 @@ contract SimpleCasper {
         current_epoch = START_EPOCH;
         // TODO: test deposit_scale_factor when deploying when current_epoch > 0
         // allocation
-        if (_deposit_scale_factor.length < uint(current_epoch + 1)) {
-            _deposit_scale_factor.length = uint(current_epoch + 1);
-        }
-        _deposit_scale_factor[uint256(current_epoch)] = Decimal.fromUint(10000000000);
+        _initDecimalAt(_deposit_scale_factor, uint(current_epoch));
+        _deposit_scale_factor[uint(current_epoch)] = Decimal.fromUint(10000000000);
         total_curdyn_deposits = Decimal.fromUint(0);
         total_prevdyn_deposits = Decimal.fromUint(0);
         DEFAULT_END_DYNASTY = 1000000000000000000000000000000;
@@ -277,25 +287,6 @@ contract SimpleCasper {
         return a.comp(b) > 0 ? b : a;
     }
 
-    /**
-     * @dev original.
-     */
-    function concat(bytes32 a, bytes b) public pure returns (bytes result) {
-        uint blen = 32 + b.length;
-        uint blockLen = (blen / 32) * 32;
-        if (blen % 32 > 0) {
-            blockLen += 32;
-        }
-        assembly {
-            let freep := mload(0x40)
-            mstore(0x40, add(freep, blockLen))
-            mstore(freep, blen)
-            mstore(add(freep, 32), a)
-            calldatacopy(add(freep, 64), 100, sub(blen, 32))
-            result := freep
-        }
-    }
-
     // ****** Private Constants *****
 
     // Returns number of epochs since finalization.
@@ -307,17 +298,22 @@ contract SimpleCasper {
     function sqrt_of_total_deposits() private constant returns (Decimal.Data) {
         int128 epoch = current_epoch;
         Decimal.Data memory ether_deposited_as_number_decimal = max(total_prevdyn_deposits, total_curdyn_deposits);
+        require(ether_deposited_as_number_decimal.den > 0);
+        _initDecimalAt(_deposit_scale_factor, uint(epoch));
         ether_deposited_as_number_decimal = ether_deposited_as_number_decimal.mul(_deposit_scale_factor[uint(epoch - 1)]);
+
+        require(ether_deposited_as_number_decimal.den > 0);
         ether_deposited_as_number_decimal = ether_deposited_as_number_decimal.div(Decimal.fromUint(1 ether));
+        require(ether_deposited_as_number_decimal.den > 0);
         uint ether_deposited_as_number = ether_deposited_as_number_decimal.toUint() + 1;
         Decimal.Data memory sqrt = Decimal.Data({
             num : ether_deposited_as_number,
             den : 2
             });
         for (uint i; i < 20; i++) {
-            sqrt = sqrt.add(Decimal.fromUint(ether_deposited_as_number));
-            sqrt = sqrt.div(sqrt);
+            sqrt = sqrt.add(Decimal.fromUint(ether_deposited_as_number).div(sqrt));
             sqrt = sqrt.div(Decimal.fromUint(2));
+            sqrt = Decimal.fromDecimal(sqrt.toDecimal()); // reset num, den.
         }
         return sqrt;
     }
@@ -326,23 +322,30 @@ contract SimpleCasper {
         return total_curdyn_deposits.compZero() > 1 && total_prevdyn_deposits.compZero() > 1;
     }
 
-
     // ** ** * Private ** ** *
 
     // Increment dynasty when checkpoint is finalized.
     // TODO : Might want to split out the cases separately.
     function increment_dynasty() private {
         uint256 epoch = uint256(current_epoch);
+
         // Increment the dynasty if finalized
         if (checkpoints[epoch - 2].is_finalized) {
             dynasty += 1;
+            _initDecimalAt(_dynasty_wei_delta, uint(dynasty));
+            if (dynasty_start_epoch.length < uint(dynasty + 1)) {
+                // TODO: wanna allocate to be more simply.
+                dynasty_start_epoch.length = uint(dynasty + 1);
+            }
+
             total_prevdyn_deposits = total_curdyn_deposits;
             total_curdyn_deposits = total_curdyn_deposits.add(_dynasty_wei_delta[uint256(dynasty)]);
+            //            require(total_curdyn_deposits.den > 0);
             dynasty_start_epoch[uint256(dynasty)] = int128(epoch);
         }
-        while (dynasty_in_epoch.length < epoch + 1) {
+        if (dynasty_in_epoch.length < epoch + 1) {
             // TODO: allocate .... nosey....
-            dynasty_in_epoch.push(0);
+            dynasty_in_epoch.length = epoch + 1;
         }
         dynasty_in_epoch[epoch] = dynasty;
         if (main_hash_justified) {
@@ -423,15 +426,21 @@ contract SimpleCasper {
     function validate_signature(bytes32 msg_hash, bytes sig, int128 validator_index) private returns (bool) {
         address addr = _validators[uint256(validator_index)].addr;
         int128 vgaslimit = VALIDATION_GAS_LIMIT;
-        bytes memory input = SimpleCasper(this).concat(msg_hash, sig);
-        uint inputSize = input.length + 32;
+        string memory msgerr = string(abi.encodePacked("invalid sig message size. ", sig, " "));
+        require(sig.length == 96, msgerr);
+        bytes memory input = abi.encodePacked(msg_hash, sig);
+        uint inputSize = input.length;
         bytes32 result = 0x00;
         uint res = 0;
         assembly {
-            res := call(vgaslimit, addr, 0, input, inputSize, result, 32)
+            let freep := mload(0x40)
+            mstore(0x40, add(freep, 32))
+            res := call(vgaslimit, addr, 0, add(input, 32), inputSize, freep, 32)
+            result := mload(freep)
         }
+        require(res == 1, "validator check call failed.");
         //return extract32(raw_call(validators[uint256(validator_index)].addr, concat(msg_hash, sig), gas=VALIDATION_GAS_LIMIT, outsize=32), 0) == convert(1, 'bytes32')
-        return res == 1 && result == bytes32(1);
+        return result == bytes32(1);
     }
 
     // ***** Public Constants *****
@@ -472,13 +481,13 @@ contract SimpleCasper {
     // original function. Resolve duplicate of MSG_HASHER raw_call.
     function getMsgHash(bytes message) internal returns (bytes32 msg_hash) {
         uint res = 0;
-        uint inputSize = message.length + 32;
+        uint inputSize = message.length;
         address addr = MSG_HASHER;
-        int128 vgaslimit = MSG_HASHER_GAS_LIMIT;
+        uint vgaslimit = uint(MSG_HASHER_GAS_LIMIT);
         assembly {
             let freep := mload(0x40)
             mstore(0x40, add(freep, 32))
-            res := call(vgaslimit, addr, 0, message, inputSize, freep, 32)
+            res := call(vgaslimit, addr, 0, add(message, 32), inputSize, freep, 32)
             msg_hash := mload(freep)
         }
 
@@ -486,23 +495,22 @@ contract SimpleCasper {
     }
 
     function decodeVoteMessageRLP(bytes vote_msg) internal returns (VoteMessage memory) {
-        bytes32 msg_hash = 0x00;
-
         //        extract32(
         //    raw_call(MSG_HASHER, vote_msg_1, gas = MSG_HASHER_GAS_LIMIT, outsize = 32),
         //    0
         //    )
-        msg_hash = getMsgHash(vote_msg);
+        bytes32 msg_hash = getMsgHash(vote_msg);
+        require(msg_hash != 0x00, "message is null....");
 
         //    values_1 = RLPList(vote_msg_1, [int128, bytes32, int128, int128, bytes])
         RLP.Iterator memory values = vote_msg.toRLPItem().iterator();
         VoteMessage memory decode;
         decode.msg_hash = msg_hash;
         decode.validator_index = int128(values.next().toUint());
-        values.next();
+        decode.target_hash = values.next().toBytes32();
         decode.target_epoch = int128(values.next().toUint());
         decode.source_epoch = int128(values.next().toUint());
-        decode.sig = values.next().toBytes();
+        decode.sig = values.next().toData();
         return decode;
     }
 
@@ -565,19 +573,18 @@ contract SimpleCasper {
     //
     // line:393
     // def highest_justified_epoch(min_total_deposits: wei_value) -> int128:
-    function highest_justified_epoch(uint min_total_deposits) public constant returns (int128) {
+    function highest_justified_epoch(int128 min_total_deposits) public constant returns (int128) {
         uint epoch = 0;
-        for (uint i; i < 1000000000000000000000000000000; i++) {
-            epoch = uint(current_epoch) - i;
-            bool is_justified = checkpoints[uint256(epoch)].is_justified;
-            bool enough_cur_dyn_deposits = checkpoints[uint256(epoch)].cur_dyn_deposits >= min_total_deposits;
-            bool enough_prev_dyn_deposits = checkpoints[uint256(epoch)].prev_dyn_deposits >= min_total_deposits;
+        init_checkpoints(uint(current_epoch));
+        require(current_epoch > 0, "current epoch is zero.");
+        uint umin_total_deposits = uint(min_total_deposits);
+        for (uint i = uint(current_epoch); i >= uint(START_EPOCH); i--) {
+            bool is_justified = checkpoints[i].is_justified;
+            bool enough_cur_dyn_deposits = checkpoints[i].cur_dyn_deposits >= umin_total_deposits;
+            bool enough_prev_dyn_deposits = checkpoints[i].prev_dyn_deposits >= umin_total_deposits;
 
             if (is_justified && (enough_cur_dyn_deposits && enough_prev_dyn_deposits)) {
-                return int128(epoch);
-            }
-            if (epoch == uint(START_EPOCH)) {
-                break;
+                return int128(i);
             }
         }
         // no justified epochs found, use 0 as default
@@ -587,13 +594,15 @@ contract SimpleCasper {
 
     // line:413
     //def highest_finalized_epoch(min_total_deposits: wei_value) -> int128:
-    function highest_finalized_epoch(uint min_total_deposits) public constant returns (int128) {
+    function highest_finalized_epoch(int128 min_total_deposits) public constant returns (int128) {
         uint epoch = 0;
+        uint umin_total_deposits = uint(min_total_deposits);
+        init_checkpoints(uint(current_epoch));
         for (uint i = 0; i < 1000000000000000000000000000000; i++) {
             epoch = uint(current_epoch) - i;
             bool is_finalized = checkpoints[uint256(epoch)].is_finalized;
-            bool enough_cur_dyn_deposits = checkpoints[epoch].cur_dyn_deposits >= min_total_deposits;
-            bool enough_prev_dyn_deposits = checkpoints[epoch].prev_dyn_deposits >= min_total_deposits;
+            bool enough_cur_dyn_deposits = checkpoints[epoch].cur_dyn_deposits >= umin_total_deposits;
+            bool enough_prev_dyn_deposits = checkpoints[epoch].prev_dyn_deposits >= umin_total_deposits;
 
             if (is_finalized && (enough_cur_dyn_deposits && enough_prev_dyn_deposits)) {
                 return int128(epoch);
@@ -618,18 +627,11 @@ contract SimpleCasper {
 
         // must track the deposits related to the checkpoint _before_ updating current_epoch
         // TODO: allocation process tedious
-        Checkpoint memory cp;
-        while (checkpoints.length < uint256(epoch + 1)) {
+        init_checkpoints(uint(epoch));
+        _initDecimalAt(_deposit_scale_factor, uint(epoch));
+        if (_total_slashed.length < uint256(epoch + 1)) {
             //allocate
-            checkpoints.push(cp);
-        }
-        if (_deposit_scale_factor.length < uint256(epoch + 1)) {
-            //allocate
-            _deposit_scale_factor.length = uint256(epoch + 1);
-        }
-        while (_total_slashed.length < uint256(epoch + 1)) {
-            //allocate
-            _total_slashed.push(0);
+            _total_slashed.length = uint(epoch + 1);
         }
 
         checkpoints[uint256(epoch)].cur_dyn_deposits = total_curdyn_deposits_in_wei();
@@ -639,8 +641,10 @@ contract SimpleCasper {
 
         last_voter_rescale = Decimal.fromUint(1).add(collective_reward());
         Decimal.Data memory dividor = reward_factor.add(Decimal.fromUint(1));
+        require(dividor.den > 0);
+        require(dividor.num > 0);
         last_nonvoter_rescale = last_voter_rescale.div(dividor);
-        require(last_nonvoter_rescale.den > 0);
+        require(_deposit_scale_factor[uint(epoch - 1)].den > 0);
         Decimal.Data memory factor_decimal = _deposit_scale_factor[uint(epoch - 1)];
         factor_decimal = factor_decimal.mul(last_nonvoter_rescale);
         _deposit_scale_factor[uint256(epoch)] = factor_decimal;
@@ -692,11 +696,7 @@ contract SimpleCasper {
             });
         validator_indexes[withdrawal_addr] = validator_index;
         next_validator_index += 1;
-        if(_dynasty_wei_delta.length < uint(start_dynasty+1)) {
-            _dynasty_wei_delta.length = uint(start_dynasty+1);
-            _dynasty_wei_delta[uint256(start_dynasty)].den = 1;
-        }
-        Decimal.Data memory tmpdeci = _dynasty_wei_delta[uint256(start_dynasty)];
+        _initDecimalAt(_dynasty_wei_delta, uint256(start_dynasty));
         _dynasty_wei_delta[uint256(start_dynasty)] = _dynasty_wei_delta[uint256(start_dynasty)].add(scaled_deposit);
         // Log deposit event
         emit Deposit(
@@ -792,6 +792,27 @@ contract SimpleCasper {
             return src >> (_shift * - 1);
         }
     }
+    // for solidity initialization. this is original.
+    function init_checkpoints(uint len) internal {
+        Checkpoint memory cp;
+        while (checkpoints.length < uint256(len + 1)) {
+            checkpoints.push(cp);
+        }
+    }
+    // for solidity initialization. this is original.
+    function init_checkpoints_for_vote(int128 target_epoch, int128 source_epoch, int128 validator_index) internal {
+        init_checkpoints(uint(target_epoch));
+        Checkpoint storage st_cp = checkpoints[uint256(target_epoch)];
+        if (st_cp.vote_bitmap.length < (uint256(validator_index) / 256) + 1) {
+            st_cp.vote_bitmap.length = (uint256(validator_index) / 256) + 1;
+        }
+        if (st_cp.cur_dyn_votes.length < uint(source_epoch + 1)) {
+            st_cp.cur_dyn_votes.length = uint(source_epoch + 1);
+        }
+        if (st_cp.prev_dyn_votes.length < uint(source_epoch + 1)) {
+            st_cp.prev_dyn_votes.length = uint(source_epoch + 1);
+        }
+    }
 
     // Process a vote message
     // line:576
@@ -800,15 +821,18 @@ contract SimpleCasper {
         // consisting solely of RLP elements
         VoteMessage memory vm = decodeVoteMessageRLP(vote_msg);
 
-        require(validate_signature(vm.msg_hash, vm.sig, vm.validator_index));
+        require(validate_signature(vm.msg_hash, vm.sig, vm.validator_index), "msg is invalid signature!");
         // Check that this vote has not yet been made
+        // init for solidity. TODO: cleanup
+        // I am out of patience, initialize code very NOISY!!!!!!!!!!!!
+        init_checkpoints_for_vote(vm.target_epoch, vm.source_epoch, vm.validator_index);
         require((checkpoints[uint256(vm.target_epoch)].vote_bitmap[uint256(vm.validator_index) / 256] &
-        shift(int128(1), int128(vm.validator_index % 256))) != 0);
+        shift(int128(1), int128(vm.validator_index % 256))) == 0, "this vote is already been made.");
         // Check that the vote's target epoch and hash are correct
-        require(vm.target_hash == recommended_target_hash());
-        require(vm.target_epoch == current_epoch);
+        require(vm.target_hash == recommended_target_hash(), "vote target hash is incorrect.");
+        require(vm.target_epoch == current_epoch, "vote target epoch is incorrect.");
         // Check that the vote source points to a justified epoch
-        require(checkpoints[uint256(vm.source_epoch)].is_justified);
+        require(checkpoints[uint256(vm.source_epoch)].is_justified, "checkpoint is not justified yet.");
 
         // ensure validator can vote for the target_epoch
         int128 start_dynasty = _validators[uint256(vm.validator_index)].start_dynasty;
@@ -817,7 +841,7 @@ contract SimpleCasper {
         int128 past_dynasty = current_dynasty - 1;
         bool in_current_dynasty = ((start_dynasty <= current_dynasty) && (current_dynasty < end_dynasty));
         bool in_prev_dynasty = ((start_dynasty <= past_dynasty) && (past_dynasty < end_dynasty));
-        require(in_current_dynasty || in_prev_dynasty);
+        require(in_current_dynasty || in_prev_dynasty, "dynasty is invalid.");
 
         // Record that the validator voted for this target epoch so they can't again
         checkpoints[uint256(vm.target_epoch)].vote_bitmap[uint256(vm.validator_index) / 256] =

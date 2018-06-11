@@ -41,7 +41,7 @@ library RLP {
             self._unsafe_nextPtr = ptr + itemLength;
         }
         else
-            revert();
+            revert("End of RLPItems.");
     }
 
     function next(Iterator memory self, bool strict) internal pure returns (RLPItem memory subItem) {
@@ -355,7 +355,7 @@ library RLP {
     // Get start position and length of the data.
     function _decode(RLPItem memory self) private pure returns (uint memPtr, uint len) {
         if (!isData(self))
-            revert();
+            revert("Not RLPItem Data.");
         uint b0;
         uint start = self._unsafe_memPtr;
         assembly {
