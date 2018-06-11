@@ -51,7 +51,7 @@ pytest tests
 
 We recommend using the Vyper version installed as a dependency from requirements.txt.
 
-NOTE: The latest version of Vyper throws an error when compiling the Casper contract due to a syntax changes
+NOTE: The latest version of Vyper throws an error when compiling the Casper contract due to syntax changes.
 
 Installing this version separately is not necessary if the steps above are followed.
 
@@ -76,9 +76,9 @@ The Casper contract is very large and uses a lot of gas to be deployed. When you
 
 ### Step 2: Deploy Helper Contracts
 
-NOTE: In addition to the two helper contracts `msg_hasher` and `purity_checker` you also need to deploy the `rlp_decoder` contract. On a production chain, the `rlp_decoder` contract is already deployed and Vyper’s standard internal library knows it’s address and gives Vyper contracts access to some functionality at that address.
+NOTE: In addition to the two helper contracts `msg_hasher` and `purity_checker` you also need to deploy the `rlp_decoder` contract. On a production chain, the `rlp_decoder` contract is already deployed and Vyper’s standard internal library knows its address and gives Vyper contracts access to some functionality at that address.
 
-**When using a test chain, these helper contract must ALL be deployed before the Casper contract. The `rlp_decoder` should be deployed first.**
+**When using a test chain, these helper contracts must ALL be deployed before the Casper contract. The `rlp_decoder` should be deployed first.**
 
 NOTE: These helper contracts can be deployed via the pre-signed txs below. Instructions for compiling and deploying via other methods will soon be available, as these contracts are currently written in Serpent, and are in the process of being rewritten in Vyper LLL.
 
@@ -102,7 +102,7 @@ PURITY_CHECKER_TX_HEX = "0xf90467808506fc23ac00830583c88080b904546104428061000e6
 
 #### Fund Senders of Contract With 0.1 Ether to Deploy TXs
 
-You need to fund these accounts to deploy the helper contracts because the transactions are signed by theses accounts, you may also choose to resign the contracts with your own account(s).
+You need to fund the accounts defined above to deploy the helper contracts byte-code, as the transactions are already signed by those accounts defined above. You may also choose to re-sign the contracts with your own account(s).
 
 ```bash
 w3.eth.sendTransaction({'to': VYPER_RLP_DECODER_TX_SENDER, 'value': 10**17})
