@@ -27,6 +27,7 @@ from web3.contract import (
 from web3.providers.eth_tester import (
     EthereumTesterProvider,
 )
+from functools import lru_cache
 
 IS_SOL_TEST = 1
 
@@ -678,6 +679,7 @@ def assert_tx_failed(base_tester):
 
 # for Solidity
 
+@lru_cache()
 def casper_sol_output():
     paths = get_sol_dirs("SimpleCasper.sol")
     return compile_standard({
