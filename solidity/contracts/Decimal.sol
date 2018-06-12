@@ -78,39 +78,48 @@ library Decimal {
         Data({
             num : a.num.mul(b.den)
             .add(b.num.mul(a.den)),
-            den : a.den * b.den
+            den : a.den.mul(b.den)
             });
     }
 
     /** Subtracts two Decimals without loss of precision. */
     function sub(Data memory a, Data memory b) internal pure returns (Data memory) {
-        return a.den == b.den ?
-        // if same denomenator, use b.num as-is
-        Data({
-            num : a.num.sub(b.num),
-            den : a.den
-            }) :
-        // otherwise convert (b) to the same denominator as (a)
-        Data({
-            num : a.num.mul(b.den)
-            .sub(b.num.mul(a.den)),
-            den : a.den * b.den
-            });
+        Data memory result;
+        if (a.den == b.den) {
+            // if same denomenator, use b.num as-is
+            result.num = a.num.sub(b.num);
+            result.den = a.den;
+        } else {
+            // otherwise convert (b) to the same denominator as (a)
+            result.num = a.num.mul(b.den).sub(b.num.mul(a.den));
+            result.den = a.den.mul(b.den);
+        }
+        return compacting(result);
     }
 
     /** Multiplies two Decimals without loss of precision. */
     function mul(Data memory a, Data memory b) internal pure returns (Data memory) {
-        return Data({
+        return compacting(Data({
             num : a.num.mul(b.num),
             den : a.den.mul(b.den)
-            });
+            }));
     }
 
     /** Divides two Decimals without loss of precision. */
     function div(Data memory a, Data memory b) internal pure returns (Data memory) {
+        uint u_num = a.num.mul(b.den);
+        uint u_den = b.num.mul(a.den);
+        return compacting(Data({
+            num : u_num,
+            den : u_den
+            }));
+    }
+
+    function compacting(Data memory self) internal pure returns (Data memory) {
+        uint _gcd = gcd(self.num, self.den);
         return Data({
-            num : a.num.mul(b.den),
-            den : b.num.mul(a.den)
+            num : self.num.div(_gcd),
+            den : self.den.div(_gcd)
             });
     }
 
@@ -146,5 +155,37 @@ library Decimal {
         } else {
             return 2;
         }
+    }
+
+    /**
+     * @dev greatest common divisor. Using Euclidean Algorithm.
+     */
+    function gcd(uint a, uint b) internal pure returns (uint) {
+        (uint min, uint max) = sort(a, b);
+        if (min == 0) {
+            return max;
+        }
+        uint mod = max % min;
+
+        while (mod > 0) {
+            (min, max) = sort(mod, min);
+            mod = max % min;
+        }
+        return min;
+    }
+
+    /**
+     * @dev least common multiple
+     */
+    function lcm(uint a, uint b) internal pure returns (uint) {
+        uint _gcd = gcd(a, b);
+        if (_gcd == 1) {
+            return a.mul(b);
+        }
+        return a.div(_gcd).mul(b.div(_gcd)).mul(_gcd);
+    }
+
+    function sort(uint a, uint b) internal pure returns (uint, uint) {
+        return a < b ? (a, b) : (b, a);
     }
 }

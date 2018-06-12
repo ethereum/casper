@@ -641,10 +641,8 @@ contract SimpleCasper {
 
         last_voter_rescale = Decimal.fromUint(1).add(collective_reward());
         Decimal.Data memory dividor = reward_factor.add(Decimal.fromUint(1));
-        require(dividor.den > 0);
-        require(dividor.num > 0);
-        last_nonvoter_rescale = last_voter_rescale.div(dividor);
-        require(_deposit_scale_factor[uint(epoch - 1)].den > 0);
+
+        last_nonvoter_rescale = Decimal.fromDecimal(last_voter_rescale.div(dividor).toDecimal()); // bypass overflow
         Decimal.Data memory factor_decimal = _deposit_scale_factor[uint(epoch - 1)];
         factor_decimal = factor_decimal.mul(last_nonvoter_rescale);
         _deposit_scale_factor[uint256(epoch)] = factor_decimal;
