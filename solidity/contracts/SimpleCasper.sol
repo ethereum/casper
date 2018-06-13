@@ -85,8 +85,8 @@ contract SimpleCasper {
         uint cur_dyn_deposits; // : wei_value,
         uint prev_dyn_deposits; // : wei_value,
         // track total votes for each dynasty
-        uint256[] cur_dyn_votes; // : decimal(wei / m)[int128],
-        uint256[] prev_dyn_votes; // : decimal(wei / m)[int128],
+        int168[] cur_dyn_votes; // : decimal(wei / m)[int128],
+        int168[] prev_dyn_votes; // : decimal(wei / m)[int128],
         // Bitmap of which validator IDs have already voted
         int128[] vote_bitmap; // : int128[int128],
         // Is a vote referencing the given epoch justified?
@@ -171,51 +171,61 @@ contract SimpleCasper {
         return _total_slashed[uint(arg0)];
     }
 
-    function dynasty_wei_delta(int128 arg0) public view returns (uint168) {
+    function dynasty_wei_delta(int128 arg0) public view returns (int168) {
         if (_dynasty_wei_delta.length <= uint(arg0)) {
             return 0;
         }
         return _dynasty_wei_delta[uint(arg0)].toDecimal();
     }
 
-    function deposit_scale_factor(int128 arg0) public view returns (uint168) {
+    function deposit_scale_factor(int128 arg0) public view returns (int168) {
+        if(_deposit_scale_factor.length <= uint(arg0)) return 0;
         return _deposit_scale_factor[uint(arg0)].toDecimal();
     }
 
     // To avoid tuple, and it produce same code of vyper compiler.
-    function validators__deposit(int128 arg0) public view returns (uint) {
+    function validators__deposit(int128 arg0) public view returns (int168) {
+        if(_deposit_scale_factor.length <= uint(arg0)) return 0;
         return _validators[uint256(arg0)].deposit.toDecimal();
     }
 
     function validators__start_dynasty(int128 arg0) public view returns (int128) {
+        if(_deposit_scale_factor.length <= uint(arg0)) return 0;
         return _validators[uint256(arg0)].start_dynasty;
     }
 
     function validators__end_dynasty(int128 arg0) public view returns (int128) {
+        if(_deposit_scale_factor.length <= uint(arg0)) return 0;
         return _validators[uint256(arg0)].end_dynasty;
     }
 
     function validators__is_slashed(int128 arg0) public view returns (bool) {
+        if(_deposit_scale_factor.length <= uint(arg0)) return false;
         return _validators[uint256(arg0)].is_slashed;
     }
 
     function validators__total_deposits_at_logout(int128 arg0) public view returns (uint) {
+        if(_deposit_scale_factor.length <= uint(arg0)) return 0;
         return _validators[uint256(arg0)].total_deposits_at_logout;
     }
 
     function validators__addr(int128 arg0) public view returns (address) {
+        if(_deposit_scale_factor.length <= uint(arg0)) return 0x00;
         return _validators[uint256(arg0)].addr;
     }
 
     function validators__withdrawal_addr(int128 arg0) public view returns (address) {
+        if(_deposit_scale_factor.length <= uint(arg0)) return 0x00;
         return _validators[uint256(arg0)].withdrawal_addr;
     }
 
     function checkpoints__cur_dyn_deposits(int128 arg0) public view returns (int128) {
+        if(checkpoints.length <= uint(arg0)) return 0;
         return int128(checkpoints[uint(arg0)].cur_dyn_deposits);
     }
 
     function checkpoints__prev_dyn_deposits(int128 arg0) public view returns (int128) {
+        if(checkpoints.length <= uint(arg0)) return 0;
         return int128(checkpoints[uint(arg0)].prev_dyn_deposits);
     }
 
@@ -322,7 +332,7 @@ contract SimpleCasper {
         for (uint i; i < 20; i++) {
             sqrt = sqrt.add(Decimal.fromUint(ether_deposited_as_number).div(sqrt));
             sqrt = sqrt.div(Decimal.fromUint(2));
-            sqrt = Decimal.fromDecimal(sqrt.toDecimal());
+            sqrt = Decimal.fromDecimal(uint256(sqrt.toDecimal()));
             // reset num, den.
         }
         return sqrt;
@@ -385,8 +395,8 @@ contract SimpleCasper {
             return Decimal.fromUint(0);
         }
         // Fraction that voted
-        Decimal.Data memory cur_vote_frac = Decimal.fromDecimal(checkpoints[epoch - 1].cur_dyn_votes[uint256(expected_source_epoch)]).div(total_curdyn_deposits);
-        Decimal.Data memory prev_vote_frac = Decimal.fromDecimal(checkpoints[epoch - 1].prev_dyn_votes[uint256(expected_source_epoch)]).div(total_prevdyn_deposits);
+        Decimal.Data memory cur_vote_frac = Decimal.fromDecimal(uint256(checkpoints[epoch - 1].cur_dyn_votes[uint256(expected_source_epoch)])).div(total_curdyn_deposits);
+        Decimal.Data memory prev_vote_frac = Decimal.fromDecimal(uint256(checkpoints[epoch - 1].prev_dyn_votes[uint256(expected_source_epoch)])).div(total_prevdyn_deposits);
         Decimal.Data memory vote_frac = min(cur_vote_frac, prev_vote_frac);
         return vote_frac.mul(reward_factor).div(Decimal.fromUint(2));
     }
@@ -436,7 +446,7 @@ contract SimpleCasper {
     function validate_signature(bytes32 msg_hash, bytes sig, int128 validator_index) private returns (bool) {
         address addr = _validators[uint256(validator_index)].addr;
         int128 vgaslimit = VALIDATION_GAS_LIMIT;
-        string memory msgerr = string(abi.encodePacked("invalid sig message size. ", sig, " "));
+        string memory msgerr = string(abi.encodePacked("invalid sig message size. ", sig.length, " "));
         require(sig.length == 96, msgerr);
         bytes memory input = abi.encodePacked(msg_hash, sig);
         uint inputSize = input.length;
@@ -456,10 +466,10 @@ contract SimpleCasper {
     // ***** Public Constants *****
 
     // line:296 wanna return decimal but solidity not defined it type.....
-    function main_hash_voted_frac() public constant returns (uint256) {
-        Decimal.Data memory cur_dyn_vote = Decimal.fromDecimal(checkpoints[uint256(current_epoch)].cur_dyn_votes[uint256(expected_source_epoch)]);
+    function main_hash_voted_frac() public constant returns (int168) {
+        Decimal.Data memory cur_dyn_vote = Decimal.fromSignDecimal(checkpoints[uint256(current_epoch)].cur_dyn_votes[uint256(expected_source_epoch)]);
         cur_dyn_vote = cur_dyn_vote.div(total_curdyn_deposits);
-        Decimal.Data memory prev_dyn_vote = Decimal.fromDecimal(checkpoints[uint256(current_epoch)].prev_dyn_votes[uint256(expected_source_epoch)]);
+        Decimal.Data memory prev_dyn_vote = Decimal.fromSignDecimal(checkpoints[uint256(current_epoch)].prev_dyn_votes[uint256(expected_source_epoch)]);
         prev_dyn_vote = prev_dyn_vote.div(total_prevdyn_deposits);
         return min(cur_dyn_vote, prev_dyn_vote).toDecimal();
     }
@@ -651,7 +661,7 @@ contract SimpleCasper {
         last_voter_rescale = Decimal.fromUint(1).add(collective_reward());
         Decimal.Data memory dividor = reward_factor.add(Decimal.fromUint(1));
 
-        last_nonvoter_rescale = Decimal.fromDecimal(last_voter_rescale.div(dividor).toDecimal());
+        last_nonvoter_rescale = Decimal.fromDecimal(uint256(last_voter_rescale.div(dividor).toDecimal()));
         // bypass overflow
         Decimal.Data memory factor_decimal = _deposit_scale_factor[uint(epoch - 1)];
         factor_decimal = factor_decimal.mul(last_nonvoter_rescale);
@@ -731,19 +741,21 @@ contract SimpleCasper {
         //values = RLPList(logout_msg, [int128, int128, bytes])
         int128 validator_index = int128(values.next().toUint());
         int128 epoch = int128(values.next().toUint());
-        bytes memory sig = values.next().toBytes();
+        bytes memory sig = values.next().toData();
 
+        require(int128(_validators.length) > validator_index, "invalid validator_index.");
         require(current_epoch >= epoch);
         bool from_withdrawal = msg.sender == _validators[uint256(validator_index)].withdrawal_addr;
         require(from_withdrawal || validate_signature(msg_hash, sig, validator_index));
 
         // Check that we haven't already withdrawn
         int128 end_dynasty = dynasty + DYNASTY_LOGOUT_DELAY;
-        require(_validators[uint256(validator_index)].end_dynasty > end_dynasty);
+        require(_validators[uint256(validator_index)].end_dynasty > end_dynasty, "validator is already withdrawn");
 
         _validators[uint256(validator_index)].end_dynasty = end_dynasty;
         _validators[uint256(validator_index)].total_deposits_at_logout = total_curdyn_deposits_in_wei();
-        _dynasty_wei_delta[uint256(end_dynasty)] = _dynasty_wei_delta[uint256(end_dynasty)].sub(_validators[uint256(validator_index)].deposit);
+        _initDecimalAt(_dynasty_wei_delta, uint256(end_dynasty));
+        _dynasty_wei_delta[uint256(end_dynasty)] = _dynasty_wei_delta[uint256(end_dynasty)].ssub(_validators[uint256(validator_index)].deposit);
 
         emit Logout(
             _validators[uint256(validator_index)].withdrawal_addr,
@@ -857,8 +869,8 @@ contract SimpleCasper {
         shift(int128(1), int128(vm.validator_index % 256)));
 
         // Record that this vote took place
-        Decimal.Data memory current_dynasty_votes = Decimal.fromDecimal(checkpoints[uint256(vm.target_epoch)].cur_dyn_votes[uint256(vm.source_epoch)]);
-        Decimal.Data memory previous_dynasty_votes = Decimal.fromDecimal(checkpoints[uint256(vm.target_epoch)].prev_dyn_votes[uint256(vm.source_epoch)]);
+        Decimal.Data memory current_dynasty_votes = Decimal.fromSignDecimal(checkpoints[uint256(vm.target_epoch)].cur_dyn_votes[uint256(vm.source_epoch)]);
+        Decimal.Data memory previous_dynasty_votes = Decimal.fromSignDecimal(checkpoints[uint256(vm.target_epoch)].prev_dyn_votes[uint256(vm.source_epoch)]);
         if (in_current_dynasty) {
             current_dynasty_votes = current_dynasty_votes.add(_validators[uint256(vm.validator_index)].deposit);
             checkpoints[uint256(vm.target_epoch)].cur_dyn_votes[uint256(vm.source_epoch)] = current_dynasty_votes.toDecimal();

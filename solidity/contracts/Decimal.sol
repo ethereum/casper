@@ -45,6 +45,10 @@ library Decimal {
             });
     }
 
+    function fromSignDecimal(int168 num) internal pure returns (Data memory) {
+        return fromDecimal(uint256(num));
+    }
+
     /** Creates a Decimal Data from a Decimal bytes. */
     function fromDecimal(uint256 num) internal pure returns (Data memory) {
         return Data({
@@ -60,9 +64,9 @@ library Decimal {
     }
 
     /** Converts to decimal by increasing up 10 digitsnum. the decimal is fi168x10 **/
-    function toDecimal(Data memory self) internal pure returns (uint168) {
+    function toDecimal(Data memory self) internal pure returns (int168) {
         require(self.den > 0, "invalid zero divide.");
-        return uint168(self.num.mul(DECIMAL_DIVISOR).div(self.den));
+        return int168(self.num.mul(DECIMAL_DIVISOR).div(self.den));
     }
 
     /** Adds two Decimals without loss of precision. */
@@ -92,6 +96,21 @@ library Decimal {
         } else {
             // otherwise convert (b) to the same denominator as (a)
             result.num = a.num.mul(b.den).sub(b.num.mul(a.den));
+            result.den = a.den.mul(b.den);
+        }
+        return compacting(result);
+    }
+
+    /** Sign-Subtracts two Decimals without loss of precision.  it will be have overflow. SO, CAREFULLY!!*/
+    function ssub(Data memory a, Data memory b) internal pure returns (Data memory) {
+        Data memory result;
+        if (a.den == b.den) {
+            // if same denomenator, use b.num as-is
+            result.num = a.num - b.num;
+            result.den = a.den;
+        } else {
+            // otherwise convert (b) to the same denominator as (a)
+            result.num = a.num.mul(b.den) - (b.num.mul(a.den));
             result.den = a.den.mul(b.den);
         }
         return compacting(result);
