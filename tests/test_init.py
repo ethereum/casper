@@ -6,12 +6,16 @@ from decimal import Decimal
 def test_no_double_init(
         casper_args,
         deploy_casper_contract,
+        casper_init_func,
         assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
-    casper.functions.init(*casper_args).transact()
+    # casper.functions.init(*casper_args).transact()
+    casper_init_func(casper, casper_args)
+    assert casper.functions.current_epoch().call() == 2
     assert_tx_failed(
-        lambda: casper.functions.init(*casper_args).transact()
+        # lambda: casper.functions.init(*casper_args).transact()
+        lambda: casper_init_func(casper, casper_args)
     )
 
 
@@ -36,6 +40,7 @@ def test_start_epoch(
         epoch_length,
         casper_args,
         casper_config,
+        casper_init_func,
         deploy_casper_contract):
     block_number = base_tester.get_block_by_number('latest')['number']
     base_tester.mine_blocks(
@@ -43,10 +48,11 @@ def test_start_epoch(
     )
 
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
-    casper.functions.init(*casper_args).transact()
-
+    # casper.functions.init(*casper_args).transact()
+    casper_init_func(casper, casper_args)
     assert casper.functions.START_EPOCH().call() == expected_start_epoch
     assert casper.functions.current_epoch().call() == expected_start_epoch
+    assert casper.functions.EPOCH_LENGTH().call() == epoch_length
 
 
 @pytest.mark.parametrize(
@@ -65,16 +71,19 @@ def test_init_epoch_length(
         success,
         casper_args,
         deploy_casper_contract,
+        casper_init_func,
         assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
     if not success:
         assert_tx_failed(
-            lambda: casper.functions.init(*casper_args).transact()
+            # lambda: casper.functions.init(*casper_args).transact()
+            lambda: casper_init_func(casper, casper_args)
         )
         return
 
-    casper.functions.init(*casper_args).transact()
+    # casper.functions.init(*casper_args).transact()
+    casper_init_func(casper, casper_args)
     assert casper.functions.EPOCH_LENGTH().call() == epoch_length
 
 
@@ -93,16 +102,20 @@ def test_init_warm_up_period(
         success,
         casper_args,
         deploy_casper_contract,
+        casper_init_func,
         assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
     if not success:
         assert_tx_failed(
-            lambda: casper.functions.init(*casper_args).transact()
+            # lambda: casper.functions.init(*casper_args).transact()
+            lambda: casper_init_func(casper, casper_args)
         )
         return
 
-    casper.functions.init(*casper_args).transact()
+    # casper.functions.init(*casper_args).transact()
+    casper_init_func(casper, casper_args)
+
     assert casper.functions.WARM_UP_PERIOD().call() == warm_up_period
 
 
@@ -123,16 +136,19 @@ def test_init_withdrawal_delay(
         success,
         casper_args,
         deploy_casper_contract,
+        casper_init_func,
         assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
     if not success:
         assert_tx_failed(
-            lambda: casper.functions.init(*casper_args).transact()
+            # lambda: casper.functions.init(*casper_args).transact()
+            lambda: casper_init_func(casper, casper_args)
         )
         return
 
-    casper.functions.init(*casper_args).transact()
+    # casper.functions.init(*casper_args).transact()
+    casper_init_func(casper, casper_args)
     assert casper.functions.WITHDRAWAL_DELAY().call() == withdrawal_delay
 
 
@@ -154,16 +170,19 @@ def test_init_dynasty_logout_delay(
         success,
         casper_args,
         deploy_casper_contract,
+        casper_init_func,
         assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
     if not success:
         assert_tx_failed(
-            lambda: casper.functions.init(*casper_args).transact()
+            # lambda: casper.functions.init(*casper_args).transact()
+            lambda: casper_init_func(casper, casper_args)
         )
         return
 
-    casper.functions.init(*casper_args).transact()
+    # casper.functions.init(*casper_args).transact()
+    casper_init_func(casper, casper_args)
     assert casper.functions.DYNASTY_LOGOUT_DELAY().call() == dynasty_logout_delay
 
 
@@ -183,16 +202,19 @@ def test_init_base_interest_factor(
         success,
         casper_args,
         deploy_casper_contract,
+        casper_init_func,
         assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
     if not success:
         assert_tx_failed(
-            lambda: casper.functions.init(*casper_args).transact()
+            # lambda: casper.functions.init(*casper_args).transact()
+            lambda: casper_init_func(casper, casper_args)
         )
         return
 
-    casper.functions.init(*casper_args).transact()
+    # casper.functions.init(*casper_args).transact()
+    casper_init_func(casper, casper_args)
     assert casper.functions.BASE_INTEREST_FACTOR().call() == base_interest_factor
 
 
@@ -212,16 +234,19 @@ def test_init_base_penalty_factor(
         success,
         casper_args,
         deploy_casper_contract,
+        casper_init_func,
         assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
     if not success:
         assert_tx_failed(
-            lambda: casper.functions.init(*casper_args).transact()
+            # lambda: casper.functions.init(*casper_args).transact()
+            lambda: casper_init_func(casper, casper_args)
         )
         return
 
-    casper.functions.init(*casper_args).transact()
+    # casper.functions.init(*casper_args).transact()
+    casper_init_func(casper, casper_args)
     assert casper.functions.BASE_PENALTY_FACTOR().call() == base_penalty_factor
 
 
@@ -243,14 +268,17 @@ def test_init_min_deposit_size(
         success,
         casper_args,
         deploy_casper_contract,
+        casper_init_func,
         assert_tx_failed):
     casper = deploy_casper_contract(casper_args, initialize_contract=False)
 
     if not success:
         assert_tx_failed(
-            lambda: casper.functions.init(*casper_args).transact()
+            # lambda: casper.functions.init(*casper_args).transact()
+            lambda: casper_init_func(casper, casper_args)
         )
         return
 
-    casper.functions.init(*casper_args).transact()
+    # casper.functions.init(*casper_args).transact()
+    casper_init_func(casper, casper_args)
     assert casper.functions.MIN_DEPOSIT_SIZE().call() == min_deposit_size

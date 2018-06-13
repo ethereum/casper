@@ -145,7 +145,7 @@ contract SimpleCasper {
 
     Decimal.Data public BASE_INTEREST_FACTOR; //: public(decimal)
     Decimal.Data public BASE_PENALTY_FACTOR; //: public(decimal)
-    uint public MIN_DEPOSIT_SIZE; //: public(wei_value)
+    int128 public MIN_DEPOSIT_SIZE; //: public(wei_value)
     int128 public START_EPOCH; //: public(int128)
     int128 DEFAULT_END_DYNASTY; //: int128
     int128 MSG_HASHER_GAS_LIMIT; //: int128
@@ -211,10 +211,11 @@ contract SimpleCasper {
         return _validators[uint256(arg0)].withdrawal_addr;
     }
 
-    function checkpoints__cur_dyn_deposits(int128 arg0) public view returns(int128) {
+    function checkpoints__cur_dyn_deposits(int128 arg0) public view returns (int128) {
         return int128(checkpoints[uint(arg0)].cur_dyn_deposits);
     }
-    function checkpoints__prev_dyn_deposits(int128 arg0) public view returns(int128) {
+
+    function checkpoints__prev_dyn_deposits(int128 arg0) public view returns (int128) {
         return int128(checkpoints[uint(arg0)].prev_dyn_deposits);
     }
 
@@ -228,16 +229,16 @@ contract SimpleCasper {
         address purity_checker,
         uint256 base_interest_factor,
         uint256 base_penalty_factor,
-        uint min_deposit_size // wei_value
+        int128 min_deposit_size // wei_value
     ) public {
 
-        require(!initialized);
+        require(!initialized, "already initialized.");
         require(epoch_length > 0 && epoch_length < 256);
         require(warm_up_period >= 0);
         require(withdrawal_delay >= 0);
         require(dynasty_logout_delay >= 2);
-        require(uint168(base_interest_factor) > 0);
-        require(uint168(base_penalty_factor) > 0);
+        require(int168(base_interest_factor) >= 0);
+        require(int168(base_penalty_factor) >= 0);
         require(min_deposit_size > 0);
 
         initialized = true;
@@ -260,8 +261,16 @@ contract SimpleCasper {
         next_validator_index = 1;
 
         dynasty = 0;
+
+        // TODO:The solidity need allocation of dynamic array. so , used gas is logically infinite when The Casper initialization.
+        // The epoch in Solidity is need always offset to START_EPOCH. For resolve to bypass "out of gas".
         current_epoch = START_EPOCH;
         // TODO: test deposit_scale_factor when deploying when current_epoch > 0
+
+        // For avoid over gas used in at first, only length is reset.
+        if(current_epoch > 2) {
+            _deposit_scale_factor.length = uint(current_epoch - 2);
+        }
         // allocation
         _initDecimalAt(_deposit_scale_factor, uint(current_epoch));
         _deposit_scale_factor[uint(current_epoch)] = Decimal.fromUint(10000000000);
@@ -313,7 +322,8 @@ contract SimpleCasper {
         for (uint i; i < 20; i++) {
             sqrt = sqrt.add(Decimal.fromUint(ether_deposited_as_number).div(sqrt));
             sqrt = sqrt.div(Decimal.fromUint(2));
-            sqrt = Decimal.fromDecimal(sqrt.toDecimal()); // reset num, den.
+            sqrt = Decimal.fromDecimal(sqrt.toDecimal());
+            // reset num, den.
         }
         return sqrt;
     }
@@ -330,7 +340,7 @@ contract SimpleCasper {
         uint256 epoch = uint256(current_epoch);
 
         // Increment the dynasty if finalized
-        if (checkpoints[epoch - 2].is_finalized) {
+        if (epoch > 1 && checkpoints[epoch - 2].is_finalized) {
             dynasty += 1;
             _initDecimalAt(_dynasty_wei_delta, uint(dynasty));
             if (dynasty_start_epoch.length < uint(dynasty + 1)) {
@@ -574,7 +584,6 @@ contract SimpleCasper {
     // line:393
     // def highest_justified_epoch(min_total_deposits: wei_value) -> int128:
     function highest_justified_epoch(int128 min_total_deposits) public constant returns (int128) {
-        uint epoch = 0;
         init_checkpoints(uint(current_epoch));
         require(current_epoch > 0, "current epoch is zero.");
         uint umin_total_deposits = uint(min_total_deposits);
@@ -642,7 +651,8 @@ contract SimpleCasper {
         last_voter_rescale = Decimal.fromUint(1).add(collective_reward());
         Decimal.Data memory dividor = reward_factor.add(Decimal.fromUint(1));
 
-        last_nonvoter_rescale = Decimal.fromDecimal(last_voter_rescale.div(dividor).toDecimal()); // bypass overflow
+        last_nonvoter_rescale = Decimal.fromDecimal(last_voter_rescale.div(dividor).toDecimal());
+        // bypass overflow
         Decimal.Data memory factor_decimal = _deposit_scale_factor[uint(epoch - 1)];
         factor_decimal = factor_decimal.mul(last_nonvoter_rescale);
         _deposit_scale_factor[uint256(epoch)] = factor_decimal;
@@ -676,7 +686,7 @@ contract SimpleCasper {
         //assert extract32(raw_call(PURITY_CHECKER, concat('\xa1\x90\x3e\xab', convert(validation_addr, 'bytes32')), gas=500000, outsize=32), 0) != convert(0, 'bytes32')
         require(PURITY_CHECKER.call.gas(500000)(bytes4(keccak256("submit(address)")), bytes32(validation_addr)));
         require(validator_indexes[withdrawal_addr] == 0);
-        require(msg.value >= MIN_DEPOSIT_SIZE);
+        require(int128(msg.value) >= MIN_DEPOSIT_SIZE);
         int128 validator_index = next_validator_index;
         int128 start_dynasty = dynasty + 2;
         Decimal.Data memory scaled_deposit = Decimal.fromUint(msg.value).div(_deposit_scale_factor[uint256(current_epoch)]);

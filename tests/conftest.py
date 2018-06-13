@@ -305,7 +305,7 @@ def tester(
         # for sol casper.
         if IS_SOL_TEST:
             tx = casper_contract.functions.init(*casper_args).buildTransaction()
-            sol_func_id = function_id("init(int128,int128,int128,int128,address,address,uint256,uint256,uint256)")
+            sol_func_id = function_id("init(int128,int128,int128,int128,address,address,uint256,uint256,int128)")
             tx["data"] = sol_func_id + tx["data"][10:] # replace sol funcid.
             tx["gas"] = 30000000 # buildTransaction return defaul gas is 30000. it is far from enougth!!!!!
             print(tx)
@@ -314,6 +314,21 @@ def tester(
             casper_contract.functions.init(*casper_args).transact()
 
     return base_tester
+
+@pytest.fixture
+def casper_init_func():
+    def casper_init_func(casper, args):
+        if IS_SOL_TEST:
+            tx = casper.functions.init(*args).buildTransaction()
+            sol_func_id = function_id("init(int128,int128,int128,int128,address,address,uint256,uint256,int128)")
+            tx["data"] = sol_func_id + tx["data"][10:]  # replace sol funcid.
+            tx["gas"] = 30000000  # buildTransaction return defaul gas is 30000. it is far from enougth!!!!!
+            print(tx)
+            casper.web3.eth.estimateGas(tx)
+            return casper.web3.eth.sendTransaction(tx)
+        else:
+            return casper.functions.init(*args).transact()
+    return casper_init_func
 
 
 @pytest.fixture
