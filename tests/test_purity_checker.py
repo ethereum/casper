@@ -33,12 +33,12 @@ def foo() -> int128:
 """,
 """
 @public
-def foo() -> int128:
+def foo() -> uint256:
     return block.number
 """,
 """
 @public
-def foo() -> int128:
+def foo() -> uint256:
     return msg.gas
 """]
 
