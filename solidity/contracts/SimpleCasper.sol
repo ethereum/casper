@@ -233,6 +233,11 @@ contract SimpleCasper {
         return int128(checkpoints[uint(arg0)].prev_dyn_deposits);
     }
 
+    function checkpoints__is_finalized(int128 arg0) public view returns (bool) {
+        if(checkpoints.length <= uint(arg0)) return false;
+        return checkpoints[uint(arg0)].is_finalized;
+    }
+
     // @public
     function init(
         int128 epoch_length,
