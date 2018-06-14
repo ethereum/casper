@@ -66,24 +66,35 @@ library Decimal {
     /** Converts to decimal by increasing up 10 digitsnum. the decimal is fi168x10 **/
     function toDecimal(Data memory self) internal pure returns (int168) {
         require(self.den > 0, "invalid zero divide.");
+        if (int256(self.num) < 0) {
+            // is signed Decimal
+            return int168(self.num / self.den * DECIMAL_DIVISOR);
+        }
         return int168(self.num.mul(DECIMAL_DIVISOR).div(self.den));
     }
 
     /** Adds two Decimals without loss of precision. */
     function add(Data memory a, Data memory b) internal pure returns (Data memory) {
 
-        return a.den == b.den ?
-        // if same denomenator, use b.num as-is
-        Data({
-            num : a.num.add(b.num),
-            den : a.den
-            }) :
-        // otherwise convert (b) to the same denominator as (a)
-        Data({
-            num : a.num.mul(b.den)
-            .add(b.num.mul(a.den)),
-            den : a.den.mul(b.den)
-            });
+        Data memory result;
+        if (a.den == b.den) {
+            result.den = a.den;
+            if (int256(a.num) < 0 || int256(b.num) < 0) {
+                // it is sign Decimal calculation
+                result.num = a.num + b.num;
+            } else {
+                result.num = a.num.add(b.num);
+            }
+        } else {
+            result.den = a.den.mul(b.den);
+            if (int256(a.num) < 0 || int256(b.num) < 0) {
+                // it is sign Decimal calculation
+                result.num = a.num.mul(b.den) + b.num.mul(a.den);
+            } else {
+                result.num = a.num.mul(b.den).add(b.num.mul(a.den));
+            }
+        }
+        return result;
     }
 
     /** Subtracts two Decimals without loss of precision. */
@@ -118,10 +129,21 @@ library Decimal {
 
     /** Multiplies two Decimals without loss of precision. */
     function mul(Data memory a, Data memory b) internal pure returns (Data memory) {
-        return compacting(Data({
-            num : a.num.mul(b.num),
-            den : a.den.mul(b.den)
-            }));
+        // bypass overflow. it is temporary workaround.... TODO: It exec only if it happend oveflow.
+        a = fromSignDecimal(toDecimal(a));
+        b = fromSignDecimal(toDecimal(b));
+        if (int256(a.num) < 0 || int256(b.num) < 0) {
+            // sign decimal
+            return compacting(Data({
+                num : uint(int256(a.num) * int256(b.num)), // allow overflow. TODO: Check safety.
+                den : a.den.mul(b.den)
+                }));
+        } else {
+            return compacting(Data({
+                num : a.num.mul(b.num),
+                den : a.den.mul(b.den)
+                }));
+        }
     }
 
     /** Divides two Decimals without loss of precision. */

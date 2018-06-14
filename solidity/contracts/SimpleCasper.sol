@@ -16,7 +16,7 @@ contract SimpleCasper {
         int128 _validator_index,
         address _validation_address,
         int128 _start_dyn,
-        uint _amount);
+        int128 _amount);
     event Vote(address indexed _from,
         int128 indexed _validator_index,
         bytes32 indexed _target_hash,
@@ -44,7 +44,7 @@ contract SimpleCasper {
         int128 start_dynasty;
         int128 end_dynasty;
         bool is_slashed;
-        uint total_deposits_at_logout; //: wei_value,
+        int128 total_deposits_at_logout; //: wei_value,
         // The address which the validator's signatures must verify against
         address addr;
         address withdrawal_addr;
@@ -75,15 +75,15 @@ contract SimpleCasper {
     Decimal.Data total_prevdyn_deposits;
 
     // Mapping of dynasty to start epoch of that dynasty : public(int128[int128])
-    int128[] public dynasty_start_epoch;
+    int128[] public _dynasty_start_epoch;
 
     // Mapping of epoch to what dynasty it is : public(int128[int128])
     int128[] public dynasty_in_epoch;
 
     struct Checkpoint {
         // track size of scaled deposits for use in client fork choice
-        uint cur_dyn_deposits; // : wei_value,
-        uint prev_dyn_deposits; // : wei_value,
+        int128 cur_dyn_deposits; // : wei_value,
+        int128 prev_dyn_deposits; // : wei_value,
         // track total votes for each dynasty
         int168[] cur_dyn_votes; // : decimal(wei / m)[int128],
         int168[] prev_dyn_votes; // : decimal(wei / m)[int128],
@@ -166,6 +166,10 @@ contract SimpleCasper {
             ds.push(Decimal.fromUint(0));
         }
     }
+
+    function dynasty_start_epoch(int128 arg0) public view returns (int128) {
+        return _dynasty_start_epoch[uint(arg0)];
+    }
     // need define the getter.
     function total_slashed(int128 arg0) public view returns (int128) {
         return _total_slashed[uint(arg0)];
@@ -204,7 +208,7 @@ contract SimpleCasper {
         return _validators[uint256(arg0)].is_slashed;
     }
 
-    function validators__total_deposits_at_logout(int128 arg0) public view returns (uint) {
+    function validators__total_deposits_at_logout(int128 arg0) public view returns (int128) {
         if(_deposit_scale_factor.length <= uint(arg0)) return 0;
         return _validators[uint256(arg0)].total_deposits_at_logout;
     }
@@ -353,15 +357,14 @@ contract SimpleCasper {
         if (epoch > 1 && checkpoints[epoch - 2].is_finalized) {
             dynasty += 1;
             _initDecimalAt(_dynasty_wei_delta, uint(dynasty));
-            if (dynasty_start_epoch.length < uint(dynasty + 1)) {
+            if (_dynasty_start_epoch.length < uint(dynasty + 1)) {
                 // TODO: wanna allocate to be more simply.
-                dynasty_start_epoch.length = uint(dynasty + 1);
+                _dynasty_start_epoch.length = uint(dynasty + 1);
             }
 
             total_prevdyn_deposits = total_curdyn_deposits;
             total_curdyn_deposits = total_curdyn_deposits.add(_dynasty_wei_delta[uint256(dynasty)]);
-            //            require(total_curdyn_deposits.den > 0);
-            dynasty_start_epoch[uint256(dynasty)] = int128(epoch);
+            _dynasty_start_epoch[uint256(dynasty)] = int128(epoch);
         }
         if (dynasty_in_epoch.length < epoch + 1) {
             // TODO: allocate .... nosey....
@@ -479,13 +482,13 @@ contract SimpleCasper {
     }
 
     // line:309
-    function total_curdyn_deposits_in_wei() public constant returns (uint) {
-        return total_curdyn_deposits.mul(_deposit_scale_factor[uint256(current_epoch)]).toUint();
+    function total_curdyn_deposits_in_wei() public constant returns (int128) {
+        return int128(total_curdyn_deposits.mul(_deposit_scale_factor[uint256(current_epoch)]).toUint());
     }
 
     // line:315
-    function total_prevdyn_deposits_in_wei() public constant returns (uint) {
-        return total_prevdyn_deposits.mul(_deposit_scale_factor[uint256(current_epoch)]).toUint();
+    function total_prevdyn_deposits_in_wei() public constant returns (int128) {
+        return int128(total_prevdyn_deposits.mul(_deposit_scale_factor[uint256(current_epoch)]).toUint());
     }
 
     // original struct. Resolve over stack size.
@@ -596,11 +599,10 @@ contract SimpleCasper {
     function highest_justified_epoch(int128 min_total_deposits) public constant returns (int128) {
         init_checkpoints(uint(current_epoch));
         require(current_epoch > 0, "current epoch is zero.");
-        uint umin_total_deposits = uint(min_total_deposits);
         for (uint i = uint(current_epoch); i >= uint(START_EPOCH); i--) {
             bool is_justified = checkpoints[i].is_justified;
-            bool enough_cur_dyn_deposits = checkpoints[i].cur_dyn_deposits >= umin_total_deposits;
-            bool enough_prev_dyn_deposits = checkpoints[i].prev_dyn_deposits >= umin_total_deposits;
+            bool enough_cur_dyn_deposits = checkpoints[i].cur_dyn_deposits >= min_total_deposits;
+            bool enough_prev_dyn_deposits = checkpoints[i].prev_dyn_deposits >= min_total_deposits;
 
             if (is_justified && (enough_cur_dyn_deposits && enough_prev_dyn_deposits)) {
                 return int128(i);
@@ -615,13 +617,12 @@ contract SimpleCasper {
     //def highest_finalized_epoch(min_total_deposits: wei_value) -> int128:
     function highest_finalized_epoch(int128 min_total_deposits) public constant returns (int128) {
         uint epoch = 0;
-        uint umin_total_deposits = uint(min_total_deposits);
         init_checkpoints(uint(current_epoch));
         for (uint i = 0; i < 1000000000000000000000000000000; i++) {
             epoch = uint(current_epoch) - i;
             bool is_finalized = checkpoints[uint256(epoch)].is_finalized;
-            bool enough_cur_dyn_deposits = checkpoints[epoch].cur_dyn_deposits >= umin_total_deposits;
-            bool enough_prev_dyn_deposits = checkpoints[epoch].prev_dyn_deposits >= umin_total_deposits;
+            bool enough_cur_dyn_deposits = checkpoints[epoch].cur_dyn_deposits >= min_total_deposits;
+            bool enough_prev_dyn_deposits = checkpoints[epoch].prev_dyn_deposits >= min_total_deposits;
 
             if (is_finalized && (enough_cur_dyn_deposits && enough_prev_dyn_deposits)) {
                 return int128(epoch);
@@ -722,7 +723,7 @@ contract SimpleCasper {
             validator_index,
             validation_addr,
             start_dynasty,
-            msg.value
+            int128(msg.value)
         );
     }
 
@@ -771,7 +772,7 @@ contract SimpleCasper {
         int128 end_dynasty = _validators[uint256(validator_index)].end_dynasty;
         require(dynasty > end_dynasty);
 
-        int128 end_epoch = dynasty_start_epoch[uint256(end_dynasty + 1)];
+        int128 end_epoch = _dynasty_start_epoch[uint256(end_dynasty + 1)];
         int128 withdrawal_epoch = end_epoch + WITHDRAWAL_DELAY;
         require(current_epoch >= withdrawal_epoch);
 
@@ -783,7 +784,7 @@ contract SimpleCasper {
             uint recently_slashed = uint256(_total_slashed[uint256(withdrawal_epoch)]) - uint256(_total_slashed[uint256(withdrawal_epoch - 2 * WITHDRAWAL_DELAY)]);
             Decimal.Data memory fraction_to_slash = Decimal.Data({
                 num : recently_slashed * uint256(SLASH_FRACTION_MULTIPLIER),
-                den : _validators[uint256(validator_index)].total_deposits_at_logout
+                den : uint(_validators[uint256(validator_index)].total_deposits_at_logout)
                 });
 
             // can't withdraw a negative amount
