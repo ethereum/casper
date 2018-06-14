@@ -13,7 +13,7 @@ contract SimpleCasper {
     using RLP for RLP.Iterator;
 
     event Deposit(address indexed _from,
-        int128 _validator_index,
+        int128 indexed _validator_index,
         address _validation_address,
         int128 _start_dyn,
         int128 _amount);
@@ -27,11 +27,11 @@ contract SimpleCasper {
         int128 _end_dyn);
     event Withdraw(address indexed _to,
         int128 indexed _validator_index,
-        uint _amount);
+        int128 _amount);
     event Slash(address indexed _from,
         address indexed _offender,
         int128 indexed _offender_index,
-        uint256 _bounty);
+        int128 _bounty);
     event Epoch(int128 indexed _number,
         bytes32 indexed _checkpoint_hash,
         bool _is_justified,
@@ -799,7 +799,7 @@ contract SimpleCasper {
         emit Withdraw(
             _validators[uint256(validator_index)].withdrawal_addr,
             validator_index,
-            withdraw_amount
+            int128(withdraw_amount)
         );
 
         delete_validator(validator_index);
@@ -941,7 +941,7 @@ contract SimpleCasper {
             msg.sender,
             _validators[uint256(validator_index)].withdrawal_addr,
             validator_index,
-            slashing_bounty
+            int128(slashing_bounty)
         );
 
         // if validator not logged out yet, remove total from next dynasty
@@ -949,7 +949,8 @@ contract SimpleCasper {
         int128 end_dynasty = _validators[uint256(validator_index)].end_dynasty;
         if (dynasty < end_dynasty) {
             Decimal.Data memory deposit_decimal = _validators[uint256(validator_index)].deposit;
-            _dynasty_wei_delta[uint256(dynasty) + 1] = _dynasty_wei_delta[uint256(dynasty) + 1].sub(deposit_decimal);
+            _initDecimalAt(_dynasty_wei_delta, uint256(dynasty + 1));
+            _dynasty_wei_delta[uint256(dynasty) + 1] = _dynasty_wei_delta[uint256(dynasty) + 1].ssub(deposit_decimal);
             _validators[uint256(validator_index)].end_dynasty = dynasty + 1;
 
             // if validator was already staged for logout at end_dynasty,
