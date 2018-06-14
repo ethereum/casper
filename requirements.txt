@@ -1,5 +1,6 @@
 rlp==1.0.1
-eth-tester[py-evm]==0.1.0b24
-web3>=4.2.1
+eth-tester==0.1.0b24
+py-evm==0.2.0a16
+web3>=4.3.0
 pytest==3.4.0
-git+https://github.com/ethereum/vyper.git@248c723288e84899908048efff4c3e0b12f0b3dc
+git+https://github.com/ethereum/vyper.git@8113f79f7bce362e7a0f803b32736cb460c78640

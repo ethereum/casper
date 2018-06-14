@@ -3,6 +3,7 @@
 .idea
 .pytest_cache
 .python-version
+.DS_Store
 
 *.pyc
 *.egg-info
@@ -12,3 +13,4 @@ notes.txt
 build/
 dist/
 venv/
+prof/
