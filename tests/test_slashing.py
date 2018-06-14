@@ -4,16 +4,15 @@ from utils.common_assertions import (
 from utils.utils import encode_int32
 
 
-def test_invalid_signature_fails(
-        casper,
-        concise_casper,
-        funded_account,
-        validation_key,
-        deposit_amount,
-        induct_validator,
-        mk_vote,
-        fake_hash,
-        assert_tx_failed):
+def test_invalid_signature_fails(casper,
+                                 concise_casper,
+                                 funded_account,
+                                 validation_key,
+                                 deposit_amount,
+                                 induct_validator,
+                                 mk_vote,
+                                 fake_hash,
+                                 assert_tx_failed):
     validator_index = induct_validator(funded_account, validation_key, deposit_amount)
 
     # construct double votes but one has an invalid signature
@@ -44,16 +43,15 @@ def test_invalid_signature_fails(
     )
 
 
-def test_different_validators_fails(
-        casper,
-        concise_casper,
-        funded_accounts,
-        validation_keys,
-        deposit_amount,
-        induct_validators,
-        mk_vote,
-        fake_hash,
-        assert_tx_failed):
+def test_different_validators_fails(casper,
+                                    concise_casper,
+                                    funded_accounts,
+                                    validation_keys,
+                                    deposit_amount,
+                                    induct_validators,
+                                    mk_vote,
+                                    fake_hash,
+                                    assert_tx_failed):
     validator_indexes = induct_validators(
         funded_accounts,
         validation_keys,
@@ -128,6 +126,28 @@ def test_double_slash_fails(casper,
 
     assert concise_casper.slashable(vote_1, vote_2)
     casper.functions.slash(vote_1, vote_2).transact()
+
+    assert not concise_casper.slashable(vote_1, vote_2)
+    assert_tx_failed(
+        lambda: casper.functions.slash(vote_1, vote_2).transact()
+    )
+
+
+def test_slash_before_start_dynasty_fails(casper,
+                                    concise_casper,
+                                    funded_account,
+                                    validation_key,
+                                    deposit_amount,
+                                    deposit_validator,
+                                    mk_slash_votes,
+                                    new_epoch,
+                                    assert_tx_failed):
+    new_epoch()
+    validator_index = deposit_validator(funded_account, validation_key, deposit_amount)
+
+    vote_1, vote_2 = mk_slash_votes(validator_index, validation_key)
+
+    assert concise_casper.validators__start_dynasty(validator_index) > concise_casper.dynasty()
 
     assert not concise_casper.slashable(vote_1, vote_2)
     assert_tx_failed(
