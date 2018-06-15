@@ -33,10 +33,14 @@ def foo() -> int128:
 """,
 """
 @public
-def foo() -> int128:
+def foo() -> uint256:
     return block.number
+""",
 """
-]
+@public
+def foo() -> uint256:
+    return msg.gas
+"""]
 
 ecrecover_lll_src = LLLnode.from_list([
     'seq',
@@ -178,6 +182,12 @@ def test_purity_checker(casper,
             'results': [False, False],
             'should_fail': True,
             'name': failed_cases[1]
+        },
+        {
+            'addr': deploy_contract(w3, acct, compiler.compile(failed_cases[2]).hex()),
+            'results': [False, False],
+            'should_fail': True,
+            'name': failed_cases[2]
         }
     ]
 

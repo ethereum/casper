@@ -16,10 +16,47 @@
 from vyper import compile_lll, optimizer
 from vyper.parser.parser import LLLnode
 
+from vyper.opcodes import opcodes
+
+def find_opcode_hex(opcode):
+    if opcode in opcodes:
+        return opcodes[opcode][0]
+    return opcode
+
+banned_opcodes = map(find_opcode_hex,[
+    'BALANCE',
+    'ORIGIN',
+    'CALLER',
+    'GASPRICE',
+    'EXTCODESIZE',
+    'EXTCODECOPY',
+    'BLOCKHASH',
+    'COINBASE',
+    'TIMESTAMP',
+    'NUMBER',
+    'DIFFICULTY',
+    'GASLIMIT',
+    0x46, # rest of the 0x40 opcode space
+    0x47,
+    0x48,
+    0x49,
+    0x4a,
+    0x4b,
+    0x4c,
+    0x4d,
+    0x4e,
+    0x4f,
+    'SLOAD',
+    'SSTORE',
+    'GAS',
+    'CREATE',
+    'SELFDESTRUCT'
+])
+
+banned_opcodes_bitmask = sum([2**x for x in banned_opcodes])
+
 invalid_if_banned = ["if",
-                     # sum([2**x for x in [0x31, 0x32, 0x33, 0x3a, 0x3b, 0x3c, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f, 0x54, 0x55, 0xf0, 0xff]])
-                     ["and", 57897811465722876096115075801844696845150819816717216876035649536196444422144,
-                      ["exp", 2, "_c"]],
+                     ["and", banned_opcodes_bitmask, ["exp", 2, "_c"]],
                      "invalid"]
 
 is_push = ["and", ["le", 0x60, "_c"], ["le", "_c", 0x7f]]
