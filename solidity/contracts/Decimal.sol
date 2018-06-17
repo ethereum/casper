@@ -60,15 +60,15 @@ library Decimal {
     /** Converts a Decimal to a uint (effectively flooring the value). **/
     function toUint(Data memory self) internal pure returns (uint256) {
         require(self.den > 0, "invalid zero divide.");
-        return self.num.div(self.den);
+        return uint256(int256(self.num) / int256(self.den));
     }
 
-    /** Converts to decimal by increasing up 10 digitsnum. the decimal is fi168x10 **/
+    /** Converts to deciamal by increasing up 10 digitsnum. the decimal is fi168x10 **/
     function toDecimal(Data memory self) internal pure returns (int168) {
         require(self.den > 0, "invalid zero divide.");
         if (int256(self.num) < 0) {
             // is signed Decimal
-            return int168(self.num / self.den * DECIMAL_DIVISOR);
+            return int168(int256(self.num) / int256(self.den) * int256(DECIMAL_DIVISOR));
         }
         return int168(self.num.mul(DECIMAL_DIVISOR).div(self.den));
     }
@@ -117,11 +117,11 @@ library Decimal {
         Data memory result;
         if (a.den == b.den) {
             // if same denomenator, use b.num as-is
-            result.num = a.num - b.num;
+            result.num = uint256(int256(a.num) - int256(b.num));
             result.den = a.den;
         } else {
             // otherwise convert (b) to the same denominator as (a)
-            result.num = a.num.mul(b.den) - (b.num.mul(a.den));
+            result.num = uint256(int256(a.num.mul(b.den)) - int256((b.num.mul(a.den))));
             result.den = a.den.mul(b.den);
         }
         return compacting(result);
@@ -171,8 +171,13 @@ library Decimal {
      *         2 is a > b
      */
     function comp(Data memory a, Data memory b) internal pure returns (uint8) {
-        uint a_num = a.num * b.den;
-        uint b_num = b.num * a.den;
+        if(int256(a.num) < 0 && int256(b.num) >= 0) {
+            return 0;
+        } else if(int256(a.num) >= 0 && int256(b.num) < 0) {
+            return 2;
+        }
+        uint a_num = a.num.mul(b.den);
+        uint b_num = b.num.mul(a.den);
         if (a_num < b_num) {
             return 0;
         } else if (a_num == b_num) {
@@ -189,7 +194,7 @@ library Decimal {
      *         2 is a > 0
      */
     function compZero(Data memory a) internal pure returns (uint8) {
-        if (a.num < 0) {
+        if (int256(a.num) < 0) {
             return 0;
         } else if (a.num == 0) {
             return 1;
@@ -213,17 +218,6 @@ library Decimal {
             mod = max % min;
         }
         return min;
-    }
-
-    /**
-     * @dev least common multiple
-     */
-    function lcm(uint a, uint b) internal pure returns (uint) {
-        uint _gcd = gcd(a, b);
-        if (_gcd == 1) {
-            return a.mul(b);
-        }
-        return a.div(_gcd).mul(b.div(_gcd)).mul(_gcd);
     }
 
     function sort(uint a, uint b) internal pure returns (uint, uint) {

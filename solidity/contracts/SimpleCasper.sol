@@ -2,6 +2,7 @@ pragma solidity ^0.4.24;
 pragma experimental ABIEncoderV2;
 
 import "./Decimal.sol";
+import "./SafeMath.sol";
 import "./RLP.sol";
 
 
@@ -172,6 +173,9 @@ contract SimpleCasper {
     }
     // need define the getter.
     function total_slashed(int128 arg0) public view returns (int128) {
+        if (_total_slashed.length <= uint(arg0)) {
+            return 0;
+        }
         return _total_slashed[uint(arg0)];
     }
 
@@ -183,58 +187,58 @@ contract SimpleCasper {
     }
 
     function deposit_scale_factor(int128 arg0) public view returns (int168) {
-        if(_deposit_scale_factor.length <= uint(arg0)) return 0;
+        if (_deposit_scale_factor.length <= uint(arg0)) return 0;
         return _deposit_scale_factor[uint(arg0)].toDecimal();
     }
 
     // To avoid tuple, and it produce same code of vyper compiler.
     function validators__deposit(int128 arg0) public view returns (int168) {
-        if(_deposit_scale_factor.length <= uint(arg0)) return 0;
+        if (_validators.length <= uint(arg0)) return 0;
         return _validators[uint256(arg0)].deposit.toDecimal();
     }
 
     function validators__start_dynasty(int128 arg0) public view returns (int128) {
-        if(_deposit_scale_factor.length <= uint(arg0)) return 0;
+        if (_validators.length <= uint(arg0)) return 0;
         return _validators[uint256(arg0)].start_dynasty;
     }
 
     function validators__end_dynasty(int128 arg0) public view returns (int128) {
-        if(_deposit_scale_factor.length <= uint(arg0)) return 0;
+        if (_validators.length <= uint(arg0)) return 0;
         return _validators[uint256(arg0)].end_dynasty;
     }
 
     function validators__is_slashed(int128 arg0) public view returns (bool) {
-        if(_deposit_scale_factor.length <= uint(arg0)) return false;
+        if (_validators.length <= uint(arg0)) return false;
         return _validators[uint256(arg0)].is_slashed;
     }
 
     function validators__total_deposits_at_logout(int128 arg0) public view returns (int128) {
-        if(_deposit_scale_factor.length <= uint(arg0)) return 0;
+        if (_validators.length <= uint(arg0)) return 0;
         return _validators[uint256(arg0)].total_deposits_at_logout;
     }
 
     function validators__addr(int128 arg0) public view returns (address) {
-        if(_deposit_scale_factor.length <= uint(arg0)) return 0x00;
+        if (_validators.length <= uint(arg0)) return 0x00;
         return _validators[uint256(arg0)].addr;
     }
 
     function validators__withdrawal_addr(int128 arg0) public view returns (address) {
-        if(_deposit_scale_factor.length <= uint(arg0)) return 0x00;
+        if (_validators.length <= uint(arg0)) return 0x00;
         return _validators[uint256(arg0)].withdrawal_addr;
     }
 
     function checkpoints__cur_dyn_deposits(int128 arg0) public view returns (int128) {
-        if(checkpoints.length <= uint(arg0)) return 0;
+        if (checkpoints.length <= uint(arg0)) return 0;
         return int128(checkpoints[uint(arg0)].cur_dyn_deposits);
     }
 
     function checkpoints__prev_dyn_deposits(int128 arg0) public view returns (int128) {
-        if(checkpoints.length <= uint(arg0)) return 0;
+        if (checkpoints.length <= uint(arg0)) return 0;
         return int128(checkpoints[uint(arg0)].prev_dyn_deposits);
     }
 
     function checkpoints__is_finalized(int128 arg0) public view returns (bool) {
-        if(checkpoints.length <= uint(arg0)) return false;
+        if (checkpoints.length <= uint(arg0)) return false;
         return checkpoints[uint(arg0)].is_finalized;
     }
 
@@ -287,7 +291,7 @@ contract SimpleCasper {
         // TODO: test deposit_scale_factor when deploying when current_epoch > 0
 
         // For avoid over gas used in at first, only length is reset.
-        if(current_epoch > 2) {
+        if (current_epoch > 2) {
             _deposit_scale_factor.length = uint(current_epoch - 2);
         }
         // allocation
@@ -326,13 +330,10 @@ contract SimpleCasper {
     function sqrt_of_total_deposits() private constant returns (Decimal.Data) {
         int128 epoch = current_epoch;
         Decimal.Data memory ether_deposited_as_number_decimal = max(total_prevdyn_deposits, total_curdyn_deposits);
-        require(ether_deposited_as_number_decimal.den > 0);
         _initDecimalAt(_deposit_scale_factor, uint(epoch));
         ether_deposited_as_number_decimal = ether_deposited_as_number_decimal.mul(_deposit_scale_factor[uint(epoch - 1)]);
 
-        require(ether_deposited_as_number_decimal.den > 0);
         ether_deposited_as_number_decimal = ether_deposited_as_number_decimal.div(Decimal.fromUint(1 ether));
-        require(ether_deposited_as_number_decimal.den > 0);
         uint ether_deposited_as_number = ether_deposited_as_number_decimal.toUint() + 1;
         Decimal.Data memory sqrt = Decimal.Data({
             num : ether_deposited_as_number,
@@ -774,27 +775,30 @@ contract SimpleCasper {
     // line: 539
     function withdraw(int128 validator_index) public {
         // Check that we can withdraw
+        require(_validators.length > uint(validator_index), "invalid validator_index.");
         int128 end_dynasty = _validators[uint256(validator_index)].end_dynasty;
-        require(dynasty > end_dynasty);
+        require(dynasty > end_dynasty, "dynasty is young yet.");
 
         int128 end_epoch = _dynasty_start_epoch[uint256(end_dynasty + 1)];
         int128 withdrawal_epoch = end_epoch + WITHDRAWAL_DELAY;
-        require(current_epoch >= withdrawal_epoch);
+        require(current_epoch >= withdrawal_epoch, "epoch not enough");
 
         // Withdraw
         uint withdraw_amount = 0;
         if (!_validators[uint256(validator_index)].is_slashed) {
             withdraw_amount = _validators[uint256(validator_index)].deposit.mul(_deposit_scale_factor[uint256(end_epoch)]).toUint();
         } else {
-            uint recently_slashed = uint256(_total_slashed[uint256(withdrawal_epoch)]) - uint256(_total_slashed[uint256(withdrawal_epoch - 2 * WITHDRAWAL_DELAY)]);
-            Decimal.Data memory fraction_to_slash = Decimal.Data({
-                num : recently_slashed * uint256(SLASH_FRACTION_MULTIPLIER),
-                den : uint(_validators[uint256(validator_index)].total_deposits_at_logout)
-                });
+            if (_total_slashed.length < uint256(withdrawal_epoch + 1)) {
+                _total_slashed.length = uint256(withdrawal_epoch + 1);
+            }
+            uint before_slashed = uint256(total_slashed(withdrawal_epoch - 2 * WITHDRAWAL_DELAY));
+            int256 recently_slashed = int256(_total_slashed[uint256(withdrawal_epoch)]) - int256(before_slashed);
 
-            // can't withdraw a negative amount
-            Decimal.Data memory fraction_to_withdraw = max((Decimal.fromUint(1).sub(fraction_to_slash)), Decimal.fromUint(0));
+            Decimal.Data memory fraction_to_slash = Decimal.fromUint(uint256(recently_slashed)).mul(Decimal.fromUint(uint256(SLASH_FRACTION_MULTIPLIER)));
+            fraction_to_slash = fraction_to_slash.div(Decimal.fromUint(uint(_validators[uint256(validator_index)].total_deposits_at_logout)));
 
+            // can't withdraw a negative amountm
+            Decimal.Data memory fraction_to_withdraw = max(Decimal.fromUint(1).ssub(fraction_to_slash), Decimal.fromUint(0));
             Decimal.Data memory deposit_size_decimal = _validators[uint256(validator_index)].deposit.mul(_deposit_scale_factor[uint256(withdrawal_epoch)]);
             withdraw_amount = deposit_size_decimal.mul(fraction_to_withdraw).toUint();
         }
