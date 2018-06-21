@@ -2,7 +2,7 @@ from ethereum.tools import tester
 from ethereum.utils import sha3, normalize_address
 
 c = tester.Chain()
-x = c.contract(open('rando.v.py').read(), language='vyper')
+x = c.contract(open('rando.vy').read(), language='vyper')
 for i in range(10):
     x.deposit(sender=tester.keys[i], value=(i+1)*10**15)
     c.mine(1)

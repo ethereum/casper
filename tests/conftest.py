@@ -350,7 +350,7 @@ def deploy_purity_checker(w3):
 
 @pytest.fixture
 def casper_code():
-    with open(get_dirs('simple_casper.v.py')[0]) as f:
+    with open(get_dirs('simple_casper.vy')[0]) as f:
         return f.read()
 
 
